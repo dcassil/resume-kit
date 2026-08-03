@@ -167,3 +167,32 @@ Modules that are **tightly coupled** to the DB or frontend and require more work
 Unit tests cover: `apply_diffs`, `crypto`, `database`, `description_styles`, `e2e_monitor_*`, `improve_confirm_hash`, `interview_prep_service`, `llm`, `llm_providers`, `parser`, `prompt_guardrails`, `refiner`, `resume_diff`, `resume_wizard_service`, `settings_timeout`, `verify_diffs`.
 
 Integration tests cover: `applications_api`, `config_api`, `health_api`, `jobs_api`, `llm_contract`, `pdf_render`, `pipeline_e2e`, `regenerate_endpoints`, `resume_api`, `resume_wizard_api`, `tracker_autocreate`, `upload_api`.
+
+---
+
+## Reviewer Spot-Check
+
+As the final Phase 0 reconciliation step (RIT-T-0004), a reviewer opened the actual upstream files
+behind three varied-risk inventory rows in `references/reuse-inventory.md` and confirmed each row's
+claim against the source at the pinned SHA `116f9cc3b00e1ac91734a6c2679bf41ea64a0edc`
+(verified equal to `git -C upstream rev-parse HEAD`). Paths are relative to `upstream/apps/backend/`.
+
+| # | Inventory row (risk area) | Upstream path checked | Row claim | Result |
+|---|---------------------------|-----------------------|-----------|--------|
+| 1 | ATS scoring engine (deterministic parser/schema/ATS area) | `app/services/ats.py` | `compute_ats_score` + `_compute_skills_coverage` + `_compute_section_completeness` are pure Python with **zero `app.*` imports** and **zero LLM calls**; refutes the earlier "Likely LiteLLM" guess | **CONFIRMED.** `compute_ats_score` present (line 112); `_compute_skills_coverage` (line 5), `_compute_section_completeness` (line 39). Module imports are only `logging`, `re`, `typing` — `grep -c "from app"` returns `0`. Deterministic, no-LLM, no app coupling as claimed. |
+| 2 | Diff application engine (diff / alignment-policy area) | `app/services/improver.py` | `apply_diffs` at line 226 with `_ALLOWED_PATH_PATTERNS` (80), `_BLOCKED_PATH_PREFIXES` (94), `_BLOCKED_FIELD_NAMES` (101) gates; couples only to `app.schemas` (plus `app.llm`/`app.prompts` for generation paths), never the DB or routers | **CONFIRMED.** `apply_diffs` at line 226; `_ALLOWED_PATH_PATTERNS` (80), `_BLOCKED_PATH_PREFIXES` (94), `_BLOCKED_FIELD_NAMES` (101) all present; `_is_path_allowed`/`_is_path_blocked` gate helpers present (120, 125). `from app.*` imports limited to `app.llm`, `app.prompts`, `app.schemas` — no `app.database`/`app.models`/router imports. |
+| 3 | PDF/DOCX export (Replace web/persistence area) | `app/pdf.py` | Only export path is a headless-Chromium render of the Next.js frontend `/print/*` page via Playwright; nothing reusable beyond intent → **Replace → New** | **CONFIRMED.** Imports `playwright.async_api` (`async_playwright`, line 17); launches `playwright.chromium` (line 125); renders a documented "print route" URL (line 288). Hard frontend + Chromium dependency exactly as the Replace row states. |
+
+All three rows confirmed with no corrections required. The audit's original "Likely LiteLLM" note for
+`ats.py` was already corrected to deterministic in the reuse inventory; spot-check #1 independently
+verifies that correction against the source.
+
+---
+
+## Scope of Phase 0 work
+
+Phase 0 wrote **no product code**. The only files created or modified by Phase 0 are the three
+reference documents (`references/upstream-audit.md`, `references/reuse-inventory.md`,
+`references/attribution.md`). The donor repository at `./upstream/` is a **gitignored reference
+clone** (via `/upstream/` in `.gitignore`), used solely for read-only audit evidence — it is not
+distributed product code and is not committed to this repository.

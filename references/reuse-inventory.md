@@ -180,4 +180,12 @@ engine ✓, standalone no-LLM mode ✓.
 5. **Coupling is lighter than feared** — services import only `app.{llm,prompts,schemas,config}`,
    all invertible; no core service touches the DB or routers.
 
+## Scope of Phase 0
+
+Phase 0 wrote **no product code**. The only artefacts produced are the three reference documents
+(`references/upstream-audit.md`, `references/reuse-inventory.md`, `references/attribution.md`). The
+donor repository at `./upstream/` is a **gitignored reference clone** (`/upstream/` in `.gitignore`)
+used only for read-only audit evidence — it is not distributed product code. Every classification
+above is an analysis decision for later phases; no upstream material has been ported yet.
+
 Touched only `references/reuse-inventory.md`.
