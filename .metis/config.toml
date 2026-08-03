@@ -1,0 +1,16 @@
+[project]
+prefix = "RIT"
+
+[flight_levels]
+strategies_enabled = false
+initiatives_enabled = true
+
+[lint]
+enabled = true
+extends = "standard"
+
+[lint.rules]
+
+[lint.phase_gates]
+
+[architecture]
