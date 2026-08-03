@@ -43,11 +43,12 @@ Claude-Session: https://claude.ai/code/session_01WpLT8iXnxtXkgRQeHFbhNj
 
 ## Status ledger
 - **Phase 0 — Upstream Audit (RIT-I-0001): COMPLETE & pushed.** Deliverables: `references/upstream-audit.md`, `reuse-inventory.md` (Reuse/Extract/Adapt/Replace/New matrix), `attribution.md` (Apache-2.0). 530 upstream tests pass. Tasks RIT-T-0001..0004 completed.
-- **Phase 1 — Clean Core & Schemas (RIT-I-0002): IN PROGRESS.**
-  - RIT-T-0005 scaffold (packages/core, packages/schemas, uv workspace, toolchain): DONE & committed.
-  - RIT-T-0006 canonical + ported schemas (packages/schemas + attribution): running (Wave 2).
-  - RIT-T-0007 core contracts (Protocols, InterfaceResponse, fakes; packages/core): running (Wave 2).
-  - RIT-T-0008 boundary/integration quality gates (tests/): NOT STARTED — Wave 3, depends on 0006+0007.
+- **Phase 1 — Clean Core & Schemas (RIT-I-0002): COMPLETE & pushed.** All 4 tasks (RIT-T-0005..0008) done.
+  - `packages/schemas` (`resume_kit_schemas`): canonical Pydantic v2 domain models, split from transport DTOs; resume/change/analysis/coercion ported from upstream w/ markers+attribution; job/evidence/provenance/common new.
+  - `packages/core` (`resume_kit_core`): StructuredCompletionProvider/CompletionProvider Protocols, ArtifactStore, error/warning taxonomy, InterfaceResponse[T] envelope, in-memory fakes (`resume_kit_core.testing`).
+  - Boundary + integration guard tests under `tests/`. **Full gate green: ruff clean, mypy --strict clean (24 files), 284 tests pass.**
+  - Gate command: `uv run ruff check packages tests && uv run mypy packages/core packages/schemas && uv run pytest`.
+  - Note: NEXT session should START at Phase 2.
 - **Phases 2–6: NOT STARTED.** Next initiatives to create from vision roadmap:
   - Phase 2 — Document extraction & parsing (MarkItDown, date-restoration, LLM parse behind provider iface, no-LLM text mode).
   - Phase 3 — Matching & deterministic analysis (keyword/match, ATS engine — note `services/ats.py` is already deterministic+no-LLM, a strong seed — scoring dims; check-ats, check-job-match, select-best, compare-versions).
