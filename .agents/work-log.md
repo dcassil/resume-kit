@@ -14,4 +14,6 @@ Only the orchestrator edits git. Update claims as waves start and finish.
 | 6 | claude/opus | RIT-T-0006 (schemas) | `packages/schemas/`,`references/attribution.md` | DONE (36 tests) |
 | 6 | claude/sonnet | RIT-T-0007 (core) | `packages/core/` | DONE (51 tests) |
 
+| 7 | claude/sonnet | RIT-T-0008 (quality gates) | `tests/` | DONE (197 tests; 284 total) |
+
 Gate (orchestrator, per wave): `uv run ruff check packages && uv run mypy packages/core && uv run mypy packages/schemas && uv run pytest`. Per-package mypy avoids the cross-package `tests` module collision.
