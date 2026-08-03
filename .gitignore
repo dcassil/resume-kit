@@ -31,3 +31,4 @@ htmlcov/
 
 # Metis runtime
 .metis/metis-mcp-server.log
+.metis/.index-dirty

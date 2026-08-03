@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-schemas"
+version = "0.0.0"
+description = "Canonical Pydantic schemas for resume evaluation and job matching."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_schemas"]
