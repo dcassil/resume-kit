@@ -42,7 +42,8 @@ namespace_packages = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages"]
-addopts = "-q"
+addopts = "-q --import-mode=importlib"
+asyncio_mode = "auto"
 markers = [
     "eval: real-model LLM quality evals (opt-in, network + API cost)",
 ]

@@ -11,5 +11,7 @@ Only the orchestrator edits git. Update claims as waves start and finish.
 | 3    | claude/opus   | RIT-T-0004 | all 3 reference docs | DONE (reconciled, 3 rows spot-checked) |
 | 4 | codex-decomp | RIT-I-0002 | Metis tasks RIT-T-0005..0008 | planned |
 | 5 | claude/haiku | RIT-T-0005 (scaffold) | `pyproject.toml`,`uv.lock`,`packages/*` | DONE (uv sync+ruff+mypy green) |
-| 6 | claude/opus | RIT-T-0006 (schemas) | `packages/schemas/`,`references/attribution.md` | in-progress |
-| 6 | claude/sonnet | RIT-T-0007 (core) | `packages/core/` | in-progress |
+| 6 | claude/opus | RIT-T-0006 (schemas) | `packages/schemas/`,`references/attribution.md` | DONE (36 tests) |
+| 6 | claude/sonnet | RIT-T-0007 (core) | `packages/core/` | DONE (51 tests) |
+
+Gate (orchestrator, per wave): `uv run ruff check packages && uv run mypy packages/core && uv run mypy packages/schemas && uv run pytest`. Per-package mypy avoids the cross-package `tests` module collision.

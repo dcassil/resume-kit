@@ -150,6 +150,30 @@ include LICENSE** — abbreviated below as "standard obligations".
 
 ---
 
+## Ported Files — `packages/schemas` (RIT-T-0006)
+
+> Concrete resume-kit files that port/adapt upstream schema material. Each source and test
+> file below carries the modified-source marker comment block (upstream path + pinned SHA
+> `116f9cc3b00e1ac91734a6c2679bf41ea64a0edc`). Domain models only; upstream HTTP/DB DTOs
+> (`ResumeUploadResponse`, `ResumeFetchResponse`, `ResumeListResponse`, `JobUploadRequest/Response`,
+> config/API-key/health/status/tracker/interview-prep DTOs, response wrappers) were **not** ported.
+
+| resume-kit file | Upstream source | Ported/adapted material | Modification note |
+|---|---|---|---|
+| `packages/schemas/src/resume_kit_schemas/_coercion.py` | `app/schemas/models.py:10-127` | `_extract_text_fragments`, `_coerce_text`, `_coerce_optional_text`, `_split_description_lines`, `_coerce_string_list`, `_coerce_description_styles`, `_align_description_styles` | Extracted verbatim-in-behavior into a standalone helper module; made public; no HTTP/DB coupling |
+| `packages/schemas/src/resume_kit_schemas/resume.py` | `app/schemas/models.py:129-423` | `SectionType`, `PersonalInfo`, `Experience`, `Education`, `Project`, `AdditionalInfo`, `SectionMeta`, `CustomSectionItem`, `CustomSection`, `DEFAULT_SECTION_META`, `normalize_resume_data`, `ResumeData` | Domain models split from HTTP/DB DTOs; re-namespaced; `str, Enum`→`StrEnum`; coercion moved to `_coercion`; validators/defaults/`descriptionStyles` alignment preserved; canonical `ResumeDocument`/`Contact`/`Skill` added |
+| `packages/schemas/src/resume_kit_schemas/change.py` | `app/schemas/models.py:545-575,896-928` | `ResumeChange`→`ChangeProposal`, `ResumeFieldDiff`→`Diff`, `ResumeDiffSummary`, `ImproveDiffResult`→`ChangeSet` | Ported out of DTO file; list-`original`-only-for-reorder validator preserved; enriched `ChangeSet` with diffs/summary/warnings; no request/resume/job ids |
+| `packages/schemas/src/resume_kit_schemas/analysis.py` | `app/schemas/refinement.py`; `app/schemas/models.py:577-616` | `RefinementConfig`, `KeywordGapAnalysis`, `AlignmentViolation`, `AlignmentReport`, `RefinementStats`, `ATSSubScores`, `ATSScore` | Ported schema-only primitives; dropped API `RefinementResult.to_stats` helper; bounds/defaults preserved; New `AnalysisReport` umbrella added |
+| `packages/schemas/tests/test_characterization_resume.py` | `app/tests/unit/test_description_styles.py` | description/style coercion + alignment + default-filling characterization | Retargeted to canonical names; extended coverage to lock ported validators |
+| `packages/schemas/tests/test_characterization_change.py` | `app/schemas/models.py` (`ResumeChange`); `app/tests/unit/test_resume_diff.py` | list-`original`-only-for-reorder + Diff field expectations | Characterization of ported change/diff validators |
+| `packages/schemas/tests/test_characterization_analysis.py` | `app/schemas/refinement.py`; `app/schemas/models.py:577-616` | 0-100 / 1-5 bounds + defaults of refinement/ATS schemas | Characterization of ported score bounds |
+
+Note: `job.py`, `evidence.py`, `provenance.py`, and `common.py` are **New** subsystems (candidate
+evidence, claim provenance, structured warnings/artifacts, structured job description) with no
+upstream material to attribute; their tests (`test_new_models.py`) are original.
+
+---
+
 ## Intentionally Excluded Subsystems (Replace / Leave Behind)
 
 The following Resume-Matcher subsystems were reviewed during Phase 0 and intentionally
