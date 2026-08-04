@@ -125,3 +125,11 @@ Phase 4 Wave D executed (2 claude/opus + 1 codex):
 Orchestrator gate after Wave D: **934 passed, 1 skipped**, ruff clean, mypy --strict clean (92 files).
 Gate fixes: lint E501 in ported prompt constants (prompts.py, generation.py) resolved via implicit string concatenation preserving verbatim prompt text (no rule suppression); import sorting auto-fixed.
 Remaining: Wave E (RIT-T-0036 align_resume orchestration + invariant tests), Wave F (RIT-T-0037 exports/attribution/boundaries).
+
+Phase 4 Wave E executed (claude/opus):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| E | RIT-T-0036 align_resume orchestration | claude/opus | DONE (94 alignment tests; async align_resume wires generation→policy→apply→verify→diff→truth→score→review; F>=3 forces truth; UNSUPPORTED/CONTRADICTED stripped + re-verified or deferred to human review; NFR-405 adversarial test proves fabricated employer + unsupported claim never reach output) |
+
+Orchestrator gate after Wave E: **948 passed, 1 skipped**, ruff clean (first pass), mypy --strict clean (95 files).
+Remaining: Wave F (RIT-T-0037 exports/attribution/import-boundaries) — final task, then close initiative.
