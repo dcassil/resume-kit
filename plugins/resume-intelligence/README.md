@@ -2,6 +2,25 @@
 
 Agent skills for the resume-kit Phase 5 interface surface.
 
+## Install
+
+In Claude Code:
+
+```
+/plugin marketplace add dcassil/resume-kit
+/plugin install resume-intelligence@resume-kit
+```
+
+**Prerequisite** — the skills and the bundled MCP server (`resume-kit-mcp`) call
+the `resume-kit` package, so install it too so those commands exist on PATH:
+
+```
+uv tool install "resume-kit[all]"      # or: pip install "resume-kit[all]"
+```
+
+Without it the skill *docs* still load, but the `resume-tool` CLI and the
+`resume-kit` MCP tools won't launch.
+
 These skills describe how an agent drives the `resume-tool` CLI or the MCP
 server to invoke each of the 10 built capabilities.  Skills are thin
 invocation guides — they do not implement resume intelligence logic and must
