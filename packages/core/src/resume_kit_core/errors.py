@@ -12,6 +12,7 @@ class ErrorCode(StrEnum):
     """Canonical error codes used across all resume-kit interfaces."""
 
     # Provider / completion errors
+    PROVIDER_NOT_CONFIGURED = "provider_not_configured"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     PROVIDER_TIMEOUT = "provider_timeout"
     PROVIDER_RATE_LIMITED = "provider_rate_limited"
