@@ -7,6 +7,8 @@ description: >
   Chromium or upstream frontend involved.
 ---
 
+> **Resume input format.** This capability needs the resume as a `ResumeDocument` JSON. If you have a PDF, DOCX, Markdown, or plain-text resume, first convert it with the **resume-to-json** skill (`/resume-intelligence:resume-to-json`) — which transcribes the file faithfully and losslessly — then use the resulting JSON here.
+
 ## Purpose
 
 Render a `ResumeDocument` to bytes and persist them through an `ArtifactStore`.

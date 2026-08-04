@@ -40,6 +40,7 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "validate-resume-truth",
         "build-candidate-evidence",
         "export-resume",
+        "resume-to-json",
     ]
 )
 

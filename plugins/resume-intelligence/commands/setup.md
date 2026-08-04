@@ -28,3 +28,15 @@ the `resume-kit` MCP server starts and its tools become available.
 
 If installation fails, show the error output and suggest checking that Python
 and `uv`/`pip` are available and that PyPI is reachable.
+
+## Optional: PDF support for the deterministic extractor
+
+The recommended way to turn a PDF/DOCX/Markdown resume into JSON is the
+**resume-to-json** skill (the agent reads the file directly — nothing extra to
+install). Only the *deterministic* `resume-tool extract` needs the optional
+`markitdown[pdf]` extra to read PDFs. Do **not** install it unless the user
+wants it — ask first, then run:
+
+```bash
+uv tool install "resume-kit[all]" --with "markitdown[pdf]"
+```

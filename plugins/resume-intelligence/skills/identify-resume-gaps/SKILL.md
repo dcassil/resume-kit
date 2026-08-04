@@ -6,6 +6,8 @@ description: >
   missing keywords.  No LLM required.
 ---
 
+> **Resume input format.** This capability needs the resume as a `ResumeDocument` JSON. If you have a PDF, DOCX, Markdown, or plain-text resume, first convert it with the **resume-to-json** skill (`/resume-intelligence:resume-to-json`) — which transcribes the file faithfully and losslessly — then use the resulting JSON here.
+
 ## Purpose
 
 Produce a `KeywordGapAnalysis` showing which job keywords are missing from the

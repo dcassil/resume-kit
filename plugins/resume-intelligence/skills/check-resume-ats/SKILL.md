@@ -5,6 +5,8 @@ description: >
   for a resume against a job description.  No LLM required.
 ---
 
+> **Resume input format.** This capability needs the resume as a `ResumeDocument` JSON. If you have a PDF, DOCX, Markdown, or plain-text resume, first convert it with the **resume-to-json** skill (`/resume-intelligence:resume-to-json`) — which transcribes the file faithfully and losslessly — then use the resulting JSON here.
+
 ## Purpose
 
 Score how well a resume will pass automated ATS filters for a specific job.
