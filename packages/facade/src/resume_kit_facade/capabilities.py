@@ -1,0 +1,416 @@
+"""The Phase 5 capability facade: one uniform callable per capability.
+
+Each callable maps exactly one engine public API into an
+:class:`~resume_kit_core.InterfaceResponse` via the core substrate
+(``build_success`` / ``build_provider_not_configured`` / ``from_resume_kit_error``
+/ ``from_exception``).  This is the ONLY place a transport ever needs to reach
+engine functions; transports enumerate and dispatch through :data:`REGISTRY`.
+
+Rules enforced here:
+
+* ``no_llm=True`` uses the deterministic engine path for every capability that
+  has one (and an explicit no-change path for ``align-resume``).
+* An LLM-requiring capability with ``provider=None`` (and ``no_llm`` False)
+  returns the stable provider-not-configured failure — the engine is never
+  called and nothing crashes.
+* Engine ``ResumeKitError`` maps through ``from_resume_kit_error``; any other
+  exception maps through ``from_exception``.
+
+Every capability is exposed as an ``async`` callable with the uniform signature
+``(request, options) -> InterfaceResponse[object]`` so a single registry can
+type-check without casts or ignores; deterministic capabilities simply do not
+await anything internally.
+
+No transport dependency (Typer, MCP SDK, FastAPI, uvicorn, httpx) and no
+concrete provider are imported here.  Everything depends inward on core,
+schemas, and the engine packages only.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+
+from resume_kit_alignment import align_resume as _align_resume
+from resume_kit_ats import compute_ats_score
+from resume_kit_core import InterfaceResponse, ResumeKitError
+from resume_kit_core.interface import (
+    build_provider_not_configured as _build_provider_not_configured,
+)
+from resume_kit_core.interface import (
+    build_success,
+)
+from resume_kit_core.interface import (
+    from_exception as _from_exception,
+)
+from resume_kit_core.interface import (
+    from_resume_kit_error as _from_resume_kit_error,
+)
+from resume_kit_document_parser import (
+    extract_resume_text_only,
+    parse_resume_structured,
+)
+from resume_kit_evidence import build_candidate_evidence, validate_resume_truth
+from resume_kit_job_parser import (
+    parse_job_description,
+    parse_job_description_text_only,
+)
+from resume_kit_matching import (
+    analyze_keyword_gaps,
+    check_job_match,
+    compare_versions,
+    select_best,
+)
+from resume_kit_schemas import (
+    AlignmentResult,
+    ATSScore,
+    CandidateEvidence,
+    JobDescription,
+    JobMatchReport,
+    KeywordGapAnalysis,
+    ResumeComparisonResult,
+    ResumeDocument,
+    ResumeSelectionResult,
+    TruthReport,
+)
+
+from resume_kit_facade.models import (
+    AlignResumeRequest,
+    BuildCandidateEvidenceRequest,
+    CapabilityOptions,
+    CheckResumeAtsRequest,
+    CheckResumeJobMatchRequest,
+    CompareResumeVersionsRequest,
+    ExtractJobDescriptionRequest,
+    ExtractResumeRequest,
+    IdentifyResumeGapsRequest,
+    SelectBestResumeRequest,
+    ValidateResumeTruthRequest,
+)
+
+# A capability takes a request object plus options and yields an
+# InterfaceResponse.  Registry values narrow their request via ``isinstance``.
+Capability = Callable[[object, CapabilityOptions], Awaitable[InterfaceResponse[object]]]
+
+
+def _widen(response: InterfaceResponse[None]) -> InterfaceResponse[object]:
+    """Widen a data-less failure/pause response to ``InterfaceResponse[object]``.
+
+    ``InterfaceResponse`` is invariant in its type parameter, but the substrate
+    failure builders return ``InterfaceResponse[None]`` (always ``data=None``).
+    Re-wrap the envelope into the widened type so capabilities can return a
+    single ``InterfaceResponse[object]`` type across success and failure.
+    """
+    return InterfaceResponse[object](
+        data=None,
+        warnings=response.warnings,
+        errors=response.errors,
+        requires_human_input=response.requires_human_input,
+        questions=response.questions,
+        artifacts=response.artifacts,
+        provenance=response.provenance,
+    )
+
+
+def from_resume_kit_error(exc: ResumeKitError) -> InterfaceResponse[object]:
+    """Widened ``from_resume_kit_error`` for capability return positions."""
+    return _widen(_from_resume_kit_error(exc))
+
+
+def from_exception(exc: BaseException) -> InterfaceResponse[object]:
+    """Widened ``from_exception`` for capability return positions."""
+    return _widen(_from_exception(exc))
+
+
+def build_provider_not_configured(
+    *, details: dict[str, object] | None = None
+) -> InterfaceResponse[object]:
+    """Widened ``build_provider_not_configured`` for capability returns."""
+    return _widen(_build_provider_not_configured(details=details))
+
+
+class _UnexpectedRequestError(ResumeKitError):
+    """Raised when a capability receives a request of the wrong type."""
+
+
+def _bad_request(request: object, expected: str) -> ResumeKitError:
+    from resume_kit_core.errors import CoreError, ErrorCode
+
+    return _UnexpectedRequestError(
+        CoreError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"Expected {expected} request.",
+            details={"received_type": type(request).__name__},
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# LLM-capable capabilities
+# ---------------------------------------------------------------------------
+
+
+async def extract_resume(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Extract a structured resume from raw bytes (LLM or deterministic)."""
+    if not isinstance(request, ExtractResumeRequest):
+        return from_resume_kit_error(_bad_request(request, "ExtractResumeRequest"))
+    document: ResumeDocument | None
+    if options.no_llm:
+        try:
+            result = extract_resume_text_only(request.content, request.filename)
+        except ResumeKitError as exc:
+            return from_resume_kit_error(exc)
+        except Exception as exc:  # noqa: BLE001 - map any engine failure
+            return from_exception(exc)
+        document = result.document
+        return build_success(
+            document, warnings=result.warnings, provenance=result.provenance,
+            strict=options.strict,
+        )
+
+    if options.provider is None:
+        return build_provider_not_configured(details={"capability": "extract-resume"})
+    try:
+        result = await parse_resume_structured(
+            request.content, request.filename, options.provider
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    document = result.document
+    return build_success(
+        document, warnings=result.warnings, provenance=result.provenance,
+        strict=options.strict,
+    )
+
+
+async def extract_job_description(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Extract a structured job description from raw text (LLM or deterministic)."""
+    if not isinstance(request, ExtractJobDescriptionRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ExtractJobDescriptionRequest")
+        )
+    job: JobDescription
+    if options.no_llm:
+        try:
+            job = parse_job_description_text_only(request.raw_text)
+        except ResumeKitError as exc:
+            return from_resume_kit_error(exc)
+        except Exception as exc:  # noqa: BLE001 - map any engine failure
+            return from_exception(exc)
+        return build_success(job, strict=options.strict)
+
+    if options.provider is None:
+        return build_provider_not_configured(
+            details={"capability": "extract-job-description"},
+        )
+    try:
+        job = await parse_job_description(request.raw_text, options.provider)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(job, strict=options.strict)
+
+
+async def align_resume(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run controlled alignment (LLM), or a deterministic no-change path."""
+    if not isinstance(request, AlignResumeRequest):
+        return from_resume_kit_error(_bad_request(request, "AlignResumeRequest"))
+    result: AlignmentResult
+    if options.no_llm:
+        result = AlignmentResult(
+            original_resume=request.resume,
+            aligned_resume=request.resume,
+            job=request.job,
+        )
+        return build_success(result, strict=options.strict)
+
+    if options.provider is None:
+        return build_provider_not_configured(details={"capability": "align-resume"})
+    try:
+        result = await _align_resume(
+            request.resume,
+            request.job,
+            request.evidence,
+            human_in_loop=options.human_in_loop,
+            provider=options.provider,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+# ---------------------------------------------------------------------------
+# Deterministic capabilities (no provider ever required)
+# ---------------------------------------------------------------------------
+
+
+async def check_resume_ats(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Compute the deterministic ATS score for a resume against a job."""
+    if not isinstance(request, CheckResumeAtsRequest):
+        return from_resume_kit_error(_bad_request(request, "CheckResumeAtsRequest"))
+    try:
+        gap = analyze_keyword_gaps(request.job, request.resume, request.resume)
+        score: ATSScore = compute_ats_score(
+            request.resume,
+            request.job,
+            gap.current_match_percentage,
+            gap.non_injectable_keywords,
+            gap.injectable_keywords,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(score, strict=options.strict)
+
+
+async def check_resume_job_match(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Compute the deterministic resume/job match report."""
+    if not isinstance(request, CheckResumeJobMatchRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "CheckResumeJobMatchRequest")
+        )
+    try:
+        report: JobMatchReport = check_job_match(request.resume, request.job)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
+async def select_best_resume(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Select the best-matching resume from a set for a job."""
+    if not isinstance(request, SelectBestResumeRequest):
+        return from_resume_kit_error(_bad_request(request, "SelectBestResumeRequest"))
+    try:
+        result: ResumeSelectionResult = select_best(
+            request.resumes, request.job, request.labels
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def compare_resume_versions(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Compare two resume versions against a job description."""
+    if not isinstance(request, CompareResumeVersionsRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "CompareResumeVersionsRequest")
+        )
+    try:
+        result: ResumeComparisonResult = compare_versions(
+            request.base,
+            request.candidate,
+            request.job,
+            request.base_label,
+            request.candidate_label,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def identify_resume_gaps(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Analyse keyword gaps between a tailored resume, master, and job."""
+    if not isinstance(request, IdentifyResumeGapsRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "IdentifyResumeGapsRequest")
+        )
+    try:
+        gap: KeywordGapAnalysis = analyze_keyword_gaps(
+            request.job, request.tailored, request.master
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(gap, strict=options.strict)
+
+
+async def validate_resume_truth_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Validate a resume against candidate evidence for truthfulness."""
+    if not isinstance(request, ValidateResumeTruthRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ValidateResumeTruthRequest")
+        )
+    try:
+        report: TruthReport = validate_resume_truth(request.resume, request.evidence)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
+async def build_candidate_evidence_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Build candidate evidence records from a resume."""
+    if not isinstance(request, BuildCandidateEvidenceRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "BuildCandidateEvidenceRequest")
+        )
+    try:
+        evidence: list[CandidateEvidence] = build_candidate_evidence(
+            request.resume, approved_claims=request.approved_claims
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(evidence, strict=options.strict)
+
+
+# ---------------------------------------------------------------------------
+# Capability registry
+# ---------------------------------------------------------------------------
+
+REGISTRY: dict[str, Capability] = {
+    "extract-resume": extract_resume,
+    "extract-job-description": extract_job_description,
+    "check-resume-ats": check_resume_ats,
+    "check-resume-job-match": check_resume_job_match,
+    "select-best-resume": select_best_resume,
+    "compare-resume-versions": compare_resume_versions,
+    "identify-resume-gaps": identify_resume_gaps,
+    "align-resume": align_resume,
+    "validate-resume-truth": validate_resume_truth_capability,
+    "build-candidate-evidence": build_candidate_evidence_capability,
+}

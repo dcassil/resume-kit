@@ -18,6 +18,7 @@ members = [
     "resume-kit-core",
     "resume-kit-document-parser",
     "resume-kit-evidence",
+    "resume-kit-facade",
     "resume-kit-job-parser",
     "resume-kit-matching",
     "resume-kit-policy",
@@ -1092,6 +1093,35 @@ dependencies = [
 requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
+name = "resume-kit-facade"
+version = "0.0.0"
+source = { editable = "packages/facade" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-alignment" },
+    { name = "resume-kit-ats" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-document-parser" },
+    { name = "resume-kit-evidence" },
+    { name = "resume-kit-job-parser" },
+    { name = "resume-kit-matching" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-alignment", editable = "packages/alignment" },
+    { name = "resume-kit-ats", editable = "packages/ats" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-document-parser", editable = "packages/document-parser" },
+    { name = "resume-kit-evidence", editable = "packages/evidence" },
+    { name = "resume-kit-job-parser", editable = "packages/job-parser" },
+    { name = "resume-kit-matching", editable = "packages/matching" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
 ]
 

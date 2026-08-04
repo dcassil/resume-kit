@@ -92,6 +92,10 @@ def test_known_packages_present() -> None:
         "policy",
         "evidence",
         "alignment",
+        "facade",
+        "cli",
+        "mcp",
+        "api",
     }
     unexpected = set(package_dirs) - expected
     assert not unexpected, (

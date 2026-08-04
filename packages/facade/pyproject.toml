@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-facade"
+version = "0.0.0"
+description = "Phase 5 in-process capability facade all transports call; single engine boundary."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-core",
+    "resume-kit-schemas",
+    "resume-kit-document-parser",
+    "resume-kit-job-parser",
+    "resume-kit-ats",
+    "resume-kit-matching",
+    "resume-kit-alignment",
+    "resume-kit-evidence",
+]
+
+[tool.uv.sources]
+resume-kit-core = { workspace = true }
+resume-kit-schemas = { workspace = true }
+resume-kit-document-parser = { workspace = true }
+resume-kit-job-parser = { workspace = true }
+resume-kit-ats = { workspace = true }
+resume-kit-matching = { workspace = true }
+resume-kit-alignment = { workspace = true }
+resume-kit-evidence = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_facade"]
