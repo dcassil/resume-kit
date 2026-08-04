@@ -92,7 +92,7 @@ async def call_tool(
 
 server: Server[object] = Server(
     "resume-kit",
-    version="0.1.0",
+    version="0.1.1",
     on_list_tools=list_tools,
     on_call_tool=call_tool,
 )

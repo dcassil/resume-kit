@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Resume Intelligence Toolkit — agent plugin, MCP server, and CLI for evaluating, matching, aligning, validating, and exporting resumes.",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "plugins": [
     {
       "name": "resume-intelligence",
       "source": "./plugins/resume-intelligence",
       "description": "Resume analysis, controlled alignment, truth validation, and PDF/DOCX export skills backed by the resume-kit MCP server + resume-tool CLI.",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
