@@ -267,3 +267,12 @@ Phase 6 Wave E executed (2 claude/opus + 1 codex):
 Orchestrator verify: independent `uv build --wheel` → self-contained (no internal Requires-Dist, all 15 pkgs vendored, resume-tool entry present).
 Gate after Wave E: **2370 passed, 1 skipped**, ruff clean, mypy --strict clean (74 files).
 Remaining: Wave F (RIT-T-0059 clean-venv install proof) — final task.
+
+Phase 6 Wave F executed (claude/sonnet):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| F | RIT-T-0059 clean-venv install proof | claude/sonnet | DONE (builds umbrella wheel → fresh venv → pip install 'resume-kit[cli]' → asserts import resume_kit_facade/export + resume-tool --help lists export; passes in ~23s; skips gracefully if uv absent) |
+
+**Phase 6 (RIT-I-0007) COMPLETE & pushed.** Final gate: **2371 passed, 1 skipped**, ruff clean, mypy --strict clean (75 files incl packaging test).
+`pip install resume-kit[cli]` now genuinely works (self-contained umbrella wheel proven end-to-end in a clean venv).
+DEFERRED to a future Phase 7: cover-letter match/align, application-package audit, and the 4 engine capabilities (check-resume-consistency, score-resume-bullet, improve-resume-section, create-job-specific-resume) + their interfaces. Actual PyPI upload is Daniel's to run (Trusted-Publishing workflow tag-gated + ready).
