@@ -226,3 +226,13 @@ forbidden set for engine pkgs but ALLOWED in packages/export (task 0060). (2) kn
 (4) root pyproject wheel force-include is the load-bearing packaging fix (task 0058).
 
 Gate after each wave (uv sync --all-packages first): ruff + mypy(+packages/export) + pytest.
+
+Phase 6 Wave A/B executed:
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| A | RIT-T-0049 scaffold packages/export | claude/sonnet | DONE (ExportFormat/ExportOptions/render dispatcher, lazy renderer loading; 13 tests) |
+| B | RIT-T-0050 ReportLab PDF renderer | claude/opus | DONE (4 tests; deterministic via rl_config.invariant; pdfminer structural checks; reportlab untyped→targeted type:ignore[import-untyped]) |
+| B | RIT-T-0051 python-docx DOCX renderer | codex | DONE (4 tests; deterministic via fixed core-props + zip-entry rewrite; byte-equality) |
+
+Orchestrator fix (integration seam): scaffold render() dispatcher called renderers positionally, but renderers use keyword-only `options`. Fixed dispatcher to call `options=...`, added a `Renderer` Protocol (keyword-only) typing the loaders (no cast), and updated 2 obsolete scaffold tests (they asserted render() raises ImportError before renderers land — now assert %PDF-/PK bytes).
+Gate after Wave B: **2082 passed, 1 skipped**, ruff clean, mypy --strict clean.

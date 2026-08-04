@@ -77,20 +77,20 @@ def test_export_options_custom_values() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_render_pdf_raises_import_error_before_renderer_lands() -> None:
+def test_render_pdf_dispatches_to_renderer() -> None:
     from resume_kit_schemas.resume import ResumeDocument
 
     resume = ResumeDocument()
-    with pytest.raises(ImportError, match="PDF renderer is not available"):
-        render(resume, ExportFormat.pdf)
+    data = render(resume, ExportFormat.pdf)
+    assert data[:5] == b"%PDF-"
 
 
-def test_render_docx_raises_import_error_before_renderer_lands() -> None:
+def test_render_docx_dispatches_to_renderer() -> None:
     from resume_kit_schemas.resume import ResumeDocument
 
     resume = ResumeDocument()
-    with pytest.raises(ImportError, match="DOCX renderer is not available"):
-        render(resume, ExportFormat.docx)
+    data = render(resume, ExportFormat.docx)
+    assert data[:2] == b"PK"
 
 
 # ---------------------------------------------------------------------------

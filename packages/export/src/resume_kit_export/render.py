@@ -7,11 +7,19 @@ format. This keeps the package importable before the renderer tasks land.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import Protocol
 
 from resume_kit_schemas.resume import ResumeDocument
 
 from resume_kit_export.models import ExportFormat, ExportOptions
+
+
+class Renderer(Protocol):
+    """Structural type for a format renderer (keyword-only ``options``)."""
+
+    def __call__(
+        self, resume: ResumeDocument, *, options: ExportOptions
+    ) -> bytes: ...
 
 
 def render(
@@ -41,17 +49,17 @@ def render(
     resolved_options = options if options is not None else ExportOptions()
 
     if fmt is ExportFormat.pdf:
-        renderer_fn: Callable[[ResumeDocument, ExportOptions], bytes] = _load_pdf()
-        return renderer_fn(resume, resolved_options)
+        renderer_fn: Renderer = _load_pdf()
+        return renderer_fn(resume, options=resolved_options)
 
     if fmt is ExportFormat.docx:
         renderer_fn = _load_docx()
-        return renderer_fn(resume, resolved_options)
+        return renderer_fn(resume, options=resolved_options)
 
     raise NotImplementedError(f"No renderer registered for format: {fmt!r}")
 
 
-def _load_pdf() -> Callable[[ResumeDocument, ExportOptions], bytes]:
+def _load_pdf() -> Renderer:
     """Lazily import and return the PDF renderer callable."""
     try:
         import importlib
@@ -62,11 +70,11 @@ def _load_pdf() -> Callable[[ResumeDocument, ExportOptions], bytes]:
             "PDF renderer is not available yet. "
             "Install or await the resume_kit_export.pdf module."
         ) from exc
-    fn: Callable[[ResumeDocument, ExportOptions], bytes] = mod.render_pdf
+    fn: Renderer = mod.render_pdf
     return fn
 
 
-def _load_docx() -> Callable[[ResumeDocument, ExportOptions], bytes]:
+def _load_docx() -> Renderer:
     """Lazily import and return the DOCX renderer callable."""
     try:
         import importlib
@@ -77,5 +85,5 @@ def _load_docx() -> Callable[[ResumeDocument, ExportOptions], bytes]:
             "DOCX renderer is not available yet. "
             "Install or await the resume_kit_export.docx module."
         ) from exc
-    fn: Callable[[ResumeDocument, ExportOptions], bytes] = mod.render_docx
+    fn: Renderer = mod.render_docx
     return fn
