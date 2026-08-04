@@ -1,10 +1,14 @@
 """Boundary: packages/ must not import from upstream app or forbidden concrete deps.
 
 Guards against:
-- ``from app`` / ``import app`` (upstream application namespace)
-- ``litellm`` (concrete LLM provider SDK)
-- ``sqlalchemy`` (ORM / persistence)
-- ``fastapi`` (web framework — disallowed in core/schema packages)
+- ``from app`` / ``import app`` (upstream application namespace) — everywhere
+- ``litellm`` (concrete LLM provider SDK) — everywhere
+- ``sqlalchemy`` (ORM / persistence) — everywhere
+- transport frameworks (``fastapi``, ``typer``, ``mcp``, ``uvicorn``, ``httpx``) —
+  disallowed in ENGINE packages only. The Phase 5 transport packages (``cli``, ``mcp``,
+  ``api``) legitimately depend on these, so they are exempt from the transport-framework
+  checks (but never from the app/litellm/sqlalchemy checks). This encodes NFR-503: heavy
+  transport deps must not leak into the engine.
 
 Reads source files as text so upstream is never executed.
 """
@@ -21,6 +25,9 @@ import pytest
 # ---------------------------------------------------------------------------
 
 PACKAGES_ROOT = Path(__file__).parents[2] / "packages"
+
+# Phase 5 transport packages — exempt from the transport-framework checks only.
+TRANSPORT_PACKAGES = {"cli", "mcp", "api"}
 
 # Patterns that must not appear anywhere in packages/*/src/**/*.py
 FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -39,10 +46,29 @@ FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "sqlalchemy import",
         re.compile(r"^\s*(from\s+sqlalchemy|import\s+sqlalchemy)", re.MULTILINE),
     ),
-    # web framework
+]
+
+# Transport frameworks: forbidden in ENGINE packages, allowed in TRANSPORT_PACKAGES.
+ENGINE_ONLY_FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "fastapi import",
         re.compile(r"^\s*(from\s+fastapi|import\s+fastapi)", re.MULTILINE),
+    ),
+    (
+        "typer import",
+        re.compile(r"^\s*(from\s+typer|import\s+typer)", re.MULTILINE),
+    ),
+    (
+        "mcp SDK import",
+        re.compile(r"^\s*(from\s+mcp(\s*\.|\s)|import\s+mcp(\s+|$))", re.MULTILINE),
+    ),
+    (
+        "uvicorn import",
+        re.compile(r"^\s*(from\s+uvicorn|import\s+uvicorn)", re.MULTILINE),
+    ),
+    (
+        "httpx import",
+        re.compile(r"^\s*(from\s+httpx|import\s+httpx)", re.MULTILINE),
     ),
 ]
 
@@ -60,6 +86,15 @@ def _collect_python_files() -> list[Path]:
     if not files:
         pytest.fail(f"No Python source files found under {PACKAGES_ROOT}")
     return files
+
+
+def _collect_engine_python_files() -> list[Path]:
+    """Return all .py under packages/*/src/ EXCEPT the transport packages."""
+    return [
+        p
+        for p in _collect_python_files()
+        if p.relative_to(PACKAGES_ROOT).parts[0] not in TRANSPORT_PACKAGES
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -115,11 +150,37 @@ def test_known_packages_present() -> None:
     ids=lambda x: x if isinstance(x, str) else None,
 )
 def test_no_forbidden_import(py_file: Path, label: str, pattern: re.Pattern[str]) -> None:
-    """Source file must not contain a forbidden import pattern."""
+    """Source file must not contain a forbidden import pattern (everywhere)."""
     source = py_file.read_text(encoding="utf-8")
     matches = pattern.findall(source)
     assert not matches, (
         f"{label!r} found in {py_file.relative_to(PACKAGES_ROOT.parent)!s}:\n"
+        + "\n".join(f"  {m!r}" for m in matches)
+    )
+
+
+@pytest.mark.parametrize(
+    "py_file",
+    _collect_engine_python_files(),
+    ids=lambda p: str(p.relative_to(PACKAGES_ROOT.parent)),
+)
+@pytest.mark.parametrize(
+    "label,pattern",
+    ENGINE_ONLY_FORBIDDEN_PATTERNS,
+    ids=lambda x: x if isinstance(x, str) else None,
+)
+def test_no_transport_dep_in_engine(
+    py_file: Path, label: str, pattern: re.Pattern[str]
+) -> None:
+    """Engine package source must not import a transport framework (NFR-503).
+
+    Transport packages (cli/mcp/api) legitimately depend on these and are excluded
+    from this scan; they remain subject to the always-forbidden patterns above.
+    """
+    source = py_file.read_text(encoding="utf-8")
+    matches = pattern.findall(source)
+    assert not matches, (
+        f"{label!r} found in ENGINE file {py_file.relative_to(PACKAGES_ROOT.parent)!s}:\n"
         + "\n".join(f"  {m!r}" for m in matches)
     )
 
