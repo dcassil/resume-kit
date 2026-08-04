@@ -169,3 +169,16 @@ Bridge task (0044) or scaffold must update root workspace members + the gate myp
 
 Gate after each wave (uv sync --all-packages first):
 `uv run ruff check packages tests && uv run mypy packages/core ... packages/cli packages/mcp packages/api && uv run pytest`
+
+Phase 5 Wave D executed (3 claude/opus + 1 claude/sonnet + 1 codex):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| D | RIT-T-0041 resume-tool CLI | claude/opus | DONE (15 tests; Typer, 10 commands, json/text/md, exit codes via exit_code_for, --help works) |
+| D | RIT-T-0042 MCP server | codex | DONE (19 tests; mcp.server.Server low-level, 10 stable tools, direct handler registry) |
+| D | RIT-T-0043 FastAPI routes | claude/opus | DONE (17 tests; 10 POST endpoints, envelope-derived HTTP status, TestClient) |
+| D | RIT-T-0044 job-hunter bridge | claude/opus | DONE (8 tests; analyze/align/validate/build callables + sync wrappers; no-mutation asserted) |
+| D | RIT-T-0045 plugin skills | claude/sonnet | DONE (10 SKILL.md + 8 tests; guards against deferred-capability mentions) |
+
+Orchestrator integration + gate after Wave D: **1335 passed, 1 skipped**, ruff clean, mypy --strict clean (69 files).
+Orchestrator fixes: (1) added "integrations/*" to root workspace members so the bridge is gate-covered; (2) removed bridge `# type: ignore[arg-type]` — typed `_run` param as Coroutine (first-class, no suppression); (3) fixed 2 sys.modules-pollution test failures (core+facade no-transport-import tests) by running the import check in a clean subprocess; (4) MCP tools.py mypy: narrowed `_find_model_type` to `type[BaseModel]` via issubclass; (5) CLI ruff: StrEnum + PEP-695 generic.
+Remaining: Wave E (RIT-T-0046 parity, 0047 boundary, 0048 exports).

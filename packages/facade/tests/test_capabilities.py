@@ -8,7 +8,7 @@ invariant that ``resume_kit_facade`` imports no transport package.
 
 from __future__ import annotations
 
-import importlib
+import subprocess
 import sys
 
 import pytest
@@ -245,8 +245,20 @@ async def test_align_resume_awaits_provider_path() -> None:
 
 
 def test_facade_imports_no_transport_package() -> None:
-    importlib.import_module("resume_kit_facade.capabilities")
-    importlib.import_module("resume_kit_facade.models")
-    forbidden = {"typer", "mcp", "fastapi", "uvicorn", "httpx"}
-    loaded = set(sys.modules)
-    assert forbidden.isdisjoint(loaded), forbidden & loaded
+    """Importing the facade in a clean interpreter pulls in no transport package.
+
+    Runs in a subprocess so the check is not polluted by other test modules that
+    legitimately import the transports (the Phase 5 CLI/MCP/API test suites).
+    """
+    script = (
+        "import sys\n"
+        "import resume_kit_facade.capabilities\n"
+        "import resume_kit_facade.models\n"
+        "forbidden = {'typer', 'mcp', 'fastapi', 'uvicorn', 'httpx'}\n"
+        "hit = sorted(forbidden & set(sys.modules))\n"
+        "assert not hit, hit\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

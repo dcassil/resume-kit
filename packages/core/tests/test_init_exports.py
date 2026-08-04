@@ -29,22 +29,27 @@ def test_all_public_types_importable() -> None:
 
 
 def test_no_forbidden_imports() -> None:
-    """Verify core modules don't import forbidden dependencies."""
-    import importlib
+    """Importing core in a clean interpreter pulls in no forbidden dependency.
+
+    Runs in a subprocess so the check reflects only what importing core actually
+    imports — an in-process ``sys.modules`` scan would be polluted by other test
+    modules (e.g. the Phase 5 CLI/API tests legitimately import typer/fastapi).
+    """
+    import subprocess
     import sys
 
-    forbidden = {"litellm", "sqlalchemy", "fastapi", "click", "typer"}
-
-    # Import all core modules
-    for mod_name in [
-        "resume_kit_core",
-        "resume_kit_core.errors",
-        "resume_kit_core.providers",
-        "resume_kit_core.storage",
-        "resume_kit_core.response",
-    ]:
-        importlib.import_module(mod_name)
-
-    loaded = set(sys.modules.keys())
-    for forbidden_pkg in forbidden:
-        assert forbidden_pkg not in loaded, f"Forbidden import found: {forbidden_pkg}"
+    script = (
+        "import sys\n"
+        "import resume_kit_core\n"
+        "import resume_kit_core.errors\n"
+        "import resume_kit_core.providers\n"
+        "import resume_kit_core.storage\n"
+        "import resume_kit_core.response\n"
+        "forbidden = {'litellm', 'sqlalchemy', 'fastapi', 'click', 'typer'}\n"
+        "hit = sorted(forbidden & set(sys.modules))\n"
+        "assert not hit, hit\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
