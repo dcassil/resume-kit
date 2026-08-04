@@ -32,3 +32,11 @@ Gate (Phase 2): `uv run ruff check packages tests && uv run mypy packages/core p
 | Wave | Agent | Task | Files claimed | Status |
 | ---- | ----- | ---- | ------------- | ------ |
 | A | codex-decomp | RIT-I-0003 | Metis tasks RIT-T-0009..0015 | planned |
+| A | claude/haiku | RIT-T-0009 (scaffold) | `packages/document-parser/{pyproject,__init__,py.typed,README}` | DONE (workspace member, imports, ruff+mypy green) |
+| B | claude/sonnet | RIT-T-0010 (dates) | `dates.py`,`tests/test_dates.py`,`tests/__init__.py` | DONE (28 char tests) |
+| B | claude/sonnet | RIT-T-0011 (text-extract) | `text_extraction.py`,`tests/test_text_extraction.py`,`tests/fixtures/sample_resume.md` | DONE (10 tests incl. real DOCX roundtrip) |
+| B | claude/sonnet | RIT-T-0012 (json+prompts) | `json_helpers.py`,`prompts.py`,`tests/test_json_helpers.py` | DONE (30 char tests) |
+| B | claude/sonnet | RIT-T-0013 (results) | `results.py`,`tests/test_results.py` | DONE (13 tests; ParseResult/ParseMethod compose core+schemas) |
+
+Orchestrator gate after Wave B: **389 passed**, ruff clean, mypy --strict clean (35 files).
+Orchestrator fixes at gate: (1) updated `tests/boundary/test_boundary_no_upstream_imports.py` Phase-1-only assertion to include `document-parser`; (2) added `python-docx` dev dep so DOCX extraction tests run (un-skipped); (3) NOTE: gate must use `uv sync --all-packages` — plain `uv sync` does not install non-root workspace members.

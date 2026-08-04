@@ -72,16 +72,21 @@ def test_packages_root_exists() -> None:
     assert PACKAGES_ROOT.is_dir(), f"Expected packages/ directory at {PACKAGES_ROOT}"
 
 
-def test_phase1_only_packages_present() -> None:
-    """Only resume_kit_core and resume_kit_schemas exist under packages/."""
+def test_known_packages_present() -> None:
+    """Only known workspace packages exist under packages/.
+
+    Phase 1 shipped ``core`` + ``schemas``; Phase 2 (RIT-I-0003) adds
+    ``document-parser``. New packages must be added here as later phases land, so
+    an accidental/unreviewed package under ``packages/`` is still caught.
+    """
     package_dirs = sorted(
         p.name for p in PACKAGES_ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")
     )
-    expected = {"core", "schemas"}
+    expected = {"core", "schemas", "document-parser"}
     unexpected = set(package_dirs) - expected
     assert not unexpected, (
-        f"Unexpected Phase 2+ packages found under packages/: {sorted(unexpected)}. "
-        "Only 'core' and 'schemas' should be present for Phase 1."
+        f"Unexpected package(s) found under packages/: {sorted(unexpected)}. "
+        "Add the package to the expected set here once it is an intended phase deliverable."
     )
 
 

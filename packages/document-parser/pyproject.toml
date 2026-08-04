@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-document-parser"
+version = "0.0.0"
+description = "Phase 2 document extraction & parsing package for resume evaluation and processing."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-core",
+    "resume-kit-schemas",
+    "markitdown[docx]",
+    "pdfminer.six",
+]
+
+[tool.uv.sources]
+resume-kit-core = { workspace = true }
+resume-kit-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_document_parser"]
