@@ -79,3 +79,24 @@ Gate fixes: (1) boundary test expected-set += matching/ats/job-parser; (2) remov
 **Phase 3 (RIT-I-0004) COMPLETE.** Final gate: **573 passed**, ruff clean, mypy --strict clean (59 files).
 Public APIs: `resume_kit_matching`{calculate_keyword_match, analyze_keyword_gaps, jd_keywords_present, is_valid_resume, check_job_match, select_best, compare_versions}; `resume_kit_ats`{compute_ats_score}; `resume_kit_job_parser`{parse_job_description, parse_job_description_text_only}.
 Note: import-boundary test files are package-scoped names (test_matching/ats/job_parser_import_boundaries.py) to avoid the mypy duplicate-module issue with hyphenated package dirs that can't hold tests/__init__.py.
+
+---
+
+## Phase 4 — Controlled Alignment (RIT-I-0005) — PLANNED
+
+Codex decomposed into 12 file-disjoint tasks RIT-T-0026..0037 (`.agents/decomp-RIT-I-0005.json`).
+New packages: `packages/policy` (resume_kit_policy), `packages/evidence` (resume_kit_evidence),
+`packages/alignment` (resume_kit_alignment). Initiative → active.
+
+Wave plan (by DAG / file-disjointness):
+| Wave | Tasks | Notes |
+| ---- | ----- | ----- |
+| A | RIT-T-0026 (scaffold 3 pkgs) [opus/high] | lands first; everything depends transitively |
+| B | RIT-T-0027 (schemas results.py) [opus/med] | new result types (PolicyDecision/AlignmentResult/TruthReport/ReviewSession/SkillTargetPlan) |
+| C | RIT-T-0028 freedom path policy [opus/high], 0029 skill targets [opus/med], 0030 evidence predicates+fabrication [opus/med], 0033 diff+verifier [opus/med], 0035 review controller [opus/med] | all dep only on 0027; file-disjoint |
+| D | RIT-T-0031 candidate evidence+truth [opus/med] (dep 0030), 0032 apply_diffs engine [opus/med] (dep 0028+0029), 0034 provider generation [opus/med] (dep 0028+0029) | file-disjoint |
+| E | RIT-T-0036 align_resume orchestration [opus/high] (dep 0031,0032,0033,0034,0035) | invariant tests: NFR-405 fabricating-provider rejected, F>=3 forces truth, no unsupported claim |
+| F | RIT-T-0037 exports+attribution+boundaries [sonnet/med] (dep all) | edits every __init__ + attribution.md — LATE, serial |
+
+Gate after each wave (run `uv sync --all-packages` first):
+`uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser packages/policy packages/evidence packages/alignment && uv run pytest`
