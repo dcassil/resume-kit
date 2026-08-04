@@ -193,6 +193,29 @@ Note: characterization tests under `packages/document-parser/tests/` lock the up
 
 ---
 
+## Ported Files — `packages/matching`, `packages/ats`, `packages/job-parser` (RIT-I-0004)
+
+> Concrete resume-kit files that port/adapt upstream material into the matching, ats, and
+> job-parser packages. Each file below carries the modified-source marker comment block
+> (upstream path + pinned SHA `116f9cc3b00e1ac91734a6c2679bf41ea64a0edc`, Apache-2.0).
+> All modifications invert app-level dependencies: no file imports `app.*`, `litellm`,
+> `openai`, or any concrete LLM provider directly.
+
+| resume-kit file | Upstream source | Ported/adapted material | Modification note |
+|---|---|---|---|
+| `packages/matching/src/resume_kit_matching/keywords.py` | `app/services/refiner.py` (lines 38, 56, 181, 641: `_keyword_in_text`, `_extract_jd_skill_keys`, `analyze_keyword_gaps`, `calculate_keyword_match`) | Deterministic keyword matching and gap-analysis helpers | Extracted into a standalone module; `app.schemas.*` replaced with `resume_kit_schemas`; typed overloads added for `ResumeDocument` / `JobDescription` and plain dict; LLM and async dependencies removed; all deterministic re/text logic faithfully preserved |
+| `packages/matching/src/resume_kit_matching/predicates.py` | `app/tests/evals/scorers.py` (lines 152, 161: `jd_keywords_present`, `is_valid_resume`) | Deterministic resume-validation predicates | Ported `jd_keywords_present` and `is_valid_resume` only; `app.schemas.ResumeData` replaced with `resume_kit_schemas.ResumeDocument`; accepts both model instance and dict; private keyword helpers are local copies (file-disjoint from `keywords.py` by design) |
+| `packages/ats/src/resume_kit_ats/engine.py` | `app/services/ats.py` (line 171: `compute_ats_score`; line 64: `_compute_skills_coverage`; line 98: `_compute_section_completeness`; line 129: `_generate_recommendations`) | ATS composite scoring engine | Adapted and extended into the richer resume-kit ATS engine; existing 2-factor keyword+skills+section score is the seed; `app.*` imports removed (confirmed zero coupling); expanded deterministic checks enrich `recommendations` without altering seed composite score contract |
+| `packages/job-parser/src/resume_kit_job_parser/prompts.py` | `app/prompts/templates.py` (line 188: `EXTRACT_KEYWORDS_PROMPT`) | LLM prompt constant for job-keyword extraction | Ported `EXTRACT_KEYWORDS_PROMPT` as a pure string constant; surrounding `app.prompts` module coupling (placeholder validation, re-exports) dropped; `{job_description}` format placeholder preserved |
+| `packages/job-parser/src/resume_kit_job_parser/parse.py` | `app/services/improver.py` (line 604: `extract_job_keywords`) | Provider-injected job-description parsing pipeline | Adapted `extract_job_keywords` into an async provider-injected parser; `app.llm` / `app.prompts` / `complete_json` coupling removed; raw keyword dict mapped to canonical `resume_kit_schemas.JobDescription` + `Requirement` value objects; provider failures / malformed output mapped to safe raw-text fallback |
+
+Note: `packages/matching/src/resume_kit_matching/match.py`, `selection.py`, and `comparison.py`
+are **original resume-kit composition** with no upstream material ported — their module
+docstrings explicitly state "Original resume-kit code." No attribution rows are required for
+these files.
+
+---
+
 ## Intentionally Excluded Subsystems (Replace / Leave Behind)
 
 The following Resume-Matcher subsystems were reviewed during Phase 0 and intentionally

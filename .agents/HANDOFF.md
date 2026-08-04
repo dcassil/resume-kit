@@ -55,8 +55,16 @@ Claude-Session: https://claude.ai/code/session_01WpLT8iXnxtXkgRQeHFbhNj
   - Gate command (UPDATED): `uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser && uv run pytest`. **IMPORTANT: run `uv sync --all-packages` first** — plain `uv sync` does NOT install non-root workspace members (document-parser), breaking test collection.
   - Landmine cleared / added: added `python-docx` dev dep (DOCX extraction tests now run); `json_helpers.py` is extracted+attributed but currently unused on the response path (provider Protocol returns `dict`) — retain for the real provider (Phase 5).
   - Note: NEXT session should START at Phase 3.
-- **Phases 3–6: NOT STARTED.** Next initiatives to create from vision roadmap:
-  - Phase 3 — Matching & deterministic analysis (keyword/match, ATS engine — note `services/ats.py` is already deterministic+no-LLM, a strong seed — scoring dims; check-ats, check-job-match, select-best, compare-versions).
+- **Phase 3 — Matching & Deterministic Analysis (RIT-I-0004): COMPLETE & pushed.** All 10 tasks (RIT-T-0016..0025) done. Three new packages:
+  - `packages/matching` (`resume_kit_matching`): deterministic keyword match + gap → `KeywordGapAnalysis` (refiner port); `jd_keywords_present`/`is_valid_resume` predicates; explainable `check_job_match` → `JobMatchReport` (5 weighted dims summing 1.0, no-keyword-repetition-reward enforced); `select_best` (ranked, stable tie-break) → `ResumeSelectionResult`; `compare_versions` → `ResumeComparisonResult`.
+  - `packages/ats` (`resume_kit_ats`): `compute_ats_score` → `ATSScore` (adapt of deterministic upstream seed, weights 0.55/0.25/0.20) + expanded deterministic checks (contact/section/date/formatting recs). No LLM, no matching import.
+  - `packages/job-parser` (`resume_kit_job_parser`): `parse_job_description` (provider-injected → `JobDescription`) + `parse_job_description_text_only` no-LLM fallback.
+  - schemas gained 6 explainable-scoring models (MatchDimensionScore, JobMatchReport, ResumeVariantScore, ResumeSelectionResult, ScoreDelta, ResumeComparisonResult).
+  - **Full gate green: ruff clean, mypy --strict clean (59 files), 573 tests pass.**
+  - Gate command (UPDATED): `uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser && uv run pytest` (run `uv sync --all-packages` first).
+  - Landmine cleared: removed empty `packages/*/tests/__init__.py` (mypy duplicate-`tests`-module collision once >1 package had one); import-boundary test files must use package-scoped names (hyphenated pkg dirs can't hold `tests/__init__.py`).
+  - Note: NEXT session should START at Phase 4.
+- **Phases 4–6: NOT STARTED.** Next initiatives to create from vision roadmap:
   - Phase 4 — Controlled alignment (diff apply/verify engine, allowed-path policy, freedom 0-10, evidence+provenance, human-in-loop, validate-truth).
   - Phase 5 — Interfaces (CLI `resume-tool`, MCP server, agent plugin, REST API, job-hunter bridge).
   - Phase 6 — Export & package workflows (PDF/DOCX export WITHOUT the upstream Next.js frontend — `pdf.py` hard-deps Playwright+Chromium+frontend, so Replace→New; app-package audit; cover-letter match/align). Then configure PyPI publishing.

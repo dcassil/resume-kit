@@ -5,6 +5,10 @@ Provides ATS evaluation and scoring services for resume parsing and matching
 based on deterministic rules and keyword extraction.
 """
 
+from .engine import compute_ats_score
+
 __version__ = "0.0.0"
 
-__all__ = []
+__all__ = [
+    "compute_ats_score",
+]

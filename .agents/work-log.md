@@ -71,3 +71,11 @@ Gate (Phase 3): `uv run ruff check packages tests && uv run mypy packages/core p
 
 Orchestrator gate after Wave B: **539 passed**, ruff clean, mypy --strict clean (51 files).
 Gate fixes: (1) boundary test expected-set += matching/ats/job-parser; (2) removed empty `packages/*/tests/__init__.py` (4 files) — they collided as duplicate `tests` module under mypy; pytest uses `--import-mode=importlib` so they're unnecessary.
+| C | opus/med | RIT-T-0022 (job-match) | `matching/match.py`,test | DONE (7 tests; 5 weighted dims sum 1.0; no-repetition-reward proven) |
+| D | opus/med | RIT-T-0023 (select/compare) | `matching/selection.py`,`matching/comparison.py`,test | DONE (9 tests; stable tie-break, score deltas) |
+| E | haiku | RIT-T-0024 (exports) | `matching/ats/job-parser __init__.py` | DONE (public APIs importable) |
+| E | sonnet | RIT-T-0025 (attribution+boundary) | `references/attribution.md`,3× `test_*_import_boundaries.py` | DONE (5 ledger rows; boundary tests) |
+
+**Phase 3 (RIT-I-0004) COMPLETE.** Final gate: **573 passed**, ruff clean, mypy --strict clean (59 files).
+Public APIs: `resume_kit_matching`{calculate_keyword_match, analyze_keyword_gaps, jd_keywords_present, is_valid_resume, check_job_match, select_best, compare_versions}; `resume_kit_ats`{compute_ats_score}; `resume_kit_job_parser`{parse_job_description, parse_job_description_text_only}.
+Note: import-boundary test files are package-scoped names (test_matching/ats/job_parser_import_boundaries.py) to avoid the mypy duplicate-module issue with hyphenated package dirs that can't hold tests/__init__.py.
