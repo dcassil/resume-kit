@@ -58,6 +58,27 @@ Input fields: `resume`, `job`, `strict`.
 | `questions` | list | Always empty |
 | `provenance` | object | Source attribution |
 
+## Honor the project synonym index
+
+Read `resume-kit/config.json`'s `alias_file` (default
+`resume-kit/learning/synonyms.json`) and pass it to this capability so the
+grown, user-confirmed synonym index is honored: add `--alias-file <path>` on the
+CLI, or set the `alias_file` field on the `resume_check_job_match` MCP request.
+The engine UNIONs the project file over the seed lexicon; scoring stays fully
+deterministic (no LLM).
+
+## After scoring: grow the synonym index (truth-gated)
+
+After you surface the match report, for each missing requirement/keyword that the
+resume plausibly satisfies under a DIFFERENT surface term, run the shared
+**`manage-synonyms`** workflow: it applies the truthfulness gate (genuine
+same-skill synonym only — NetSuite↔SuiteCommerce yes, React≈Vue never), asks the
+user to confirm, and only then appends a justified `{canonical, alias, why}`
+entry to the alias file so the next deterministic run matches it. Never append
+silently; always report exactly what was added. See the `manage-synonyms` skill
+for the full workflow and file format. Scoring itself remains deterministic and
+provider-free.
+
 ## Notes
 
 - Fully deterministic.  No provider needed.

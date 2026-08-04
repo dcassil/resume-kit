@@ -312,3 +312,40 @@ Gate after Wave 1 + config: **ruff clean, mypy --strict clean (77 src files), 25
 | RIT-T-0066 integration + anti-over-match + cross-package consistency | opus | dispatched |
 
 **RIT-T-0067 build smoke check (orchestrator): PASS.** `uv build --wheel` → wheel contains `resume_kit_terms/*` incl `data/aliases.json` + `data/FORMAT.md`; fresh-venv `uv pip install resume_kit-0.1.1.whl` → `from resume_kit_terms import match` works, `match('k8s','Kubernetes',idx,allow_stem=False)` → alias/kubernet, `import snowballstemmer` OK. Umbrella ships the synonym engine correctly.
+
+---
+
+## RIT-I-0009 — Agent-Grown Alias Index (plugin, no provider)
+
+Decomposed (opus+high) into 4 tasks per the initiative Implementation Plan. Integration branch = main; commit+push once per initiative. User chose 0009 before 0010.
+- RIT-T-0068 (opus+high) engine merge hook: resume-kit-terms merges project alias file over seed; matching/ats _alias_index() load effective index; format+FORMAT.md. FOUNDATIONAL — all others depend.
+- RIT-T-0069 (opus+medium) config alias_file pointer + facade/CLI/MCP/API honor it.
+- RIT-T-0070 (opus+medium) plugin skills: truth-gated propose→confirm→append; gate wording; validate.
+- RIT-T-0071 (sonnet+medium) integration proof: project-added domain synonym matches end-to-end.
+
+Wave plan: W1 = 0068 solo (defines format everyone consumes). W2 = 0069 + 0070 parallel (engine/facade vs plugin markdown, disjoint). W3 = 0071.
+
+### Wave 1
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0068 engine merge hook | opus+high | dispatched |
+
+Wave 1 (RIT-T-0068) DONE (opus+high): `load_effective_alias_index(project_path=None)` in terms — UNION merge over seed, env `RESUME_KIT_ALIAS_FILE`/arg (arg>env>seed), `"justifications"` sibling ignored by matching, path-keyed lru_cache; matching/ats `_alias_index()` rewired. Gate: 2571 passed/1 skipped, ruff+mypy clean.
+FINDING: no Python package reads config.json — it's a plugin/working-dir convention. RIT-T-0069 corrected: surfaces take explicit `alias_file` param → engine env/arg; config.json pointer stays a plugin convention the skill passes through.
+
+### Wave 2 (parallel, file-disjoint)
+| Task | Files | Agent | Result |
+| ---- | ----- | ----- | ------ |
+| RIT-T-0069 surfaces alias_file param | packages/facade,cli,mcp,api + integrations | opus+medium | dispatched |
+| RIT-T-0070 plugin skills alias workflow | plugins/** | opus+medium | dispatched |
+
+Wave 2 DONE. RIT-T-0069 (opus): `use_alias_file` ctx mgr in facade (leak-free env set/reset); `alias_file` on 3 facade caps + CLI `--alias-file` + MCP `alias_file` + API body + job-hunter bridge; README documents config.json pointer; per-surface + env-leak tests. RIT-T-0070 (opus): new `manage-synonyms` skill (propose→truth-gate→confirm→append), linked from check-ats/job-match/identify-gaps; React≈Vue reject example; registered in skill slug test; plugin validate passes.
+Gate after Wave 2: ruff+mypy clean (78 src), plugin validate OK, 2596 passed/1 skipped.
+
+### Wave 3
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0071 integration proof | sonnet+medium | dispatched |
+
+Wave 3 (RIT-T-0071) DONE (sonnet): 15 integration tests — baseline miss, no-op, gap-resolves+scores rise, alias:<canonical> kind, no inflation, determinism, 2 facade-surface proofs, LexiconError conflict guard.
+**RIT-I-0009 COMPLETE.** Final gate: ruff+mypy clean (78 src), plugin validate OK, 2611 passed/1 skipped. Ready to commit+push per initiative.

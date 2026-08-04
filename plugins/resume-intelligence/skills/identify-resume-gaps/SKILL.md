@@ -62,6 +62,28 @@ Input fields: `job`, `tailored`, `master`, `strict`.
 | `questions` | list | Always empty |
 | `provenance` | object | Source attribution |
 
+## Honor the project synonym index
+
+Read `resume-kit/config.json`'s `alias_file` (default
+`resume-kit/learning/synonyms.json`) and pass it to this capability so the
+grown, user-confirmed synonym index is honored: add `--alias-file <path>` on the
+CLI, or set the `alias_file` field on the `resume_identify_gaps` MCP request. The
+engine UNIONs the project file over the seed lexicon; scoring stays fully
+deterministic (no LLM).
+
+## After analysis: grow the synonym index (truth-gated)
+
+After you report the gap analysis, for each missing job keyword that the resume
+plausibly satisfies under a DIFFERENT surface term, run the shared
+**`manage-synonyms`** workflow: it applies the truthfulness gate (genuine
+same-skill synonym only — NetSuite↔SuiteCommerce yes, React≈Vue never; never
+alias to make an ABSENT skill score as present), asks the user to confirm, and
+only then appends a justified `{canonical, alias, why}` entry to the alias file
+so the next deterministic run matches it. Do not confuse this with
+`non_injectable_keywords`: a genuinely absent skill is a real gap and must NOT be
+aliased away. Never append silently; always report exactly what was added. See
+the `manage-synonyms` skill for the full workflow and file format.
+
 ## Notes
 
 - Fully deterministic.  No provider needed.

@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from resume_kit_core import StructuredCompletionProvider
 from resume_kit_core.storage import ArtifactStore
@@ -69,18 +70,30 @@ class ExtractJobDescriptionRequest:
 
 @dataclass(frozen=True)
 class CheckResumeAtsRequest:
-    """Inputs for the check-resume-ats capability."""
+    """Inputs for the check-resume-ats capability.
+
+    ``alias_file`` is an optional path to a project alias JSON (RIT-T-0068
+    format). When set, scoring becomes aware of those project synonyms for this
+    call; ``None`` (the default) is seed-only, identical to pre-0009 behaviour.
+    """
 
     resume: ResumeDocument
     job: JobDescription
+    alias_file: str | Path | None = None
 
 
 @dataclass(frozen=True)
 class CheckResumeJobMatchRequest:
-    """Inputs for the check-resume-job-match capability."""
+    """Inputs for the check-resume-job-match capability.
+
+    ``alias_file`` optionally points at a project alias JSON (RIT-T-0068
+    format) to make matching aware of project synonyms for this call; ``None``
+    (default) is seed-only, identical to pre-0009 behaviour.
+    """
 
     resume: ResumeDocument
     job: JobDescription
+    alias_file: str | Path | None = None
 
 
 @dataclass(frozen=True)
@@ -105,11 +118,17 @@ class CompareResumeVersionsRequest:
 
 @dataclass(frozen=True)
 class IdentifyResumeGapsRequest:
-    """Inputs for the identify-resume-gaps capability."""
+    """Inputs for the identify-resume-gaps capability.
+
+    ``alias_file`` optionally points at a project alias JSON (RIT-T-0068
+    format) to make gap analysis aware of project synonyms for this call;
+    ``None`` (default) is seed-only, identical to pre-0009 behaviour.
+    """
 
     job: JobDescription
     tailored: ResumeDocument
     master: ResumeDocument
+    alias_file: str | Path | None = None
 
 
 @dataclass(frozen=True)

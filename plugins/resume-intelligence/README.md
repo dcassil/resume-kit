@@ -40,16 +40,34 @@ All state lives under `resume-kit/` in the current project:
 
 ```
 resume-kit/
-├── config.json                          # active_resume / active_job pointers + preferences
+├── config.json                          # active_resume / active_job / alias_file pointers + preferences
 ├── resumes/<name>-original.json         # immutable faithful resume conversions
 ├── jobs/<name>-original.json            # immutable job conversions
 ├── working/<session-id>/resume.json     # the resume currently being changed/reviewed (mutable)
+├── learning/synonyms.json               # grown project alias index (default alias_file target)
 └── learning/<skill>.md                  # accumulated hints; skills read these first, append new ones
 ```
 
 `-original.json` files are the untouched conversions (the name maps back to the
 source file). To modify a resume, copy it into `working/<session-id>/` and edit
 the copy; leave the original pristine.
+
+#### `config.json` `alias_file` pointer
+
+Alongside `active_resume` and `active_job`, `config.json` may carry an optional
+`alias_file` key pointing at a project alias JSON (the RIT-T-0068 format
+`{"version": 1, "aliases": {canonical: [alias, ...]}}`). It defaults to
+`learning/synonyms.json` and is resolved against the `resume-kit/` working dir
+(not the shell CWD), matching the `active_resume`/`active_job` convention.
+
+This is purely a plugin/agent convention: **no Python package opens
+`config.json`.** The skill reads the pointer and passes the resolved path to the
+scoring surfaces through their `alias_file` parameter — `resume-tool check-ats
+--alias-file <path>` / `match --alias-file <path>` / `identify-gaps
+--alias-file <path>` on the CLI, an `alias_file` field on the
+`resume_check_ats` / `resume_check_job_match` / `resume_identify_gaps` MCP tools,
+and an `alias_file` body field on the corresponding API routes. When the pointer
+is absent the surfaces run seed-only, identical to prior behaviour.
 
 These skills describe how an agent drives the `resume-tool` CLI or the MCP
 server to invoke each of the 10 built capabilities.  Skills are thin

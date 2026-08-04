@@ -202,6 +202,17 @@ def _optional_string(arguments: ToolArguments, field: str, default: str) -> str:
     raise _ValidationFailure(f"Field '{field}' must be a string.", field=field)
 
 
+def _optional_alias_file(arguments: ToolArguments) -> str | None:
+    value = arguments.get("alias_file")
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise _ValidationFailure(
+        "Field 'alias_file' must be a string.", field="alias_file"
+    )
+
+
 def _export_format(arguments: ToolArguments, field: str) -> ExportFormat:
     value = _string(arguments, field)
     try:
@@ -335,6 +346,7 @@ async def resume_check_ats(arguments: ToolArguments) -> ToolResult:
             {
                 "resume": _resume(_required(arguments, "resume"), "resume"),
                 "job": _job(_required(arguments, "job"), "job"),
+                "alias_file": _optional_alias_file(arguments),
             },
         )
     except _ValidationFailure as exc:
@@ -349,6 +361,7 @@ async def resume_check_job_match(arguments: ToolArguments) -> ToolResult:
             {
                 "resume": _resume(_required(arguments, "resume"), "resume"),
                 "job": _job(_required(arguments, "job"), "job"),
+                "alias_file": _optional_alias_file(arguments),
             },
         )
     except _ValidationFailure as exc:
@@ -403,6 +416,7 @@ async def resume_identify_gaps(arguments: ToolArguments) -> ToolResult:
                 "job": _job(_required(arguments, "job"), "job"),
                 "tailored": _resume(_required(arguments, "tailored"), "tailored"),
                 "master": _resume(_required(arguments, "master"), "master"),
+                "alias_file": _optional_alias_file(arguments),
             },
         )
     except _ValidationFailure as exc:

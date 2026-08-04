@@ -8,6 +8,7 @@ substrate.
 
 __version__ = "0.0.0"
 
+from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.capabilities import (
     REGISTRY,
     align_resume,
@@ -54,6 +55,8 @@ __all__ = [
     "validate_resume_truth_capability",
     # options
     "CapabilityOptions",
+    # alias scoping helper
+    "use_alias_file",
     # request models
     "AlignResumeRequest",
     "BuildCandidateEvidenceRequest",

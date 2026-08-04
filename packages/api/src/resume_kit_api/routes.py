@@ -166,12 +166,16 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/check-ats")
     async def check_ats(body: CheckResumeAtsBody) -> Response:
-        request = CheckResumeAtsRequest(resume=body.resume, job=body.job)
+        request = CheckResumeAtsRequest(
+            resume=body.resume, job=body.job, alias_file=body.alias_file
+        )
         return _render(await REGISTRY["check-resume-ats"](request, _options(body)))
 
     @app.post("/match")
     async def match(body: CheckResumeJobMatchBody) -> Response:
-        request = CheckResumeJobMatchRequest(resume=body.resume, job=body.job)
+        request = CheckResumeJobMatchRequest(
+            resume=body.resume, job=body.job, alias_file=body.alias_file
+        )
         return _render(
             await REGISTRY["check-resume-job-match"](request, _options(body))
         )
@@ -199,7 +203,10 @@ def register_routes(app: FastAPI) -> None:
     @app.post("/identify-gaps")
     async def identify_gaps(body: IdentifyResumeGapsBody) -> Response:
         request = IdentifyResumeGapsRequest(
-            job=body.job, tailored=body.tailored, master=body.master
+            job=body.job,
+            tailored=body.tailored,
+            master=body.master,
+            alias_file=body.alias_file,
         )
         return _render(
             await REGISTRY["identify-resume-gaps"](request, _options(body))

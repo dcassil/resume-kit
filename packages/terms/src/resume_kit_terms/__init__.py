@@ -6,7 +6,12 @@ alias lexicon index (``AliasIndex``), and a provenance-carrying comparison
 (``match`` → ``MatchResult``). Pure, offline, deterministic — no LLM, no network.
 """
 
-from .aliases import AliasIndex, LexiconError, load_alias_lexicon
+from .aliases import (
+    AliasIndex,
+    LexiconError,
+    load_alias_lexicon,
+    load_effective_alias_index,
+)
 from .match import MatchKind, MatchResult, match
 from .normalize import normalize, surface_form
 
@@ -18,6 +23,7 @@ __all__ = [
     "MatchKind",
     "MatchResult",
     "load_alias_lexicon",
+    "load_effective_alias_index",
     "match",
     "normalize",
     "surface_form",

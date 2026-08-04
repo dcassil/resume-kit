@@ -17,13 +17,22 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import resume_kit_schemas
 from resume_kit_schemas import KeywordGapAnalysis, MatchedKeyword, ResumeDocument
-from resume_kit_terms import AliasIndex, MatchResult, match, surface_form
+from resume_kit_terms import (
+    AliasIndex,
+    MatchResult,
+    load_effective_alias_index,
+    match,
+    surface_form,
+)
+from resume_kit_terms.aliases import PROJECT_ALIAS_ENV_VAR
 
 # Public surface ---------------------------------------------------------------
 
@@ -68,15 +77,29 @@ def _normalize_skill_key(skill: str) -> str:
     return surface_form(skill)
 
 
-@lru_cache(maxsize=1)
-def _alias_index() -> AliasIndex:
-    """Return the process-wide curated alias index, built once and reused.
+@lru_cache(maxsize=8)
+def _effective_alias_index(project_key: str | None) -> AliasIndex:
+    """Build (and cache) the effective seed+project index for *project_key*.
 
-    The lexicon is packaged data; loading it is deterministic and offline. The
-    ``lru_cache`` guarantees we build the index a single time rather than per
-    comparison.
+    The cache is keyed on the resolved project-file path string (``None`` for
+    seed-only), so a changed ``RESUME_KIT_ALIAS_FILE`` yields a fresh index
+    rather than a stale one — deterministic for a FIXED path, invalidatable
+    across paths. Loading is offline and deterministic.
     """
-    return AliasIndex.load()
+    project_path = Path(project_key) if project_key is not None else None
+    return load_effective_alias_index(project_path)
+
+
+def _alias_index() -> AliasIndex:
+    """Return the effective (seed + optional project) curated alias index.
+
+    Resolves the project-alias path from ``RESUME_KIT_ALIAS_FILE`` (a surface
+    sets it; RIT-T-0069) and delegates to the path-keyed cache. An unset / empty
+    env var means seed-only.
+    """
+    env_value = os.environ.get(PROJECT_ALIAS_ENV_VAR)
+    project_key = env_value if env_value and env_value.strip() else None
+    return _effective_alias_index(project_key)
 
 
 # Token pattern for splitting resume text into whole terms. Mirrors the

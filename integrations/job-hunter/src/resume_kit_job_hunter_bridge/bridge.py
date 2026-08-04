@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Coroutine, Sequence
+from pathlib import Path
 
 from resume_kit_core import InterfaceResponse
 from resume_kit_export import ExportFormat, ExportOptions
@@ -101,28 +102,34 @@ async def analyze_resume_for_job(
     *,
     master: ResumeDocument | None = None,
     options: CapabilityOptions | None = None,
+    alias_file: str | Path | None = None,
 ) -> ResumeJobAnalysis:
     """Analyze ``resume`` against ``job`` for a job-hunter application.
 
     Runs the three deterministic analysis capabilities and returns their
     canonical responses. ``master`` supplies the baseline for gap analysis and
     defaults to ``resume`` when not provided. All three paths are provider-free.
+    ``alias_file`` optionally points at a project alias JSON (RIT-T-0068
+    format) so scoring becomes aware of those project synonyms; ``None`` (the
+    default) is seed-only, identical to pre-0009 behaviour.
     """
     opts = options or CapabilityOptions()
     baseline = master if master is not None else resume
     ats = await _dispatch(
         "check-resume-ats",
-        CheckResumeAtsRequest(resume=resume, job=job),
+        CheckResumeAtsRequest(resume=resume, job=job, alias_file=alias_file),
         opts,
     )
     job_match = await _dispatch(
         "check-resume-job-match",
-        CheckResumeJobMatchRequest(resume=resume, job=job),
+        CheckResumeJobMatchRequest(resume=resume, job=job, alias_file=alias_file),
         opts,
     )
     gaps = await _dispatch(
         "identify-resume-gaps",
-        IdentifyResumeGapsRequest(job=job, tailored=resume, master=baseline),
+        IdentifyResumeGapsRequest(
+            job=job, tailored=resume, master=baseline, alias_file=alias_file
+        ),
         opts,
     )
     return ResumeJobAnalysis(ats=ats, job_match=job_match, gaps=gaps)

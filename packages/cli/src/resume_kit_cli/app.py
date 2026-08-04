@@ -69,6 +69,11 @@ _HumanInLoop = typer.Option(
     help="Request human-in-the-loop behaviour where supported.",
 )
 _Config = typer.Option(None, "--config", help="Optional config JSON path (not persisted).")
+_AliasFile = typer.Option(
+    None,
+    "--alias-file",
+    help="Optional project alias JSON path for synonym-aware scoring.",
+)
 _Format = typer.Option(..., "--format", help="Export format: pdf or docx.")
 _Out = typer.Option(None, "--out", help="Write raw bytes to this path.")
 _ResumeOrStdin = typer.Option("-", "--resume", help="Resume JSON path, or '-' for stdin.")
@@ -161,9 +166,12 @@ def check_ats(
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
+    alias_file: str | None = _AliasFile,
 ) -> None:
     """Compute the deterministic ATS score for a resume against a job."""
-    request = CheckResumeAtsRequest(resume=io.load_resume(resume), job=io.load_job(job))
+    request = CheckResumeAtsRequest(
+        resume=io.load_resume(resume), job=io.load_job(job), alias_file=alias_file
+    )
     options = _options(False, strict, False)
     _run(caps.check_resume_ats(request, options), output)
 
@@ -175,10 +183,11 @@ def match(
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
+    alias_file: str | None = _AliasFile,
 ) -> None:
     """Compute the deterministic resume/job match report."""
     request = CheckResumeJobMatchRequest(
-        resume=io.load_resume(resume), job=io.load_job(job)
+        resume=io.load_resume(resume), job=io.load_job(job), alias_file=alias_file
     )
     options = _options(False, strict, False)
     _run(caps.check_resume_job_match(request, options), output)
@@ -227,12 +236,14 @@ def identify_gaps(
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
+    alias_file: str | None = _AliasFile,
 ) -> None:
     """Analyse keyword gaps between a tailored resume, master, and job."""
     request = IdentifyResumeGapsRequest(
         job=io.load_job(job),
         tailored=io.load_resume(tailored),
         master=io.load_resume(master),
+        alias_file=alias_file,
     )
     options = _options(False, strict, False)
     _run(caps.identify_resume_gaps(request, options), output)

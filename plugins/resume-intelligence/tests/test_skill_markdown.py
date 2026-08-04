@@ -42,6 +42,7 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "export-resume",
         "resume-to-json",
         "job-to-json",
+        "manage-synonyms",
     ]
 )
 

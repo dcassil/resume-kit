@@ -54,6 +54,10 @@ class CheckResumeAtsBody(_Options):
 
     resume: ResumeDocument
     job: JobDescription
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware scoring.",
+    )
 
 
 class CheckResumeJobMatchBody(_Options):
@@ -61,6 +65,10 @@ class CheckResumeJobMatchBody(_Options):
 
     resume: ResumeDocument
     job: JobDescription
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware scoring.",
+    )
 
 
 class SelectBestResumeBody(_Options):
@@ -87,6 +95,10 @@ class IdentifyResumeGapsBody(_Options):
     job: JobDescription
     tailored: ResumeDocument
     master: ResumeDocument
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware scoring.",
+    )
 
 
 class AlignResumeBody(_Options):

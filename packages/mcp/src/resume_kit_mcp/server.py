@@ -17,6 +17,7 @@ _INPUT_SCHEMA: dict[str, object] = {
         "no_llm": {"type": "boolean"},
         "strict": {"type": "boolean"},
         "human_in_loop": {"type": "boolean"},
+        "alias_file": {"type": "string"},
     },
 }
 

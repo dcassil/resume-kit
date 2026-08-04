@@ -17,8 +17,10 @@ seed composite score contract.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from resume_kit_schemas import ATSScore, ATSSubScores, MatchedKeyword
@@ -27,23 +29,39 @@ from resume_kit_schemas.resume import ResumeDocument
 from resume_kit_terms import (
     AliasIndex,
     MatchResult,
-    load_alias_lexicon,
+    load_effective_alias_index,
     match,
     surface_form,
 )
+from resume_kit_terms.aliases import PROJECT_ALIAS_ENV_VAR
 
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def _alias_index() -> AliasIndex:
-    """Return the shared, process-wide curated :class:`AliasIndex`.
+@lru_cache(maxsize=8)
+def _effective_alias_index(project_key: str | None) -> AliasIndex:
+    """Build (and cache) the effective seed+project index for *project_key*.
 
-    Built once from the packaged lexicon and reused across every comparison so
-    the ``ats`` engine and the sibling ``matching`` engine resolve synonyms
-    through the identical index — the "no divergent matching" guarantee.
+    Keyed on the resolved project-file path string (``None`` for seed-only) so a
+    changed ``RESUME_KIT_ALIAS_FILE`` produces a fresh index instead of a stale
+    one — deterministic for a FIXED path, invalidatable across paths.
     """
-    return AliasIndex(load_alias_lexicon())
+    project_path = Path(project_key) if project_key is not None else None
+    return load_effective_alias_index(project_path)
+
+
+def _alias_index() -> AliasIndex:
+    """Return the effective (seed + optional project) :class:`AliasIndex`.
+
+    Resolves the project-alias path from ``RESUME_KIT_ALIAS_FILE`` (set by a
+    surface; RIT-T-0069) and delegates to the path-keyed cache. Seed-only when
+    the env var is unset / empty. The ``ats`` and ``matching`` engines share the
+    identical loader so they never diverge — the "no divergent matching"
+    guarantee.
+    """
+    env_value = os.environ.get(PROJECT_ALIAS_ENV_VAR)
+    project_key = env_value if env_value and env_value.strip() else None
+    return _effective_alias_index(project_key)
 
 # ---------------------------------------------------------------------------
 # Weights — MUST match the upstream seed contract (sum = 1.0).

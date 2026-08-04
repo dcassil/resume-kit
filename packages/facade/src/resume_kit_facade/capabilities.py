@@ -76,6 +76,7 @@ from resume_kit_schemas import (
     TruthReport,
 )
 
+from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.models import (
     AlignResumeRequest,
     BuildCandidateEvidenceRequest,
@@ -295,14 +296,15 @@ async def check_resume_ats(
     if not isinstance(request, CheckResumeAtsRequest):
         return from_resume_kit_error(_bad_request(request, "CheckResumeAtsRequest"))
     try:
-        gap = analyze_keyword_gaps(request.job, request.resume, request.resume)
-        score: ATSScore = compute_ats_score(
-            request.resume,
-            request.job,
-            gap.current_match_percentage,
-            gap.non_injectable_keywords,
-            gap.injectable_keywords,
-        )
+        with use_alias_file(request.alias_file):
+            gap = analyze_keyword_gaps(request.job, request.resume, request.resume)
+            score: ATSScore = compute_ats_score(
+                request.resume,
+                request.job,
+                gap.current_match_percentage,
+                gap.non_injectable_keywords,
+                gap.injectable_keywords,
+            )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
@@ -320,7 +322,8 @@ async def check_resume_job_match(
             _bad_request(request, "CheckResumeJobMatchRequest")
         )
     try:
-        report: JobMatchReport = check_job_match(request.resume, request.job)
+        with use_alias_file(request.alias_file):
+            report: JobMatchReport = check_job_match(request.resume, request.job)
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
@@ -380,9 +383,10 @@ async def identify_resume_gaps(
             _bad_request(request, "IdentifyResumeGapsRequest")
         )
     try:
-        gap: KeywordGapAnalysis = analyze_keyword_gaps(
-            request.job, request.tailored, request.master
-        )
+        with use_alias_file(request.alias_file):
+            gap: KeywordGapAnalysis = analyze_keyword_gaps(
+                request.job, request.tailored, request.master
+            )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
