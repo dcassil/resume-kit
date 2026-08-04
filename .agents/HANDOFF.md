@@ -3,19 +3,20 @@
 Copy-paste this into a fresh session to resume the autonomous build.
 
 ## ⭐ Current state (resume here)
-- **Done & pushed:** Phases 0–3 (initiatives RIT-I-0001..0004; tasks RIT-T-0001..0025 all completed).
-- **Next up: Phase 4 — Controlled Alignment** (create initiative RIT-I-0005; tasks continue at RIT-T-0026).
-- **`main` is green & clean:** working tree clean; last code commit `fc8893d` (close RIT-I-0004), followed by handoff-refresh commit `44a0b35`. Full gate at `fc8893d` = ruff clean, mypy --strict clean (59 files), **573 tests pass** (nothing touched since except this doc).
+- **Done & pushed:** Phases 0–4 (initiatives RIT-I-0001..0005; tasks RIT-T-0001..0037 all completed).
+- **Next up: Phase 5 — Interfaces** (create initiative RIT-I-0006; tasks continue at RIT-T-0038). CLI `resume-tool`, MCP server, agent plugin skills, REST API as thin adapters, and the `job-hunter` bridge — all over the SAME core engine (no business rule may live only in a CLI/MCP/API/plugin layer).
+- **`main` is green & clean:** working tree clean; last commit `67ad569` (close RIT-I-0005). Full gate = ruff clean, mypy --strict clean (**52 src files**), **963 tests pass, 1 skipped**.
 - **First thing to do on resume:** `uv sync --all-packages` then run the gate (below) to confirm green before touching anything.
-- **Packages so far:** `schemas`, `core`, `document-parser`, `matching`, `ats`, `job-parser`.
+- **Packages so far (9):** `schemas`, `core`, `document-parser`, `matching`, `ats`, `job-parser`, `policy`, `evidence`, `alignment`.
 - **Current gate command:**
   ```
   uv sync --all-packages && \
   uv run ruff check packages tests && \
-  uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser && \
+  uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser packages/policy packages/evidence packages/alignment && \
   uv run pytest
   ```
-  (extend the mypy package list as new packages land each phase.)
+  (extend the mypy package list as new packages land each phase. NOTE: mypy counts SRC files only — 52 — because hyphenated test dirs have no `tests/__init__.py`; tests are covered by pytest+ruff, not directory-mypy. This is by design, not a gap.)
+- **Orchestration method that worked for Phase 4:** mixed **claude Agent-tool subagents (opus/sonnet) + codex** (`codex exec -s workspace-write`, stdin from /dev/null, background) in file-disjoint waves; orchestrator runs the full gate + commits per wave. Codex occasionally makes a stray edit to the task `.md` (duplicate header) — harmless, ignore. Lint E501 on ported prompt/rule constants: fix with implicit string concatenation (byte-preserving), never noqa/rule-suppression (global lint policy).
 
 ## The directive (from Daniel)
 > Orchestrate the build. Use **codex** agents to decompose ONE Metis initiative at a time, then
@@ -81,11 +82,15 @@ Claude-Session: https://claude.ai/code/session_01WpLT8iXnxtXkgRQeHFbhNj
   - **Full gate green: ruff clean, mypy --strict clean (59 files), 573 tests pass.**
   - Gate command (UPDATED): `uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser && uv run pytest` (run `uv sync --all-packages` first).
   - Landmine cleared: removed empty `packages/*/tests/__init__.py` (mypy duplicate-`tests`-module collision once >1 package had one); import-boundary test files must use package-scoped names (hyphenated pkg dirs can't hold `tests/__init__.py`).
-  - Note: NEXT session should START at Phase 4.
-- **Phases 4–6: NOT STARTED.** Next initiatives to create from vision roadmap:
-  - Phase 4 — Controlled alignment (diff apply/verify engine, allowed-path policy, freedom 0-10, evidence+provenance, human-in-loop, validate-truth).
-  - Phase 5 — Interfaces (CLI `resume-tool`, MCP server, agent plugin, REST API, job-hunter bridge).
-  - Phase 6 — Export & package workflows (PDF/DOCX export WITHOUT the upstream Next.js frontend — `pdf.py` hard-deps Playwright+Chromium+frontend, so Replace→New; app-package audit; cover-letter match/align). Then configure PyPI publishing.
+- **Phase 4 — Controlled Alignment (RIT-I-0005): COMPLETE & pushed.** All 12 tasks (RIT-T-0026..0037) done. Three new packages:
+  - `packages/policy` (`resume_kit_policy`): freedom 0–10 path-policy table (`evaluate_change_policy`→`PolicyDecision`; factual fields employer/title/date/name/institution/location/metrics BLOCKED at every level incl. F10 via `is_path_blocked` running first); freedom ladder F0-1 skills→…→F8-10 +education.description; injection `sanitize_user_input`; truthfulness-rule constants; `verify_skill_target_plan` + `build_allowed_skill_target_keys` (verified/JD/evidence-backed skill gate).
+  - `packages/evidence` (`resume_kit_evidence`): `build_candidate_evidence` (content-addressed stable IDs); `validate_resume_truth`→`TruthReport` across all 7 `ProvenanceStatus` (verified/supported/partially/user-confirmed/ambiguous/unsupported/contradicted); structural predicates (sections_preserved/no_fabricated_employers/personal_info_unchanged) + fabrication detection (validate_master_alignment/fix_alignment_violations).
+  - `packages/alignment` (`resume_kit_alignment`): `apply_diffs` (policy+skill gated, original-match, reorder salvage, deep-copy); `calculate_resume_diff` + `verify_diff_result` (upstream parity); `generate_change_proposals`/`generate_skill_target_plan` (proposal-only behind `StructuredCompletionProvider`); `ReviewController` (pure human-in-loop state machine); **`align_resume`** (async orchestrator: generation→policy→apply→verify→diff→truth→score→review; F≥3 forces truth; UNSUPPORTED/CONTRADICTED stripped+re-verified or deferred to review; NFR-405 adversarial test proves fabricated employer + unsupported claim never reach output).
+  - schemas gained 12 Phase-4 result models in `results.py` (PolicyDecision/PolicyRejection, SkillTarget(Plan/Source/Rejection), TruthReport, ReviewAction/Decision/Session, AlignmentResult).
+  - **Full gate green: ruff clean, mypy --strict clean (52 src files), 963 tests pass / 1 skipped.** Every ported unit attributed (SHA `116f9cc`) + import-boundary tests per package.
+- **Phases 5–6: NOT STARTED.** Next initiatives to create from vision roadmap:
+  - Phase 5 — Interfaces (CLI `resume-tool` {extract,check-ats,match,select,align,validate-truth,compare,create-for-job}; MCP server {resume_extract,resume_align,resume_validate_truth,…}; agent plugin skills; REST API as THIN adapters; job-hunter bridge). Vision rule: no business rule may live only in a CLI/MCP/API/plugin layer — all over the same core engine. JSON/text/Markdown output, no-LLM mode, strict mode, human-in-loop + non-interactive, automation-friendly exit codes.
+  - Phase 6 — Export & package workflows (PDF/DOCX export WITHOUT the upstream Next.js frontend — `pdf.py` hard-deps Playwright+Chromium+frontend, so Replace→New; app-package audit; cover-letter match/align). Then configure PyPI publishing (fix root `pyproject.toml` wheel target first — see landmines).
 
 ## Known landmines
 - **Metis tooling (this session):** the `mcp__plugin_metis_metis__*` create/read tools failed with
@@ -96,5 +101,5 @@ Claude-Session: https://claude.ai/code/session_01WpLT8iXnxtXkgRQeHFbhNj
   `metis status`, and `metis transition <code> <phase>` all work fine via CLI.
 - Root `pyproject.toml` `[tool.hatch.build.targets.wheel] packages = ["src/resume_kit"]` points at a dir that doesn't exist (root is a meta-package). `uv sync` tolerates it in editable mode; fix before any root `uv build` (Phase 6 packaging).
 - Structured resume parsing is LLM-only upstream — no-LLM structured extraction is a known gap to design around (Phase 2).
-- `improver.py` upstream is a ~1500-line mega-module; decompose during Phase 4 extraction.
+- `improver.py` upstream was a ~1500-line mega-module — DONE: decomposed in Phase 4 into `policy` (path/skill gates, sanitizer), `alignment` (apply/diff/verify/generation/orchestrator), `evidence` (truth/fabrication).
 - Export `pdf.py` depends on the upstream frontend/print-route — must be replaced, not ported (Phase 6).
