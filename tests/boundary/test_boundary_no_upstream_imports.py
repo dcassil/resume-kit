@@ -82,7 +82,17 @@ def test_known_packages_present() -> None:
     package_dirs = sorted(
         p.name for p in PACKAGES_ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")
     )
-    expected = {"core", "schemas", "document-parser", "matching", "ats", "job-parser"}
+    expected = {
+        "core",
+        "schemas",
+        "document-parser",
+        "matching",
+        "ats",
+        "job-parser",
+        "policy",
+        "evidence",
+        "alignment",
+    }
     unexpected = set(package_dirs) - expected
     assert not unexpected, (
         f"Unexpected package(s) found under packages/: {sorted(unexpected)}. "

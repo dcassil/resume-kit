@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-alignment"
+version = "0.0.0"
+description = "Phase 4 controlled alignment orchestration package for resume tailoring."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-core",
+    "resume-kit-schemas",
+    "resume-kit-policy",
+    "resume-kit-evidence",
+    "resume-kit-matching",
+    "resume-kit-ats",
+]
+
+[tool.uv.sources]
+resume-kit-core = { workspace = true }
+resume-kit-schemas = { workspace = true }
+resume-kit-policy = { workspace = true }
+resume-kit-evidence = { workspace = true }
+resume-kit-matching = { workspace = true }
+resume-kit-ats = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_alignment"]

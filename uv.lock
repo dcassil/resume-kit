@@ -13,11 +13,14 @@ resolution-markers = [
 [manifest]
 members = [
     "resume-kit",
+    "resume-kit-alignment",
     "resume-kit-ats",
     "resume-kit-core",
     "resume-kit-document-parser",
+    "resume-kit-evidence",
     "resume-kit-job-parser",
     "resume-kit-matching",
+    "resume-kit-policy",
     "resume-kit-schemas",
 ]
 
@@ -998,6 +1001,31 @@ dev = [
 ]
 
 [[package]]
+name = "resume-kit-alignment"
+version = "0.0.0"
+source = { editable = "packages/alignment" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-ats" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-evidence" },
+    { name = "resume-kit-matching" },
+    { name = "resume-kit-policy" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-ats", editable = "packages/ats" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-evidence", editable = "packages/evidence" },
+    { name = "resume-kit-matching", editable = "packages/matching" },
+    { name = "resume-kit-policy", editable = "packages/policy" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
 name = "resume-kit-ats"
 version = "0.0.0"
 source = { editable = "packages/ats" }
@@ -1051,6 +1079,23 @@ requires-dist = [
 ]
 
 [[package]]
+name = "resume-kit-evidence"
+version = "0.0.0"
+source = { editable = "packages/evidence" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
 name = "resume-kit-job-parser"
 version = "0.0.0"
 source = { editable = "packages/job-parser" }
@@ -1082,6 +1127,23 @@ dependencies = [
 requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "resume-kit-ats", editable = "packages/ats" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
+name = "resume-kit-policy"
+version = "0.0.0"
+source = { editable = "packages/policy" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
     { name = "resume-kit-core", editable = "packages/core" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
 ]
