@@ -42,6 +42,8 @@ def test_help_lists_all_commands() -> None:
         "select",
         "compare",
         "identify-gaps",
+        "suggest-terminology",
+        "align-terminology",
         "align",
         "validate-truth",
         "build-evidence",
@@ -112,6 +114,7 @@ def test_deterministic_commands_succeed(tmp_path: Path) -> None:
         ["select", "--resumes", resumes, "--job", job],
         ["compare", "--base", resume, "--candidate", resume, "--job", job],
         ["identify-gaps", "--job", job, "--tailored", resume, "--master", resume],
+        ["suggest-terminology", "--resume", resume, "--job", job],
         ["validate-truth", "--resume", resume],
         ["build-evidence", "--resume", resume],
     ]

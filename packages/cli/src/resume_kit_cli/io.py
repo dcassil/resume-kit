@@ -19,6 +19,7 @@ from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
     ResumeDocument,
+    TerminologyAlignment,
 )
 
 _STDIN = "-"
@@ -75,6 +76,11 @@ def load_resume(source: str) -> ResumeDocument:
 def load_job(source: str) -> JobDescription:
     """Load a :class:`JobDescription` from JSON at ``source``."""
     return load_model(source, JobDescription)
+
+
+def load_suggestion(source: str) -> TerminologyAlignment:
+    """Load a :class:`TerminologyAlignment` suggestion from JSON at ``source``."""
+    return load_model(source, TerminologyAlignment)
 
 
 def load_resumes(source: str) -> list[ResumeDocument]:

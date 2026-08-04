@@ -81,7 +81,7 @@ def _assert_export_envelope(payload: dict[str, object]) -> None:
     _assert_envelope(canonical)
 
 
-def test_registers_exactly_the_eleven_stable_tools() -> None:
+def test_registers_exactly_the_stable_tools() -> None:
     expected = {
         "resume_extract",
         "job_description_extract",
@@ -94,6 +94,8 @@ def test_registers_exactly_the_eleven_stable_tools() -> None:
         "resume_validate_truth",
         "candidate_evidence_build",
         "resume_export",
+        "resume_suggest_terminology",
+        "resume_align_terminology",
     }
     assert set(TOOL_NAMES) == expected
     assert set(HANDLERS) == expected

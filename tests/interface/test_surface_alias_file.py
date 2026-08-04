@@ -27,7 +27,11 @@ from fastapi.testclient import TestClient
 from resume_kit_api.app import create_app
 from resume_kit_core import InterfaceResponse
 from resume_kit_facade.capabilities import REGISTRY
-from resume_kit_facade.models import CapabilityOptions, CheckResumeAtsRequest
+from resume_kit_facade.models import (
+    CapabilityOptions,
+    CheckResumeAtsRequest,
+    SuggestTerminologyRequest,
+)
 from resume_kit_mcp.tools import HANDLERS
 from resume_kit_schemas import (
     AdditionalInfo,
@@ -194,6 +198,78 @@ def test_alias_file_raises_score_on_every_surface(tmp_path: Path) -> None:
     assert _ats_percentage(_cli_ats(resume_path, job_path, None)) == baseline
     assert _ats_percentage(_mcp_ats(resume, job, None)) == baseline
     assert _ats_percentage(_api_ats(resume, job, None)) == baseline
+
+
+def test_suggest_terminology_honors_alias_file_on_every_surface(
+    tmp_path: Path,
+) -> None:
+    """A project alias makes ``zflow`` an alias hit for the JD's ``Zephyrflow``,
+    so ``suggest-terminology`` emits a mirror suggestion only WITH the alias
+    file — identically across facade, CLI, MCP, and API."""
+    resume, job = _resume(), _job()
+    alias = str(_alias_json(tmp_path))
+    resume_path = _write_json(tmp_path / "resume.json", resume)
+    job_path = _write_json(tmp_path / "job.json", job)
+
+    def _keywords(payload: Mapping[str, object]) -> set[str]:
+        data = cast(list[dict[str, object]], payload["data"])
+        return {cast(str, item["jd_keyword"]) for item in data}
+
+    def _direct(a: str | None) -> JsonDict:
+        response = asyncio.run(
+            _await_response(
+                REGISTRY["suggest-terminology"](
+                    SuggestTerminologyRequest(resume=resume, job=job, alias_file=a),
+                    CapabilityOptions(),
+                )
+            )
+        )
+        return cast(JsonDict, response.model_dump(mode="json"))
+
+    def _cli(a: str | None) -> JsonDict:
+        args = [
+            "suggest-terminology",
+            "--resume",
+            str(resume_path),
+            "--job",
+            str(job_path),
+        ]
+        if a is not None:
+            args += ["--alias-file", a]
+        result = _RUNNER.invoke(_CLI_APP, [*args, "--output", "json"])
+        assert result.exit_code == 0, result.stdout
+        return cast(JsonDict, json.loads(result.stdout))
+
+    def _mcp(a: str | None) -> JsonDict:
+        args: JsonDict = {
+            "resume": resume.model_dump(mode="json"),
+            "job": job.model_dump(mode="json"),
+        }
+        if a is not None:
+            args["alias_file"] = a
+        return asyncio.run(_await_json(HANDLERS["resume_suggest_terminology"](args)))
+
+    def _api(a: str | None) -> JsonDict:
+        body: JsonDict = {
+            "resume": resume.model_dump(mode="json"),
+            "job": job.model_dump(mode="json"),
+        }
+        if a is not None:
+            body["alias_file"] = a
+        response = _CLIENT.post("/suggest-terminology", json=body)
+        assert response.status_code == 200, response.text
+        return cast(JsonDict, response.json())
+
+    # With the alias file the fabricated ``Zephyrflow`` keyword surfaces as a
+    # mirror suggestion on every surface ...
+    assert "Zephyrflow" in _keywords(_direct(alias))
+    for payload in (_cli(alias), _mcp(alias), _api(alias)):
+        assert "Zephyrflow" in _keywords(payload)
+
+    # ... and without it no surface emits that suggestion (seed-only parity).
+    assert "Zephyrflow" not in _keywords(_direct(None))
+    for payload in (_cli(None), _mcp(None), _api(None)):
+        assert "Zephyrflow" not in _keywords(payload)
 
 
 def test_alias_file_env_does_not_leak_between_calls(tmp_path: Path) -> None:

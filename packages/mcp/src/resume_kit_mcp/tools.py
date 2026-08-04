@@ -19,6 +19,7 @@ from resume_kit_export.models import ExportFormat
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
+    AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -29,6 +30,7 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
+    SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -49,6 +51,8 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_validate_truth",
     "candidate_evidence_build",
     "resume_export",
+    "resume_suggest_terminology",
+    "resume_align_terminology",
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
@@ -119,6 +123,7 @@ def _model_validator(request_type: type[object], field: str) -> ModelValidator:
 _VALIDATE_RESUME = _model_validator(CheckResumeAtsRequest, "resume")
 _VALIDATE_JOB = _model_validator(CheckResumeAtsRequest, "job")
 _VALIDATE_EVIDENCE = _model_validator(ValidateResumeTruthRequest, "evidence")
+_VALIDATE_SUGGESTION = _model_validator(AlignTerminologyRequest, "suggestion")
 
 
 def _dump(response: InterfaceResponse[object]) -> ToolResult:
@@ -249,6 +254,21 @@ def _job(value: object, field: str) -> object:
 
 def _evidence(value: object, field: str) -> object:
     return _validated(_VALIDATE_EVIDENCE, value, field)
+
+
+def _suggestion(value: object, field: str) -> object:
+    return _validated(_VALIDATE_SUGGESTION, value, field)
+
+
+def _optional_freedom(arguments: ToolArguments) -> int | None:
+    value = arguments.get("freedom")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise _ValidationFailure(
+            "Field 'freedom' must be an integer.", field="freedom"
+        )
+    return value
 
 
 def _object_list(arguments: ToolArguments, field: str) -> Sequence[object]:
@@ -501,6 +521,42 @@ async def resume_export(arguments: ToolArguments) -> ToolResult:
     return result
 
 
+async def resume_suggest_terminology(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            SuggestTerminologyRequest,
+            {
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+                "job": _job(_required(arguments, "job"), "job"),
+                "alias_file": _optional_alias_file(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("suggest-terminology", request, arguments)
+
+
+async def resume_align_terminology(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            AlignTerminologyRequest,
+            {
+                "suggestion": _suggestion(
+                    _required(arguments, "suggestion"), "suggestion"
+                ),
+                "location": _string(arguments, "location"),
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+                "job": _job(_required(arguments, "job"), "job"),
+                "evidence": _optional_evidence_list(arguments, "evidence") or (),
+                "freedom": _optional_freedom(arguments),
+                "alias_file": _optional_alias_file(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("align-terminology", request, arguments)
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
     "job_description_extract": job_description_extract,
@@ -513,4 +569,6 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_validate_truth": resume_validate_truth,
     "candidate_evidence_build": candidate_evidence_build,
     "resume_export": resume_export,
+    "resume_suggest_terminology": resume_suggest_terminology,
+    "resume_align_terminology": resume_align_terminology,
 }

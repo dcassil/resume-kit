@@ -10,6 +10,7 @@ from .keywords import analyze_keyword_gaps, calculate_keyword_match
 from .match import check_job_match
 from .predicates import is_valid_resume, jd_keywords_present
 from .selection import select_best
+from .terminology import analyze_terminology_alignment
 
 __version__ = "0.0.0"
 
@@ -21,4 +22,5 @@ __all__ = [
     "check_job_match",
     "select_best",
     "compare_versions",
+    "analyze_terminology_alignment",
 ]

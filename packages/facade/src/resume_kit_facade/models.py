@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel, Field
 from resume_kit_core import StructuredCompletionProvider
 from resume_kit_core.storage import ArtifactStore
 from resume_kit_export import ExportFormat, ExportOptions
@@ -22,7 +23,10 @@ from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
     ResumeDocument,
+    TerminologyAlignment,
 )
+from resume_kit_schemas.change import ChangeProposal
+from resume_kit_schemas.results import PolicyRejection
 
 
 @dataclass(frozen=True)
@@ -177,3 +181,100 @@ class ExportResumeRequest:
             return self.artifact_id
         digest = hashlib.sha256(self.format.value.encode("utf-8") + data)
         return f"resume-{self.format.value}-{digest.hexdigest()}"
+
+
+@dataclass(frozen=True)
+class SuggestTerminologyRequest:
+    """Inputs for the suggest-terminology capability (RIT-I-0010).
+
+    Analysis-only: lists the terminology-mirroring suggestions for *resume*
+    against *job* (each an alias hit the employer words differently). No
+    mutation happens; a caller reviews the list and then applies a chosen
+    suggestion via the align-terminology capability (human-in-loop).
+
+    ``alias_file`` optionally points at a project alias JSON (RIT-T-0068
+    format) so grown project synonyms feed the suggestions for this call;
+    ``None`` (default) is seed-only, identical to pre-0009 behaviour.
+    """
+
+    resume: ResumeDocument
+    job: JobDescription
+    alias_file: str | Path | None = None
+
+
+@dataclass(frozen=True)
+class AlignTerminologyRequest:
+    """Inputs for the align-terminology capability (RIT-I-0010).
+
+    Applies exactly ONE accepted terminology suggestion (never a bulk apply):
+    it swaps the resume's current wording for the employer's exact wording at a
+    single chosen ``location``, routed through the Phase-4 policy + truth gates,
+    and reports the before/after score delta.
+
+    Attributes:
+        suggestion: The accepted alias-backed suggestion to apply.
+        location: One resume path drawn from ``suggestion.locations`` — the
+            field whose surface term is rewritten.
+        resume: The resume to edit (never mutated; a new document is returned).
+        job: The target job description, used for the score delta.
+        evidence: Ground-truth candidate evidence for truth re-validation.
+        freedom: Optional explicit policy-freedom level; when ``None`` the
+            minimal sufficient level for ``location`` is used.
+        alias_file: Optional project alias JSON path (see
+            :class:`SuggestTerminologyRequest`).
+    """
+
+    suggestion: TerminologyAlignment
+    location: str
+    resume: ResumeDocument
+    job: JobDescription
+    evidence: Sequence[CandidateEvidence] = field(default_factory=tuple)
+    freedom: int | None = None
+    alias_file: str | Path | None = None
+
+
+class TerminologyAlignmentDelta(BaseModel):
+    """Deterministic before/after keyword-match + skills-coverage scores.
+
+    Serializable mirror of the alignment engine's ``ScoreDelta`` dataclass so
+    the applied-terminology outcome can be returned as JSON by every surface.
+    ``*_delta`` fields are ``after - before`` (positive means improvement).
+    """
+
+    model_config = {"frozen": True}
+
+    keyword_match_before: float = Field(description="Keyword-match score before.")
+    keyword_match_after: float = Field(description="Keyword-match score after.")
+    keyword_match_delta: float = Field(description="after - before keyword match.")
+    skills_coverage_before: float = Field(description="Skills-coverage score before.")
+    skills_coverage_after: float = Field(description="Skills-coverage score after.")
+    skills_coverage_delta: float = Field(description="after - before skills coverage.")
+
+
+class AlignTerminologyResult(BaseModel):
+    """Serializable outcome of applying one accepted terminology suggestion.
+
+    Frozen facade response mirroring the alignment engine's ``AcceptResult``
+    dataclass (which is not a schema model) so CLI/MCP/API can return the
+    applied result — the updated resume, the change, policy applied/rejected
+    records, the freedom used, the before/after score delta, whether truth
+    still passed and whether the swap actually fired — as JSON.
+    """
+
+    model_config = {"frozen": True}
+
+    resume: ResumeDocument = Field(description="Updated resume (untouched on reject).")
+    change: ChangeProposal = Field(description="The single surface-swap change.")
+    applied: list[ChangeProposal] = Field(
+        default_factory=list, description="Changes the policy gate applied."
+    )
+    rejected: list[PolicyRejection] = Field(
+        default_factory=list, description="Policy rejections, if any."
+    )
+    freedom: int = Field(description="Policy-freedom level the swap was gated at.")
+    delta: TerminologyAlignmentDelta = Field(description="Before/after score delta.")
+    truth_passed: bool = Field(description="Whether truth validation still passed.")
+    swap_applied: bool = Field(description="Whether the surface swap actually fired.")
+    location: str = Field(description="Resume path the swap targeted.")
+    field_before: str = Field(default="", description="Field text before the swap.")
+    field_after: str = Field(default="", description="Field text after the swap.")

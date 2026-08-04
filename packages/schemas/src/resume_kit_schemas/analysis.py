@@ -62,6 +62,48 @@ class MatchedKeyword(BaseModel):
         return self.kind
 
 
+class TerminologyAlignment(BaseModel):
+    """A suggestion to mirror the employer's exact wording for an alias hit.
+
+    Emitted by the terminology-alignment analyzer (RIT-I-0010) for each
+    job-description keyword the resume already satisfies, but only under a
+    *different* surface form reached through the curated alias lexicon (an
+    ``alias`` match). The resume says ``current_wording``; the employer's exact
+    wording is ``jd_keyword`` — the proposed mirror target. Analysis-only: this
+    records where the current wording occurs so a later apply path (RIT-T-0073)
+    can mirror it; it performs no mutation itself.
+
+    Exact hits and no-match keywords never produce a ``TerminologyAlignment``:
+    exact wording needs no mirroring and a missing keyword stays a gap.
+    """
+
+    model_config = {"frozen": True}
+
+    jd_keyword: str = Field(
+        description="Employer's exact wording — the proposed mirror target."
+    )
+    current_wording: str = Field(
+        description="The resume's alias surface form that matched the keyword."
+    )
+    locations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Dot+bracket resume paths where the current wording occurs "
+            "(e.g. ``workExperience[0].description[1]``), sorted for determinism."
+        ),
+    )
+    canonical: str = Field(
+        description="Canonical term of the alias group (from match provenance)."
+    )
+    match_kind: Literal["alias"] = Field(
+        default="alias",
+        description=(
+            "Provenance of the hit. Only ``alias`` today; kept as a field for "
+            "forward-compat if a stem tier is ever re-enabled."
+        ),
+    )
+
+
 class ATSSubScores(BaseModel):
     """Individual component scores that make up the ATS overall score."""
 

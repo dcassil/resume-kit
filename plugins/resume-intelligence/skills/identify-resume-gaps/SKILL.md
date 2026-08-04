@@ -84,6 +84,14 @@ so the next deterministic run matches it. Do not confuse this with
 aliased away. Never append silently; always report exactly what was added. See
 the `manage-synonyms` skill for the full workflow and file format.
 
+## Gaps vs. terminology mirrors
+
+A **gap** is a JD keyword absent from the resume — surface it here, never rewrite
+it in. Distinct from a **terminology mirror**, where the resume already satisfies
+the JD keyword under a different surface form (an alias hit); mirroring the
+employer's exact wording is truthful and is handled by the **`align-terminology`**
+skill. Keep the two apart: a real gap must NOT be aliased or mirrored away.
+
 ## Notes
 
 - Fully deterministic.  No provider needed.

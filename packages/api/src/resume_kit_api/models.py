@@ -18,6 +18,7 @@ from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
     ResumeDocument,
+    TerminologyAlignment,
 )
 
 
@@ -95,6 +96,39 @@ class IdentifyResumeGapsBody(_Options):
     job: JobDescription
     tailored: ResumeDocument
     master: ResumeDocument
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware scoring.",
+    )
+
+
+class SuggestTerminologyBody(_Options):
+    """Body for ``POST /suggest-terminology``."""
+
+    resume: ResumeDocument
+    job: JobDescription
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware scoring.",
+    )
+
+
+class AlignTerminologyBody(_Options):
+    """Body for ``POST /align-terminology`` — apply ONE accepted suggestion."""
+
+    suggestion: TerminologyAlignment = Field(
+        description="The accepted terminology-mirroring suggestion to apply."
+    )
+    location: str = Field(
+        description="Resume path from ``suggestion.locations`` to apply the swap at."
+    )
+    resume: ResumeDocument
+    job: JobDescription
+    evidence: list[CandidateEvidence] = Field(default_factory=list)
+    freedom: int | None = Field(
+        default=None,
+        description="Explicit policy-freedom level; default is the minimal level.",
+    )
     alias_file: str | None = Field(
         default=None,
         description="Optional project alias JSON path for synonym-aware scoring.",

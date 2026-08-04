@@ -4,14 +4,14 @@ level: initiative
 title: "Terminology-Alignment Suggestions (mirror employer wording)"
 short_code: "RIT-I-0010"
 created_at: 2026-08-04T18:50:56+00:00
-updated_at: 2026-08-04T18:50:56+00:00
+updated_at: 2026-08-04T22:53:06.926797+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0008]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -39,6 +39,13 @@ gaps, never rewritten in.
 Relevant substrate:
 - RIT-I-0008 annotates each match with `kind` (`exact` | `stem` | `alias:<canonical>`) — this is the
   signal that a keyword is present under a DIFFERENT surface form (the rewrite candidates).
+- **RECONCILIATION (RIT-I-0008 shipped with stemming OFF — product decision "exact + alias only"):**
+  there are NO `stem` hits at runtime. So the terminology-alignment trigger collapses to **`alias` hits
+  only** (a keyword present via the curated/grown alias lexicon under a different surface form). Exact
+  hits need no change; no-match keywords are gaps. Everywhere this initiative says "stem/alias", read
+  "alias" — the analyzer keys off `matched_keywords` entries with `kind == "alias"` (which carry the
+  `canonical`). This does not reduce scope meaningfully: the seed + agent-grown alias index (RIT-I-0009)
+  is exactly the set of "present under a different word" cases worth mirroring.
 - `packages/alignment` — `align_resume`, `apply_diffs`, `ChangeProposal`, the policy freedom gates, and
   `validate_resume_truth` / evidence gates already enforce "no unsupported claim" and freedom-bounded
   edits. Terminology alignment is a constrained, low-freedom, evidence-trivial case of alignment.

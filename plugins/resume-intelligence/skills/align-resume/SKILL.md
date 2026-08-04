@@ -79,3 +79,7 @@ Input fields: `resume`, `job`, `evidence` (optional), `no_llm`, `strict`,
   evidence the engine uses only resume content as its grounding.
 - Do not modify the `aligned_resume` in agent code.  Surface the engine output
   as-is.
+- **Terminology mirrors:** if the resume already satisfies a JD keyword under a
+  different surface form (an alias hit — e.g. "k8s" vs "Kubernetes"), use the
+  **`align-terminology`** skill to mirror the employer's exact wording (truthful,
+  human-in-loop, no LLM) rather than a full alignment run.

@@ -44,6 +44,7 @@ from resume_kit_core.storage import ArtifactRef
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
+    AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -54,11 +55,13 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
+    SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
 
 from resume_kit_api.models import (
     AlignResumeBody,
+    AlignTerminologyBody,
     BuildCandidateEvidenceBody,
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
@@ -68,6 +71,7 @@ from resume_kit_api.models import (
     ExtractResumeBody,
     IdentifyResumeGapsBody,
     SelectBestResumeBody,
+    SuggestTerminologyBody,
     ValidateResumeTruthBody,
     _Options,
 )
@@ -210,6 +214,30 @@ def register_routes(app: FastAPI) -> None:
         )
         return _render(
             await REGISTRY["identify-resume-gaps"](request, _options(body))
+        )
+
+    @app.post("/suggest-terminology")
+    async def suggest_terminology(body: SuggestTerminologyBody) -> Response:
+        request = SuggestTerminologyRequest(
+            resume=body.resume, job=body.job, alias_file=body.alias_file
+        )
+        return _render(
+            await REGISTRY["suggest-terminology"](request, _options(body))
+        )
+
+    @app.post("/align-terminology")
+    async def align_terminology(body: AlignTerminologyBody) -> Response:
+        request = AlignTerminologyRequest(
+            suggestion=body.suggestion,
+            location=body.location,
+            resume=body.resume,
+            job=body.job,
+            evidence=body.evidence,
+            freedom=body.freedom,
+            alias_file=body.alias_file,
+        )
+        return _render(
+            await REGISTRY["align-terminology"](request, _options(body))
         )
 
     @app.post("/align")

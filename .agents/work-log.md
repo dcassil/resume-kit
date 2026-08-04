@@ -349,3 +349,42 @@ Gate after Wave 2: ruff+mypy clean (78 src), plugin validate OK, 2596 passed/1 s
 
 Wave 3 (RIT-T-0071) DONE (sonnet): 15 integration tests — baseline miss, no-op, gap-resolves+scores rise, alias:<canonical> kind, no inflation, determinism, 2 facade-surface proofs, LexiconError conflict guard.
 **RIT-I-0009 COMPLETE.** Final gate: ruff+mypy clean (78 src), plugin validate OK, 2611 passed/1 skipped. Ready to commit+push per initiative.
+
+---
+
+## RIT-I-0010 — Terminology-Alignment Suggestions (mirror employer wording)
+
+Reconciled: stemming OFF → trigger is ALIAS hits only (noted in initiative). Decomposed (opus+high) into 5 tasks:
+- RIT-T-0072 (opus+high) TerminologyAlignment schema + deterministic analyzer over alias provenance. FOUNDATIONAL.
+- RIT-T-0073 (opus+high) accept→ChangeProposal(replace)→apply_diffs(policy)+validate_resume_truth + before/after delta + NFR-1001 adversarial. Truth-safety load-bearing.
+- RIT-T-0074 (opus+medium) facade capability + CLI/MCP/API + parity (analyze vs apply split; honor alias_file).
+- RIT-T-0075 (opus+medium) align-terminology plugin skill (section-by-section, human-in-loop, mirror-not-fabricate).
+- RIT-T-0076 (sonnet+medium) integration proof + public exports.
+
+Wave plan: W1=0072 → W2=0073 → W3=0074 ∥ 0075 → W4=0076 (mostly sequential — each builds on the prior data/contract).
+
+### Wave 1
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0072 schema + analyzer | opus+high | dispatched |
+
+Wave 1 (0072) DONE: TerminologyAlignment schema + analyze_terminology_alignment (alias-only, whole-term locations, deterministic). 2645 passed.
+Wave 2 (0073) DONE: accept.py — accept_terminology_alignment maps to replace ChangeProposal (full-field original, surface-token swap), apply_diffs policy gate + validate_resume_truth, minimal freedom (desc F4/summary F6/edu F8); skill-element replace correctly rejected (truth-safety); before/after deltas. 11 tests. 2678 passed.
+Finding: `additional.technicalSkills[i]` element replace is NOT an editable target (whitelist allows whole-list only) → bare-skill swaps are policy-rejected by design.
+
+### Wave 3 (parallel, file-disjoint)
+| Task | Files | Agent | Result |
+| ---- | ----- | ----- | ------ |
+| RIT-T-0074 surfaces (analyze+apply) | packages/facade,cli,mcp,api | opus+medium | dispatched |
+| RIT-T-0075 align-terminology plugin skill | plugins/** | opus+medium | dispatched |
+
+Wave 3 DONE. RIT-T-0074 (opus): facade suggest_terminology + align_terminology (+ AlignTerminologyResult/TerminologyAlignmentDelta response models wrapping the AcceptResult dataclass); CLI suggest-terminology/align-terminology; MCP resume_suggest_terminology/resume_align_terminology; API routes; parity extended; registry 11→13. RIT-T-0075 (opus): align-terminology plugin skill (human-in-loop, mirror-not-fabricate, gaps-stay-gaps), registered + cross-linked. Orchestrator reconciled skill apply-command name to actual `align-terminology`.
+Gate after Wave 3: ruff+mypy clean (80 src), plugin validate OK, 2689 passed/1 skipped.
+
+### Wave 4
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0076 integration proof + exports | sonnet+medium | dispatched |
+
+Wave 4 (0076) DONE (sonnet): 19 integration tests (analyze/accept/adversarial/facade-parity/exports/determinism); orchestrator fixed 2 ruff nits.
+**RIT-I-0010 COMPLETE.** Final gate: ruff+mypy clean (80 src), plugin validate OK, 2708 passed/1 skipped. Ready to commit+push per initiative.

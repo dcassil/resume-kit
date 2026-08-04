@@ -22,6 +22,7 @@ from resume_kit_export.models import ExportFormat, mime_type
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
+    AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -30,6 +31,7 @@ from resume_kit_facade.models import (
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
+    SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
 from resume_kit_mcp.tools import HANDLERS
@@ -43,6 +45,7 @@ from resume_kit_schemas import (
     Requirement,
     RequirementKind,
     ResumeDocument,
+    TerminologyAlignment,
 )
 from typer import Typer
 from typer.testing import CliRunner
@@ -75,6 +78,10 @@ class Fixtures:
     evidence: list[CandidateEvidence]
     resume_text: str
     job_text: str
+    term_resume: ResumeDocument
+    term_job: JobDescription
+    term_suggestion: TerminologyAlignment
+    term_location: str
 
 
 @dataclass(frozen=True)
@@ -85,6 +92,9 @@ class FixturePaths:
     evidence: Path
     resume_text: Path
     job_text: Path
+    term_resume: Path
+    term_job: Path
+    term_suggestion: Path
 
 
 @dataclass(frozen=True)
@@ -218,6 +228,40 @@ def _fixtures() -> Fixtures:
             "Containerized services with Docker and automated CI pipelines.",
         ]
     )
+    # Terminology-alignment fixtures: the k8s/Kubernetes seed alias makes the
+    # resume's "Kubernetes" an alias hit for the job's exact "k8s" wording.
+    term_resume = ResumeDocument(
+        personalInfo=PersonalInfo(name="Sam Rivera"),
+        summary="Platform engineer.",
+        workExperience=[
+            Experience(
+                id=1,
+                title="Platform Engineer",
+                company="Northwind Ltd",
+                years="2019-2024",
+                description=["Ran workloads on Kubernetes across three regions."],
+            )
+        ],
+        additional=AdditionalInfo(technicalSkills=["Python", "Kubernetes"]),
+    )
+    term_job = JobDescription(
+        title="Platform Engineer",
+        summary="Kubernetes platform role.",
+        requirements=[
+            Requirement(
+                text="k8s",
+                kind=RequirementKind.REQUIRED,
+                keywords=["k8s"],
+            )
+        ],
+        keywords=["k8s"],
+    )
+    term_suggestion = TerminologyAlignment(
+        jd_keyword="k8s",
+        current_wording="kubernetes",
+        locations=["workExperience[0].description[0]"],
+        canonical="kubernet",
+    )
     return Fixtures(
         resume=resume,
         master=master,
@@ -225,10 +269,16 @@ def _fixtures() -> Fixtures:
         evidence=evidence,
         resume_text=resume_text,
         job_text=job_text,
+        term_resume=term_resume,
+        term_job=term_job,
+        term_suggestion=term_suggestion,
+        term_location="workExperience[0].description[0]",
     )
 
 
-def _json_model(model: ResumeDocument | JobDescription | CandidateEvidence) -> JsonDict:
+def _json_model(
+    model: ResumeDocument | JobDescription | CandidateEvidence | TerminologyAlignment,
+) -> JsonDict:
     return cast(JsonDict, model.model_dump(mode="json"))
 
 
@@ -250,6 +300,15 @@ def _context(tmp_path: Path) -> FixtureContext:
         evidence=_write_json(tmp_path / "evidence.json", _json_models(fixtures.evidence)),
         resume_text=tmp_path / "resume.txt",
         job_text=tmp_path / "job.txt",
+        term_resume=_write_json(
+            tmp_path / "term_resume.json", _json_model(fixtures.term_resume)
+        ),
+        term_job=_write_json(
+            tmp_path / "term_job.json", _json_model(fixtures.term_job)
+        ),
+        term_suggestion=_write_json(
+            tmp_path / "term_suggestion.json", _json_model(fixtures.term_suggestion)
+        ),
     )
     paths.resume_text.write_text(fixtures.resume_text, encoding="utf-8")
     paths.job_text.write_text(fixtures.job_text, encoding="utf-8")
@@ -407,6 +466,65 @@ _SURFACE_CASES = (
             "job": _job(ctx),
             "tailored": _resume(ctx),
             "master": _master(ctx),
+        },
+    ),
+    SurfaceCase(
+        name="suggest-terminology",
+        capability="suggest-terminology",
+        request=lambda ctx: SuggestTerminologyRequest(
+            resume=ctx.data.term_resume, job=ctx.data.term_job
+        ),
+        cli_args=lambda ctx: [
+            "suggest-terminology",
+            "--resume",
+            str(ctx.paths.term_resume),
+            "--job",
+            str(ctx.paths.term_job),
+        ],
+        mcp_name="resume_suggest_terminology",
+        mcp_args=lambda ctx: {
+            "resume": _json_model(ctx.data.term_resume),
+            "job": _json_model(ctx.data.term_job),
+        },
+        api_path="/suggest-terminology",
+        api_body=lambda ctx: {
+            "resume": _json_model(ctx.data.term_resume),
+            "job": _json_model(ctx.data.term_job),
+        },
+    ),
+    SurfaceCase(
+        name="align-terminology",
+        capability="align-terminology",
+        request=lambda ctx: AlignTerminologyRequest(
+            suggestion=ctx.data.term_suggestion,
+            location=ctx.data.term_location,
+            resume=ctx.data.term_resume,
+            job=ctx.data.term_job,
+        ),
+        cli_args=lambda ctx: [
+            "align-terminology",
+            "--suggestion",
+            str(ctx.paths.term_suggestion),
+            "--location",
+            ctx.data.term_location,
+            "--resume",
+            str(ctx.paths.term_resume),
+            "--job",
+            str(ctx.paths.term_job),
+        ],
+        mcp_name="resume_align_terminology",
+        mcp_args=lambda ctx: {
+            "suggestion": _json_model(ctx.data.term_suggestion),
+            "location": ctx.data.term_location,
+            "resume": _json_model(ctx.data.term_resume),
+            "job": _json_model(ctx.data.term_job),
+        },
+        api_path="/align-terminology",
+        api_body=lambda ctx: {
+            "suggestion": _json_model(ctx.data.term_suggestion),
+            "location": ctx.data.term_location,
+            "resume": _json_model(ctx.data.term_resume),
+            "job": _json_model(ctx.data.term_job),
         },
     ),
     SurfaceCase(

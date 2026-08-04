@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from resume_kit_alignment import accept_terminology_alignment
 from resume_kit_alignment import align_resume as _align_resume
 from resume_kit_ats import compute_ats_score
 from resume_kit_core import InterfaceResponse, Question, ResumeKitError
@@ -59,6 +60,7 @@ from resume_kit_job_parser import (
 )
 from resume_kit_matching import (
     analyze_keyword_gaps,
+    analyze_terminology_alignment,
     check_job_match,
     compare_versions,
     select_best,
@@ -73,12 +75,15 @@ from resume_kit_schemas import (
     ResumeComparisonResult,
     ResumeDocument,
     ResumeSelectionResult,
+    TerminologyAlignment,
     TruthReport,
 )
 
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.models import (
     AlignResumeRequest,
+    AlignTerminologyRequest,
+    AlignTerminologyResult,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -89,6 +94,8 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
+    SuggestTerminologyRequest,
+    TerminologyAlignmentDelta,
     ValidateResumeTruthRequest,
 )
 
@@ -510,6 +517,88 @@ async def export_resume(
     return build_success(ref, artifacts=[ref], strict=options.strict)
 
 
+async def suggest_terminology(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """List terminology-mirroring suggestions for a resume against a job.
+
+    Deterministic, analysis-only (RIT-I-0010): returns the
+    ``list[TerminologyAlignment]`` of alias hits the employer words differently.
+    It never mutates the resume — a caller reviews the list and applies a chosen
+    suggestion via :func:`align_terminology` (human-in-loop). Honors
+    ``alias_file`` so grown project synonyms feed the suggestions.
+    """
+    if not isinstance(request, SuggestTerminologyRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "SuggestTerminologyRequest")
+        )
+    try:
+        with use_alias_file(request.alias_file):
+            suggestions: list[TerminologyAlignment] = analyze_terminology_alignment(
+                request.job, request.resume
+            )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(suggestions, strict=options.strict)
+
+
+async def align_terminology(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Apply ONE accepted terminology suggestion and report the score delta.
+
+    Deterministic (RIT-I-0010): swaps the resume's current wording for the
+    employer's exact wording at a single chosen ``location``, routed through the
+    Phase-4 policy + truth gates, and returns the updated resume plus the
+    before/after delta. Human-in-loop by construction — exactly one accepted
+    suggestion at one location is applied; there is no bulk apply. Honors
+    ``alias_file`` so scoring reflects grown project synonyms.
+    """
+    if not isinstance(request, AlignTerminologyRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "AlignTerminologyRequest")
+        )
+    try:
+        with use_alias_file(request.alias_file):
+            accepted = accept_terminology_alignment(
+                request.suggestion,
+                request.location,
+                request.resume,
+                request.job,
+                list(request.evidence),
+                freedom=request.freedom,
+            )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    result = AlignTerminologyResult(
+        resume=accepted.resume,
+        change=accepted.change,
+        applied=accepted.applied,
+        rejected=accepted.rejected,
+        freedom=accepted.freedom,
+        delta=TerminologyAlignmentDelta(
+            keyword_match_before=accepted.delta.keyword_match_before,
+            keyword_match_after=accepted.delta.keyword_match_after,
+            keyword_match_delta=accepted.delta.keyword_match_delta,
+            skills_coverage_before=accepted.delta.skills_coverage_before,
+            skills_coverage_after=accepted.delta.skills_coverage_after,
+            skills_coverage_delta=accepted.delta.skills_coverage_delta,
+        ),
+        truth_passed=accepted.truth_passed,
+        swap_applied=accepted.swap_applied,
+        location=accepted.location,
+        field_before=accepted.field_before,
+        field_after=accepted.field_after,
+    )
+    return build_success(result, strict=options.strict)
+
+
 # ---------------------------------------------------------------------------
 # Capability registry
 # ---------------------------------------------------------------------------
@@ -526,4 +615,6 @@ REGISTRY: dict[str, Capability] = {
     "validate-resume-truth": validate_resume_truth_capability,
     "build-candidate-evidence": build_candidate_evidence_capability,
     "export-resume": export_resume,
+    "suggest-terminology": suggest_terminology,
+    "align-terminology": align_terminology,
 }

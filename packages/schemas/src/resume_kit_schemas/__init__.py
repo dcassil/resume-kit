@@ -23,6 +23,7 @@ from .analysis import (
     ResumeSelectionResult,
     ResumeVariantScore,
     ScoreDelta,
+    TerminologyAlignment,
 )
 from .change import (
     ChangeAction,
@@ -125,6 +126,7 @@ __all__ = [
     "ResumeSelectionResult",
     "ScoreDelta",
     "ResumeComparisonResult",
+    "TerminologyAlignment",
     # common
     "Warning",
     "Severity",

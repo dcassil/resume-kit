@@ -29,6 +29,7 @@ from resume_kit_export.models import ExportFormat
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
     AlignResumeRequest,
+    AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -39,6 +40,7 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
+    SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -247,6 +249,58 @@ def identify_gaps(
     )
     options = _options(False, strict, False)
     _run(caps.identify_resume_gaps(request, options), output)
+
+
+@app.command(name="suggest-terminology")
+def suggest_terminology(
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    job: str = typer.Option(..., "--job", help="Job description JSON path."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+    alias_file: str | None = _AliasFile,
+) -> None:
+    """List terminology-mirroring suggestions for a resume against a job."""
+    request = SuggestTerminologyRequest(
+        resume=io.load_resume(resume), job=io.load_job(job), alias_file=alias_file
+    )
+    options = _options(False, strict, False)
+    _run(caps.suggest_terminology(request, options), output)
+
+
+@app.command(name="align-terminology")
+def align_terminology(
+    suggestion: str = typer.Option(
+        ..., "--suggestion", help="TerminologyAlignment suggestion JSON path."
+    ),
+    location: str = typer.Option(
+        ..., "--location", help="Resume path from suggestion.locations to apply."
+    ),
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    job: str = typer.Option(..., "--job", help="Job description JSON path."),
+    evidence: str | None = typer.Option(
+        None, "--evidence", help="Evidence JSON path."
+    ),
+    freedom: int | None = typer.Option(
+        None, "--freedom", help="Explicit policy-freedom level (default: minimal)."
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+    alias_file: str | None = _AliasFile,
+) -> None:
+    """Apply one accepted terminology suggestion and report the score delta."""
+    request = AlignTerminologyRequest(
+        suggestion=io.load_suggestion(suggestion),
+        location=location,
+        resume=io.load_resume(resume),
+        job=io.load_job(job),
+        evidence=io.load_evidence(evidence) if evidence else (),
+        freedom=freedom,
+        alias_file=alias_file,
+    )
+    options = _options(False, strict, False)
+    _run(caps.align_terminology(request, options), output)
 
 
 @app.command(name="validate-truth")

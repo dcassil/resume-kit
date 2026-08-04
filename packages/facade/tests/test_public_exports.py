@@ -7,6 +7,8 @@ def test_all_public_exports_importable() -> None:
     from resume_kit_facade import (
         REGISTRY,
         AlignResumeRequest,
+        AlignTerminologyRequest,
+        AlignTerminologyResult,
         BuildCandidateEvidenceRequest,
         CapabilityOptions,
         CheckResumeAtsRequest,
@@ -17,8 +19,11 @@ def test_all_public_exports_importable() -> None:
         ExtractResumeRequest,
         IdentifyResumeGapsRequest,
         SelectBestResumeRequest,
+        SuggestTerminologyRequest,
+        TerminologyAlignmentDelta,
         ValidateResumeTruthRequest,
         align_resume,
+        align_terminology,
         build_candidate_evidence_capability,
         check_resume_ats,
         check_resume_job_match,
@@ -28,12 +33,22 @@ def test_all_public_exports_importable() -> None:
         extract_resume,
         identify_resume_gaps,
         select_best_resume,
+        suggest_terminology,
         validate_resume_truth_capability,
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 11
+    assert len(REGISTRY) == 13
     assert "export-resume" in REGISTRY
+    assert "suggest-terminology" in REGISTRY
+    assert "align-terminology" in REGISTRY
+
+    assert callable(suggest_terminology)
+    assert callable(align_terminology)
+    assert AlignTerminologyRequest is not None
+    assert SuggestTerminologyRequest is not None
+    assert AlignTerminologyResult is not None
+    assert TerminologyAlignmentDelta is not None
 
     assert callable(align_resume)
     assert callable(build_candidate_evidence_capability)
