@@ -100,3 +100,17 @@ Wave plan (by DAG / file-disjointness):
 
 Gate after each wave (run `uv sync --all-packages` first):
 `uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser packages/policy packages/evidence packages/alignment && uv run pytest`
+
+Phase 4 Wave A/B/C executed (mixed claude + codex agents):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| A | RIT-T-0026 scaffold | claude/opus | DONE (3 pkgs; boundary expected-set updated) |
+| B | RIT-T-0027 result schemas | codex | DONE (results.py: PolicyDecision/SkillTargetPlan/TruthReport/Review*/AlignmentResult; 10 tests) |
+| C | RIT-T-0028 freedom path policy | claude/opus | DONE (124 tests; factual fields blocked at F10; F0-10 ladder) |
+| C | RIT-T-0029 verified skill targets | codex | DONE (11 tests; verify_skill_target_plan + build_allowed_skill_target_keys) |
+| C | RIT-T-0030 evidence predicates+fabrication | claude/opus | DONE (25 tests; predicates + validate_master_alignment/fix_alignment_violations) |
+| C | RIT-T-0033 diff+verifier | codex | DONE (calculate_resume_diff + verify_diff_result parity) |
+| C | RIT-T-0035 review controller | claude/opus | DONE (21 tests; pure state machine, InterfaceResponse) |
+
+Orchestrator gate after Wave C: **848 passed, 1 skipped**, ruff clean, mypy --strict clean (82 files).
+Gate fixes: boundary expected-set += policy/evidence/alignment; lint cleanup in ported truthfulness.py (implicit string concat to preserve verbatim prompt text under line-length), SIM108/SIM103 in review.py/path_policy.py.
