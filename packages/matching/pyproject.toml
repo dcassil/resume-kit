@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-matching"
+version = "0.0.0"
+description = "Phase 3 keyword matching and job recommendation package for resume evaluation."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-core",
+    "resume-kit-schemas",
+    "resume-kit-ats",
+]
+
+[tool.uv.sources]
+resume-kit-core = { workspace = true }
+resume-kit-schemas = { workspace = true }
+resume-kit-ats = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_matching"]

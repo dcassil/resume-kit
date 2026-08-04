@@ -13,8 +13,11 @@ resolution-markers = [
 [manifest]
 members = [
     "resume-kit",
+    "resume-kit-ats",
     "resume-kit-core",
     "resume-kit-document-parser",
+    "resume-kit-job-parser",
+    "resume-kit-matching",
     "resume-kit-schemas",
 ]
 
@@ -995,6 +998,23 @@ dev = [
 ]
 
 [[package]]
+name = "resume-kit-ats"
+version = "0.0.0"
+source = { editable = "packages/ats" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
 name = "resume-kit-core"
 version = "0.0.0"
 source = { editable = "packages/core" }
@@ -1026,6 +1046,42 @@ requires-dist = [
     { name = "markitdown", extras = ["docx"] },
     { name = "pdfminer-six" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
+name = "resume-kit-job-parser"
+version = "0.0.0"
+source = { editable = "packages/job-parser" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
+name = "resume-kit-matching"
+version = "0.0.0"
+source = { editable = "packages/matching" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-ats" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-schemas" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-ats", editable = "packages/ats" },
     { name = "resume-kit-core", editable = "packages/core" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
 ]

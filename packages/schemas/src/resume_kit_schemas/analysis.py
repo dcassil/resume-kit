@@ -121,3 +121,126 @@ class AnalysisReport(BaseModel):
     alignment: AlignmentReport | None = None
     refinement_stats: RefinementStats | None = None
     warnings: list[Warning] = Field(default_factory=list)
+
+
+class MatchDimensionScore(BaseModel):
+    """One explainable scoring dimension of a job-match report.
+
+    The unit that makes scoring explainable: it names a dimension, records its
+    weighted score, and carries the concrete evidence that supports the score
+    (presence + support + placement) plus the evidence that is missing. This is
+    what lets scoring reflect real support for a requirement rather than mere
+    keyword repetition.
+    """
+
+    key: str = Field(description="Stable machine key for the dimension (e.g. 'skills').")
+    name: str = Field(description="Human-readable dimension name.")
+    score: float = Field(
+        default=0.0, ge=0.0, le=100.0, description="Dimension score (0-100)."
+    )
+    weight: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Relative weight of this dimension in the overall score (0-1).",
+    )
+    evidence: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Concrete supporting evidence, including where it appears "
+            "(presence + support + placement)."
+        ),
+    )
+    missing_evidence: list[str] = Field(
+        default_factory=list,
+        description="Expected evidence that was not found for this dimension.",
+    )
+    rationale: str = Field(
+        default="", description="Short explanation of how the score was derived."
+    )
+
+
+class JobMatchReport(BaseModel):
+    """Overall explainable match of a resume against a job.
+
+    Composes the existing ``ATSScore`` and ``KeywordGapAnalysis`` primitives
+    rather than duplicating them, and carries per-dimension explanations so the
+    overall score is auditable. Scoring is presence + support + placement based
+    (evidence lives on each ``MatchDimensionScore``), not keyword-repetition.
+    """
+
+    overall_score: float = Field(
+        default=0.0, ge=0.0, le=100.0, description="Weighted composite match score (0-100)."
+    )
+    dimensions: list[MatchDimensionScore] = Field(
+        default_factory=list,
+        description="Per-dimension explainable scores that compose the overall score.",
+    )
+    ats_score: ATSScore | None = Field(
+        default=None, description="Composed ATS breakdown, if computed."
+    )
+    keyword_gap: KeywordGapAnalysis | None = Field(
+        default=None, description="Composed keyword-gap analysis, if computed."
+    )
+    confidence: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Confidence in the match assessment (0-1)."
+    )
+    recommendations: list[str] = Field(
+        default_factory=list,
+        description="Actionable suggestions to improve the match.",
+    )
+
+
+class ResumeVariantScore(BaseModel):
+    """A labeled resume variant paired with its match report for ranking."""
+
+    variant_id: str = Field(description="Stable identifier for the resume variant.")
+    label: str = Field(default="", description="Human-readable variant label.")
+    report: JobMatchReport = Field(
+        description="Full explainable match report for this variant."
+    )
+
+    @property
+    def overall_score(self) -> float:
+        """Convenience accessor for the variant's overall match score."""
+        return self.report.overall_score
+
+
+class ResumeSelectionResult(BaseModel):
+    """Ranked selection of resume variants against a single job."""
+
+    ranked: list[ResumeVariantScore] = Field(
+        default_factory=list,
+        description="Variants ordered best-first by overall match score.",
+    )
+    selected_variant_id: str | None = Field(
+        default=None, description="Identifier of the chosen best variant, if any."
+    )
+    explanation: str = Field(
+        default="", description="Why the selected variant was chosen over the others."
+    )
+
+
+class ScoreDelta(BaseModel):
+    """A named metric compared across two resume variants."""
+
+    metric: str = Field(description="Name of the compared metric (e.g. 'ats.overall').")
+    before: float = Field(description="Value for the baseline / first variant.")
+    after: float = Field(description="Value for the compared / second variant.")
+    delta: float = Field(description="after - before (positive means improvement).")
+
+
+class ResumeComparisonResult(BaseModel):
+    """Deterministic comparison between two (or more) resume variants."""
+
+    variant_labels: list[str] = Field(
+        default_factory=list,
+        description="Labels of the compared variants, in comparison order.",
+    )
+    deltas: list[ScoreDelta] = Field(
+        default_factory=list,
+        description="Per-metric ATS and match deltas between the variants.",
+    )
+    summary: str = Field(
+        default="", description="Short human-readable summary of the comparison."
+    )

@@ -63,3 +63,11 @@ Gate (Phase 3): `uv run ruff check packages tests && uv run mypy packages/core p
 | Wave | Agent | Task | Files claimed | Status |
 | ---- | ----- | ---- | ------------- | ------ |
 | A | codex-decomp | RIT-I-0004 | Metis tasks RIT-T-0016..0025 | planned |
+| B | opus/high | RIT-T-0017 (schemas) | `schemas/analysis.py`,`schemas/__init__.py`,test | DONE (6 models: MatchDimensionScore/JobMatchReport/ResumeVariantScore/ResumeSelectionResult/ScoreDelta/ResumeComparisonResult; 11 tests) |
+| B | sonnet | RIT-T-0018 (keyword match) | `matching/keywords.py`,char test | DONE (29 tests; whole-term matching → KeywordGapAnalysis) |
+| B | sonnet | RIT-T-0019 (predicates) | `matching/predicates.py`,test | DONE (19 tests; jd_keywords_present, is_valid_resume) |
+| B | sonnet | RIT-T-0020 (ATS engine) | `ats/engine.py`,2 tests | DONE (41 tests; compute_ats_score→ATSScore, weights 0.55/0.25/0.20 + expanded checks) |
+| B | opus/med | RIT-T-0021 (job-parser) | `job-parser/{parse,prompts}.py`,test | DONE (6 tests; provider-injected + no-LLM fallback) |
+
+Orchestrator gate after Wave B: **539 passed**, ruff clean, mypy --strict clean (51 files).
+Gate fixes: (1) boundary test expected-set += matching/ats/job-parser; (2) removed empty `packages/*/tests/__init__.py` (4 files) — they collided as duplicate `tests` module under mypy; pytest uses `--import-mode=importlib` so they're unnecessary.

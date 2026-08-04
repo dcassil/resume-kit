@@ -12,9 +12,15 @@ from .analysis import (
     AnalysisReport,
     ATSScore,
     ATSSubScores,
+    JobMatchReport,
     KeywordGapAnalysis,
+    MatchDimensionScore,
     RefinementConfig,
     RefinementStats,
+    ResumeComparisonResult,
+    ResumeSelectionResult,
+    ResumeVariantScore,
+    ScoreDelta,
 )
 from .change import (
     ChangeAction,
@@ -95,6 +101,12 @@ __all__ = [
     "AlignmentViolation",
     "RefinementConfig",
     "RefinementStats",
+    "MatchDimensionScore",
+    "JobMatchReport",
+    "ResumeVariantScore",
+    "ResumeSelectionResult",
+    "ScoreDelta",
+    "ResumeComparisonResult",
     # common
     "Warning",
     "Severity",

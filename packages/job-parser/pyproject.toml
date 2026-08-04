@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-job-parser"
+version = "0.0.0"
+description = "Phase 3 job description parsing and extraction package."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-core",
+    "resume-kit-schemas",
+]
+
+[tool.uv.sources]
+resume-kit-core = { workspace = true }
+resume-kit-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_job_parser"]
