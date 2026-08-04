@@ -143,3 +143,29 @@ Phase 4 Wave F executed (claude/sonnet):
 Note on mypy count: 52 = actual src .py files across all 9 packages (mypy checks src only; hyphenated test dirs have no __init__.py → covered by pytest+ruff, not directory-mypy). Earlier 92/95 counts were an artifact of empty __init__.py changing module resolution; not a coverage regression.
 Public engine APIs now importable: resume_kit_alignment{align_resume, apply_diffs, calculate_resume_diff, verify_diff_result, generate_change_proposals, generate_skill_target_plan, ReviewController}; resume_kit_policy{evaluate_change_policy, verify_skill_target_plan, sanitize_user_input, freedom constants, truthfulness rules}; resume_kit_evidence{build_candidate_evidence, validate_resume_truth, structural predicates, fabrication helpers}; resume_kit_schemas{AlignmentResult, TruthReport, PolicyDecision, SkillTargetPlan, Review*}.
 NEXT: Phase 5 — Interfaces (CLI resume-tool, MCP server, agent plugin, REST API, job-hunter bridge).
+
+---
+
+## Phase 5 — Interfaces (RIT-I-0006) — PLANNED
+
+Codex decomposed into 11 file-disjoint tasks RIT-T-0038..0048 (`.agents/decomp-RIT-I-0006.json`).
+Scope (human-decided): ALL FIVE surfaces (CLI, MCP, REST API, plugin skills, job-hunter bridge),
+exposing ONLY the 10 built-engine capabilities as thin adapters. New pkgs: packages/facade,
+packages/cli, packages/mcp, packages/api; plus plugins/resume-intelligence/, integrations/job-hunter/.
+Stack: Typer (CLI), official mcp SDK, FastAPI+uvicorn (API) — heavy deps isolated per package (NFR-503).
+
+Wave plan (by DAG):
+| Wave | Tasks | Notes |
+| ---- | ----- | ----- |
+| A | RIT-T-0038 core interface substrate [opus/high] | InterfaceResponse mapping + ErrorCode taxonomy + exit-code map; blocks all |
+| B | RIT-T-0039 capability facade pkg [opus/high] | uniform (request,config,provider)->InterfaceResponse over 10 engine fns; blocks transports |
+| C | RIT-T-0040 scaffold cli/mcp/api [sonnet/med] | pyproject + entry points + deps |
+| D | RIT-T-0041 CLI, 0042 MCP, 0043 API, 0044 bridge, 0045 plugin skills | file-disjoint parallel over facade (0044 dep 0039; others dep 0040) |
+| E | RIT-T-0046 parity tests, 0047 boundary tests, 0048 exports | late; depend on transports |
+
+INTEGRATION NOTE for orchestrator: integrations/job-hunter is NOT under packages/* — root pyproject
+workspace `members` must gain "integrations/*" (and facade/cli/mcp/api are picked up by packages/*).
+Bridge task (0044) or scaffold must update root workspace members + the gate mypy list.
+
+Gate after each wave (uv sync --all-packages first):
+`uv run ruff check packages tests && uv run mypy packages/core ... packages/cli packages/mcp packages/api && uv run pytest`
