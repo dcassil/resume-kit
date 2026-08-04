@@ -14,6 +14,7 @@ from pathlib import Path
 
 import typer
 from pydantic import BaseModel, ValidationError
+from resume_kit_core.storage import ArtifactRef
 from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
@@ -92,6 +93,45 @@ def load_resumes(source: str) -> list[ResumeDocument]:
         except ValidationError as exc:
             raise _fail(f"Invalid resume at index {index} in {source}: {exc}") from exc
     return resumes
+
+
+class InMemoryArtifactStore:
+    """Minimal in-memory :class:`ArtifactStore` for the CLI transport.
+
+    The CLI injects an instance through ``CapabilityOptions.artifact_store`` so
+    it can retrieve rendered bytes after ``export-resume`` returns an
+    :class:`ArtifactRef`.  It holds bytes in a plain dict; no test fake is
+    imported into app code.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, object] = {}
+
+    async def put(
+        self,
+        artifact_id: str,
+        artifact_type: str,
+        data: object,
+        *,
+        content_type: str = "application/json",
+        metadata: dict[str, object] | None = None,
+    ) -> ArtifactRef:
+        """Store ``data`` in memory and return a reference to it."""
+        self._store[artifact_id] = data
+        return ArtifactRef(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            content_type=content_type,
+            metadata=metadata or {},
+        )
+
+    async def get(self, artifact_id: str) -> object:
+        """Return the payload stored under ``artifact_id``."""
+        return self._store[artifact_id]
+
+    async def exists(self, artifact_id: str) -> bool:
+        """Return True if ``artifact_id`` is present."""
+        return artifact_id in self._store
 
 
 def load_evidence(source: str) -> list[CandidateEvidence]:

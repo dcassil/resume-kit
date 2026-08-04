@@ -243,3 +243,16 @@ Phase 6 Wave C executed (claude/opus):
 | C | RIT-T-0052 export-resume facade capability | claude/opus | DONE (28 facade tests; ExportResumeRequest + CapabilityOptions.artifact_store; export_resume renders→ArtifactStore.put→ArtifactRef via build_success(artifacts=[ref]); deterministic sha256 artifact_id; _InMemoryArtifactStore default; no provider/no_llm needed; REGISTRY=11) |
 
 Gate after Wave C: **2089 passed, 1 skipped**, ruff clean, mypy --strict clean (74 files).
+
+Phase 6 Wave D executed (2 claude/opus + 1 claude/sonnet + 2 codex):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| D | RIT-T-0053 CLI export command | claude/opus | DONE (21 tests; resume-tool export --format/--out; InMemoryArtifactStore in io.py; base64 stdout / file bytes) |
+| D | RIT-T-0054 MCP resume_export tool | codex | DONE (25 tests; TOOL_NAMES+HANDLERS+server; base64 artifact bytes in JSON; local in-mem store) |
+| D | RIT-T-0055 API /export route | claude/opus | DONE (23 tests; POST /export returns raw bytes + content-type + attachment; JSON envelope on error) |
+| D | RIT-T-0056 job-hunter export callable | codex | DONE (14 tests; export_resume + _sync; no-mutation; returns ArtifactRef envelope) |
+| D | RIT-T-0057 plugin export skill | claude/sonnet | DONE (export-resume SKILL.md mirrors sibling format) |
+
+Orchestrator fix: added export-resume to plugins/.../test_skill_markdown.py EXPECTED_SKILL_SLUGS + EXPECTED_CLI_OR_MCP (resume_export); ruff import-sort autofix in mcp tools.py.
+Gate after Wave D: **2105 passed, 1 skipped**, ruff clean, mypy --strict clean (74 files).
+Remaining: Wave E (RIT-T-0058 umbrella packaging, 0060 boundary/parity, 0061 exports), Wave F (RIT-T-0059 clean-venv install proof).

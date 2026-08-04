@@ -8,9 +8,14 @@ round-trip.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from resume_kit_core import InterfaceResponse
 from resume_kit_core.errors import ErrorCode
+from resume_kit_core.storage import ArtifactRef
+from resume_kit_core.testing import FakeArtifactStore
+from resume_kit_export import ExportFormat
 from resume_kit_facade.models import CapabilityOptions
 from resume_kit_job_hunter_bridge import (
     align_resume_for_job,
@@ -19,6 +24,10 @@ from resume_kit_job_hunter_bridge import (
     build_evidence,
     validate_truth,
 )
+from resume_kit_job_hunter_bridge.bridge import (
+    export_resume,
+    export_resume_sync,
+)
 from resume_kit_schemas import (
     CandidateEvidence,
     EvidenceKind,
@@ -26,6 +35,10 @@ from resume_kit_schemas import (
     Requirement,
     RequirementKind,
     ResumeDocument,
+)
+
+_DOCX_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 
 
@@ -66,6 +79,18 @@ def _evidence() -> list[CandidateEvidence]:
             tags=["python"],
         )
     ]
+
+
+def _expected_content_type(fmt: ExportFormat) -> str:
+    if fmt is ExportFormat.pdf:
+        return "application/pdf"
+    return _DOCX_CONTENT_TYPE
+
+
+def _expected_prefix(fmt: ExportFormat) -> bytes:
+    if fmt is ExportFormat.pdf:
+        return b"%PDF-"
+    return b"PK"
 
 
 @pytest.mark.asyncio
@@ -132,6 +157,7 @@ async def test_inputs_are_not_mutated() -> None:
     await analyze_resume_for_job(resume, job)
     await validate_truth(resume, evidence)
     await build_evidence(resume)
+    await export_resume(resume, ExportFormat.pdf)
     await align_resume_for_job(
         resume, job, evidence=evidence, options=CapabilityOptions(no_llm=True)
     )
@@ -151,3 +177,54 @@ async def test_envelope_fields_are_preserved() -> None:
     assert resp.provenance == list(resp.provenance)
     # A successful deterministic path requires no human input.
     assert resp.requires_human_input is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fmt", [ExportFormat.pdf, ExportFormat.docx])
+async def test_export_resume_async_persists_artifact_without_provider(
+    fmt: ExportFormat,
+) -> None:
+    resume = _resume()
+    before = resume.model_dump()
+    store = FakeArtifactStore()
+
+    resp = await export_resume(
+        resume,
+        fmt,
+        options=CapabilityOptions(artifact_store=store),
+    )
+
+    assert resp.ok
+    assert isinstance(resp.data, ArtifactRef)
+    assert resp.data.content_type == _expected_content_type(fmt)
+    assert resp.data.metadata == {"format": fmt.value}
+    assert resp.artifacts == [resp.data]
+    data = await store.get(resp.data.artifact_id)
+    assert isinstance(data, bytes)
+    assert data.startswith(_expected_prefix(fmt))
+    assert resume.model_dump() == before
+
+
+@pytest.mark.parametrize("fmt", [ExportFormat.pdf, ExportFormat.docx])
+def test_export_resume_sync_persists_artifact_without_provider(
+    fmt: ExportFormat,
+) -> None:
+    resume = _resume()
+    before = resume.model_dump()
+    store = FakeArtifactStore()
+
+    resp = export_resume_sync(
+        resume,
+        fmt,
+        options=CapabilityOptions(artifact_store=store),
+    )
+
+    assert resp.ok
+    assert isinstance(resp.data, ArtifactRef)
+    assert resp.data.content_type == _expected_content_type(fmt)
+    assert resp.data.metadata == {"format": fmt.value}
+    assert resp.artifacts == [resp.data]
+    data = asyncio.run(store.get(resp.data.artifact_id))
+    assert isinstance(data, bytes)
+    assert data.startswith(_expected_prefix(fmt))
+    assert resume.model_dump() == before

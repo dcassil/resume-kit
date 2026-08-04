@@ -60,3 +60,13 @@ async def test_resume_align_no_llm_succeeds_without_provider() -> None:
     assert isinstance(data, dict)
     assert data["original_resume"] == data["aligned_resume"]
 
+
+async def test_resume_export_succeeds_without_provider() -> None:
+    payload = await HANDLERS["resume_export"](
+        {"resume": _resume(), "format": "pdf", "no_llm": True}
+    )
+
+    assert payload["errors"] == []
+    assert payload["requires_human_input"] is False
+    assert isinstance(payload["data"], dict)
+    assert isinstance(payload["artifact_bytes_base64"], str)

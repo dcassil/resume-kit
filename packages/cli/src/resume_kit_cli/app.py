@@ -16,13 +16,16 @@ injects one through :data:`PROVIDER`.
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import Coroutine
+from pathlib import Path
 from typing import Any
 
 import typer
 from resume_kit_core import StructuredCompletionProvider
 from resume_kit_core.interface import exit_code_for
 from resume_kit_core.response import InterfaceResponse
+from resume_kit_export.models import ExportFormat
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
     AlignResumeRequest,
@@ -31,6 +34,7 @@ from resume_kit_facade.models import (
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
@@ -65,6 +69,9 @@ _HumanInLoop = typer.Option(
     help="Request human-in-the-loop behaviour where supported.",
 )
 _Config = typer.Option(None, "--config", help="Optional config JSON path (not persisted).")
+_Format = typer.Option(..., "--format", help="Export format: pdf or docx.")
+_Out = typer.Option(None, "--out", help="Write raw bytes to this path.")
+_ResumeOrStdin = typer.Option("-", "--resume", help="Resume JSON path, or '-' for stdin.")
 
 
 def _options(no_llm: bool, strict: bool, human_in_loop: bool) -> CapabilityOptions:
@@ -259,6 +266,36 @@ def build_evidence(
     request = BuildCandidateEvidenceRequest(resume=io.load_resume(resume))
     options = _options(False, strict, False)
     _run(caps.build_candidate_evidence_capability(request, options), output)
+
+
+@app.command()
+def export(
+    format: ExportFormat = _Format,
+    out: str | None = _Out,
+    resume: str = _ResumeOrStdin,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+) -> None:
+    """Render a resume to PDF/DOCX bytes via the export-resume capability."""
+    request = ExportResumeRequest(resume=io.load_resume(resume), format=format)
+    store = io.InMemoryArtifactStore()
+    options = CapabilityOptions(strict=strict, artifact_store=store)
+    response = asyncio.run(caps.export_resume(request, options))
+    code = exit_code_for(response)
+    if response.errors or not response.artifacts:
+        typer.echo(render(response, output))
+        raise typer.Exit(code=code)
+    data = asyncio.run(store.get(response.artifacts[0].artifact_id))
+    if not isinstance(data, bytes):  # defensive: store must hold rendered bytes
+        typer.echo(render(response, output))
+        raise typer.Exit(code=code)
+    if out is not None:
+        Path(out).write_bytes(data)
+        typer.echo(f"Wrote {len(data)} bytes to {out}")
+    else:
+        typer.echo(base64.b64encode(data).decode("ascii"))
+    raise typer.Exit(code=code)
 
 
 def main() -> None:

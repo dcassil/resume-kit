@@ -59,6 +59,16 @@ def test_ats_and_match_and_select(tmp_path: Path) -> None:
         assert result.exit_code == 0, (args, result.stdout)
 
 
+def test_export_no_provider(tmp_path: Path) -> None:
+    resume = _resume(tmp_path / "r.json")
+    out = tmp_path / "resume.pdf"
+    result = runner.invoke(
+        app, ["export", "--resume", resume, "--format", "pdf", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert out.read_bytes().startswith(b"%PDF-")
+
+
 def test_compare_gaps_truth_evidence(tmp_path: Path) -> None:
     resume = _resume(tmp_path / "r.json")
     job = _job(tmp_path / "j.json")

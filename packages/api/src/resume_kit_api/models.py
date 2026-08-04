@@ -13,6 +13,7 @@ provider-not-configured envelope.
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
+from resume_kit_export.models import ExportFormat, ExportOptions
 from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
@@ -108,3 +109,17 @@ class BuildCandidateEvidenceBody(_Options):
 
     resume: ResumeDocument
     approved_claims: list[CandidateEvidence] | None = None
+
+
+class ExportResumeBody(_Options):
+    """Body for ``POST /export`` — render a resume to ``pdf`` or ``docx``.
+
+    ``format`` selects the output; ``options`` carries the deterministic export
+    tuning (fonts, margins, page size).  ``artifact_id`` may override the
+    deterministic hash-derived id.
+    """
+
+    resume: ResumeDocument
+    format: ExportFormat
+    options: ExportOptions | None = None
+    artifact_id: str | None = None

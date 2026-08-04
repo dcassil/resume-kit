@@ -39,6 +39,7 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "align-resume",
         "validate-resume-truth",
         "build-candidate-evidence",
+        "export-resume",
     ]
 )
 
@@ -54,6 +55,7 @@ EXPECTED_CLI_OR_MCP: dict[str, list[str]] = {
     "align-resume": ["resume-tool", "resume_align"],
     "validate-resume-truth": ["resume-tool", "resume_validate_truth"],
     "build-candidate-evidence": ["resume-tool", "candidate_evidence_build"],
+    "export-resume": ["resume-tool", "resume_export"],
 }
 
 # Phase 6 deferred capability names must NOT appear in any SKILL.md

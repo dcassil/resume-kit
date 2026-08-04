@@ -25,14 +25,22 @@ get a coarse, deterministic signal without having to parse the body:
 
 Because the envelope is always emitted verbatim, a client may ignore the status
 entirely and drive purely off ``errors`` / ``requires_human_input``.
+
+``POST /export`` is the one exception to the JSON-envelope shape: on success it
+returns the raw rendered artifact bytes with the format's ``Content-Type`` and a
+``Content-Disposition`` attachment filename (a real download), and falls back to
+the canonical JSON error envelope on failure.  See its handler docstring.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 from resume_kit_core.errors import ErrorCode
 from resume_kit_core.response import InterfaceResponse
+from resume_kit_core.storage import ArtifactRef
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
@@ -41,6 +49,7 @@ from resume_kit_facade.models import (
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
@@ -54,6 +63,7 @@ from resume_kit_api.models import (
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
     CompareResumeVersionsBody,
+    ExportResumeBody,
     ExtractJobDescriptionBody,
     ExtractResumeBody,
     IdentifyResumeGapsBody,
@@ -61,6 +71,43 @@ from resume_kit_api.models import (
     ValidateResumeTruthBody,
     _Options,
 )
+
+
+class _InMemoryArtifactStore:
+    """Minimal in-memory :class:`ArtifactStore` used to capture export bytes.
+
+    Not a test double: the ``/export`` route injects one instance per request so
+    it can retrieve the rendered bytes the facade persisted, then discards it.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+
+    async def put(
+        self,
+        artifact_id: str,
+        artifact_type: str,
+        data: Any,
+        *,
+        content_type: str = "application/json",
+        metadata: dict[str, Any] | None = None,
+    ) -> ArtifactRef:
+        """Store ``data`` in memory and return a reference to it."""
+        self._data[artifact_id] = data
+        return ArtifactRef(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            content_type=content_type,
+            metadata=metadata or {},
+        )
+
+    async def get(self, artifact_id: str) -> Any:
+        """Return the payload previously stored under ``artifact_id``."""
+        return self._data[artifact_id]
+
+    async def exists(self, artifact_id: str) -> bool:
+        """Return ``True`` if ``artifact_id`` is present."""
+        return artifact_id in self._data
 
 _STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.INVALID_INPUT: 422,
@@ -181,4 +228,56 @@ def register_routes(app: FastAPI) -> None:
         )
         return _render(
             await REGISTRY["build-candidate-evidence"](request, _options(body))
+        )
+
+    @app.post("/export")
+    async def export(body: ExportResumeBody) -> Response:
+        """Render a resume to ``pdf``/``docx`` and return the raw bytes.
+
+        Response policy (differs from the JSON-envelope endpoints so the caller
+        gets a real downloadable file):
+
+        * Success -> ``200`` with the artifact BYTES as the body, the format's
+          ``Content-Type`` (``application/pdf`` or the docx MIME), and a
+          ``Content-Disposition: attachment`` filename.  The artifact id and any
+          strict-mode warnings are surfaced via ``X-Artifact-Id`` /
+          ``X-Resume-Kit-Warnings`` headers so warnings stay separable.
+        * Failure (any envelope error) -> the canonical JSON
+          :class:`InterfaceResponse` envelope with the policy-mapped status,
+          identical to the other routes (errors kept distinct from warnings).
+
+        Bytes are obtained by injecting a per-request in-memory ``ArtifactStore``
+        into ``CapabilityOptions``; the facade persists the rendered bytes and
+        returns an ``ArtifactRef``, then the route reads them back by
+        ``ArtifactRef.artifact_id`` via ``store.get``.
+        """
+        store = _InMemoryArtifactStore()
+        request = ExportResumeRequest(
+            resume=body.resume,
+            format=body.format,
+            options=body.options,
+            artifact_id=body.artifact_id,
+        )
+        options = CapabilityOptions(
+            no_llm=body.no_llm,
+            strict=body.strict,
+            human_in_loop=body.human_in_loop,
+            artifact_store=store,
+        )
+        response = await REGISTRY["export-resume"](request, options)
+        if response.errors:
+            return _render(response)
+        ref = response.data
+        assert isinstance(ref, ArtifactRef)  # success envelope carries the ref
+        data = await store.get(ref.artifact_id)
+        filename = f"{ref.artifact_id}.{body.format.value}"
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Artifact-Id": ref.artifact_id,
+            "X-Resume-Kit-Warnings": str(len(response.warnings)),
+        }
+        return Response(
+            content=data,
+            media_type=ref.content_type,
+            headers=headers,
         )

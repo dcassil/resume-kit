@@ -136,3 +136,28 @@ def test_body_validation_error_is_422() -> None:
     # Missing required fields -> FastAPI request validation (not the envelope).
     resp = client.post("/check-ats", json={})
     assert resp.status_code == 422
+
+
+def test_export_pdf_returns_pdf_bytes() -> None:
+    resp = client.post("/export", json={"resume": _resume(), "format": "pdf"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "attachment" in resp.headers["content-disposition"]
+    assert resp.headers["x-artifact-id"]
+    assert resp.content.startswith(b"%PDF-")
+
+
+def test_export_docx_returns_docx_bytes() -> None:
+    resp = client.post("/export", json={"resume": _resume(), "format": "docx"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    # DOCX is a zip container -> "PK" local-file-header signature.
+    assert resp.content.startswith(b"PK")
+
+
+def test_export_invalid_format_is_422() -> None:
+    # Unknown format value -> FastAPI request validation (not the envelope).
+    resp = client.post("/export", json={"resume": _resume(), "format": "rtf"})
+    assert resp.status_code == 422

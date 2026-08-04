@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -44,9 +45,44 @@ def test_help_lists_all_commands() -> None:
         "align",
         "validate-truth",
         "build-evidence",
+        "export",
     ]
     for name in expected:
         assert name in result.stdout
+
+
+def test_export_pdf_writes_file(tmp_path: Path) -> None:
+    resume = _resume(tmp_path / "r.json")
+    out = tmp_path / "resume.pdf"
+    result = runner.invoke(
+        app, ["export", "--resume", resume, "--format", "pdf", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert out.read_bytes().startswith(b"%PDF-")
+
+
+def test_export_docx_writes_file(tmp_path: Path) -> None:
+    resume = _resume(tmp_path / "r.json")
+    out = tmp_path / "resume.docx"
+    result = runner.invoke(
+        app, ["export", "--resume", resume, "--format", "docx", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert out.read_bytes().startswith(b"PK")
+
+
+def test_export_base64_stdout_matches_file(tmp_path: Path) -> None:
+    resume = _resume(tmp_path / "r.json")
+    out = tmp_path / "resume.pdf"
+    file_res = runner.invoke(
+        app, ["export", "--resume", resume, "--format", "pdf", "--out", str(out)]
+    )
+    assert file_res.exit_code == 0, file_res.stdout
+    stdout_res = runner.invoke(app, ["export", "--resume", resume, "--format", "pdf"])
+    assert stdout_res.exit_code == 0, stdout_res.stdout
+    decoded = base64.b64decode(stdout_res.stdout.strip())
+    assert decoded == out.read_bytes()
+    assert decoded.startswith(b"%PDF-")
 
 
 def test_extract_all_output_formats(tmp_path: Path) -> None:

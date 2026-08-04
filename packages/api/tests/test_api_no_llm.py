@@ -48,6 +48,16 @@ def test_extract_job_no_llm_succeeds() -> None:
     assert payload["data"]["title"]
 
 
+def test_export_no_provider_succeeds() -> None:
+    # Export is deterministic: it renders bytes with no provider configured.
+    resp = client.post(
+        "/export", json={"resume": _RESUME, "format": "pdf", "no_llm": True}
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content.startswith(b"%PDF-")
+
+
 def test_align_no_llm_is_no_change() -> None:
     resp = client.post(
         "/align", json={"resume": _RESUME, "job": _JOB, "no_llm": True}

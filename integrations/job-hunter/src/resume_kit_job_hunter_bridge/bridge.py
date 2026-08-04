@@ -2,8 +2,9 @@
 
 This is a PURE LIBRARY bridge (REQ-506). It offers a small, stable Python
 surface that job-hunter calls to analyze a resume for a job, align a resume for
-a job, validate resume truth, and build candidate evidence. Every callable
-delegates to :data:`resume_kit_facade.REGISTRY` and returns a canonical
+a job, validate resume truth, build candidate evidence, and export resume
+artifacts. Every callable delegates to :data:`resume_kit_facade.REGISTRY` and
+returns a canonical
 :class:`~resume_kit_core.InterfaceResponse` carrying ``resume_kit_schemas``
 data (never a bridge-local DTO).
 
@@ -28,6 +29,7 @@ import asyncio
 from collections.abc import Coroutine, Sequence
 
 from resume_kit_core import InterfaceResponse
+from resume_kit_export import ExportFormat, ExportOptions
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
@@ -35,6 +37,7 @@ from resume_kit_facade.models import (
     CapabilityOptions,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    ExportResumeRequest,
     IdentifyResumeGapsRequest,
     ValidateResumeTruthRequest,
 )
@@ -50,10 +53,12 @@ __all__ = [
     "align_resume_for_job",
     "validate_truth",
     "build_evidence",
+    "export_resume",
     "analyze_resume_for_job_sync",
     "align_resume_for_job_sync",
     "validate_truth_sync",
     "build_evidence_sync",
+    "export_resume_sync",
 ]
 
 
@@ -182,6 +187,26 @@ async def build_evidence(
     )
 
 
+async def export_resume(
+    resume: ResumeDocument,
+    fmt: ExportFormat,
+    *,
+    export_options: ExportOptions | None = None,
+    options: CapabilityOptions | None = None,
+) -> InterfaceResponse[object]:
+    """Export ``resume`` through the ``export-resume`` facade capability.
+
+    Deterministic and provider-free; returns the canonical response carrying an
+    ``ArtifactRef``. Bytes remain behind the caller-provided artifact store.
+    """
+    opts = options or CapabilityOptions()
+    return await _dispatch(
+        "export-resume",
+        ExportResumeRequest(resume=resume, format=fmt, options=export_options),
+        opts,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Synchronous convenience wrappers
 # ---------------------------------------------------------------------------
@@ -237,4 +262,22 @@ def build_evidence_sync(
     """Synchronous wrapper around :func:`build_evidence`."""
     return _run(
         build_evidence(resume, approved_claims=approved_claims, options=options)
+    )
+
+
+def export_resume_sync(
+    resume: ResumeDocument,
+    fmt: ExportFormat,
+    *,
+    export_options: ExportOptions | None = None,
+    options: CapabilityOptions | None = None,
+) -> InterfaceResponse[object]:
+    """Synchronous wrapper around :func:`export_resume`."""
+    return _run(
+        export_resume(
+            resume,
+            fmt,
+            export_options=export_options,
+            options=options,
+        )
     )

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import base64
+
 import pytest
 from resume_kit_core.testing import FakeStructuredCompletionProvider
 from resume_kit_mcp.server import TOOLS
 from resume_kit_mcp.tools import HANDLERS, TOOL_NAMES
 
 
-def _resume(summary: str = "Python engineer with Docker experience.") -> dict[str, object]:
+def _resume(
+    summary: str = "Python engineer with Docker experience.",
+) -> dict[str, object]:
     return {
         "personalInfo": {
             "name": "Jane Dev",
@@ -59,7 +63,25 @@ def _assert_envelope(payload: dict[str, object]) -> None:
     assert isinstance(payload["provenance"], list)
 
 
-def test_registers_exactly_the_ten_stable_tools() -> None:
+def _assert_export_envelope(payload: dict[str, object]) -> None:
+    assert set(payload) == {
+        "data",
+        "warnings",
+        "errors",
+        "requires_human_input",
+        "questions",
+        "artifacts",
+        "provenance",
+        "artifact_bytes_base64",
+    }
+    assert isinstance(payload["artifact_bytes_base64"], str)
+    canonical = {
+        key: payload[key] for key in payload if key != "artifact_bytes_base64"
+    }
+    _assert_envelope(canonical)
+
+
+def test_registers_exactly_the_eleven_stable_tools() -> None:
     expected = {
         "resume_extract",
         "job_description_extract",
@@ -71,6 +93,7 @@ def test_registers_exactly_the_ten_stable_tools() -> None:
         "resume_align",
         "resume_validate_truth",
         "candidate_evidence_build",
+        "resume_export",
     }
     assert set(TOOL_NAMES) == expected
     assert set(HANDLERS) == expected
@@ -171,3 +194,46 @@ async def test_resume_align_human_in_loop_surfaces_questions_without_advancing()
     assert review_state["current_section"] == "summary"
     assert review_state["decisions"] == []
 
+
+@pytest.mark.parametrize(
+    ("format_value", "signature"),
+    [
+        ("pdf", b"%PDF-"),
+        ("docx", b"PK"),
+    ],
+)
+async def test_resume_export_returns_envelope_metadata_and_base64_bytes(
+    format_value: str,
+    signature: bytes,
+) -> None:
+    payload = await HANDLERS["resume_export"](
+        {"resume": _resume(), "format": format_value}
+    )
+
+    _assert_export_envelope(payload)
+    assert payload["errors"] == []
+    assert payload["requires_human_input"] is False
+    data = payload["data"]
+    artifacts = payload["artifacts"]
+    assert isinstance(data, dict)
+    assert isinstance(artifacts, list)
+    assert len(artifacts) == 1
+    artifact = artifacts[0]
+    assert isinstance(artifact, dict)
+    assert data["artifact_id"] == artifact["artifact_id"]
+    assert data["artifact_type"] == "resume"
+    assert artifact["metadata"] == {"format": format_value}
+    raw = base64.b64decode(str(payload["artifact_bytes_base64"]))
+    assert raw.startswith(signature)
+
+
+async def test_resume_export_rejects_invalid_format() -> None:
+    payload = await HANDLERS["resume_export"]({"resume": _resume(), "format": "html"})
+
+    _assert_envelope(payload)
+    assert payload["data"] is None
+    assert payload["errors"]
+    error = payload["errors"][0]
+    assert isinstance(error, dict)
+    assert error["code"] == "invalid_input"
+    assert error["details"] == {"field": "format"}

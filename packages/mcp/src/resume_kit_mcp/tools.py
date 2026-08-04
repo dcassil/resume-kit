@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Awaitable, Callable, Sequence
 from typing import get_args, get_type_hints
 
@@ -10,8 +11,11 @@ from resume_kit_core import (
     CoreError,
     ErrorCode,
     InterfaceResponse,
+    ResumeKitError,
     StructuredCompletionProvider,
 )
+from resume_kit_core.storage import ArtifactRef
+from resume_kit_export.models import ExportFormat
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
@@ -20,6 +24,7 @@ from resume_kit_facade.models import (
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
@@ -43,6 +48,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_align",
     "resume_validate_truth",
     "candidate_evidence_build",
+    "resume_export",
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
@@ -54,6 +60,43 @@ class _ValidationFailure(Exception):
     def __init__(self, message: str, *, field: str | None = None) -> None:
         super().__init__(message)
         self.field = field
+
+
+class _InMemoryArtifactStore:
+    """Per-call MCP artifact store used to retrieve export bytes."""
+
+    def __init__(self) -> None:
+        self._store: dict[str, object] = {}
+
+    async def put(
+        self,
+        artifact_id: str,
+        artifact_type: str,
+        data: object,
+        *,
+        content_type: str = "application/json",
+        metadata: dict[str, object] | None = None,
+    ) -> ArtifactRef:
+        self._store[artifact_id] = data
+        return ArtifactRef(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            content_type=content_type,
+            metadata=metadata or {},
+        )
+
+    async def get(self, artifact_id: str) -> object:
+        if artifact_id not in self._store:
+            raise ResumeKitError(
+                CoreError(
+                    code=ErrorCode.ARTIFACT_NOT_FOUND,
+                    message=f"Artifact '{artifact_id}' not found.",
+                )
+            )
+        return self._store[artifact_id]
+
+    async def exists(self, artifact_id: str) -> bool:
+        return artifact_id in self._store
 
 
 def _find_model_type(annotation: object) -> type[BaseModel]:
@@ -157,6 +200,17 @@ def _optional_string(arguments: ToolArguments, field: str, default: str) -> str:
     if isinstance(value, str):
         return value
     raise _ValidationFailure(f"Field '{field}' must be a string.", field=field)
+
+
+def _export_format(arguments: ToolArguments, field: str) -> ExportFormat:
+    value = _string(arguments, field)
+    try:
+        return ExportFormat(value)
+    except ValueError as exc:
+        raise _ValidationFailure(
+            "Field 'format' must be one of: pdf, docx.",
+            field=field,
+        ) from exc
 
 
 def _make_request(request_type: type[object], fields: ToolArguments) -> object:
@@ -399,6 +453,40 @@ async def candidate_evidence_build(arguments: ToolArguments) -> ToolResult:
     return await _call("build-candidate-evidence", request, arguments)
 
 
+async def resume_export(arguments: ToolArguments) -> ToolResult:
+    store = _InMemoryArtifactStore()
+    try:
+        options = _options(arguments)
+        request = _make_request(
+            ExportResumeRequest,
+            {
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+                "format": _export_format(arguments, "format"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    response = await REGISTRY["export-resume"](
+        request,
+        CapabilityOptions(
+            no_llm=options.no_llm,
+            strict=options.strict,
+            human_in_loop=options.human_in_loop,
+            provider=options.provider,
+            artifact_store=store,
+        ),
+    )
+    result = _dump(response)
+    if response.errors:
+        return result
+    ref = response.data
+    if isinstance(ref, ArtifactRef):
+        data = await store.get(ref.artifact_id)
+        if isinstance(data, bytes):
+            result["artifact_bytes_base64"] = base64.b64encode(data).decode("ascii")
+    return result
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
     "job_description_extract": job_description_extract,
@@ -410,4 +498,5 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_align": resume_align,
     "resume_validate_truth": resume_validate_truth,
     "candidate_evidence_build": candidate_evidence_build,
+    "resume_export": resume_export,
 }
