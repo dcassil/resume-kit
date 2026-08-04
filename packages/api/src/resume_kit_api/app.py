@@ -27,3 +27,18 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def main() -> None:
+    """Console-script entry point: serve the API with uvicorn.
+
+    Host/port come from ``RESUME_KIT_API_HOST`` (default 127.0.0.1) and
+    ``RESUME_KIT_API_PORT`` (default 8000).
+    """
+    import os
+
+    import uvicorn
+
+    host = os.environ.get("RESUME_KIT_API_HOST", "127.0.0.1")
+    port = int(os.environ.get("RESUME_KIT_API_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)

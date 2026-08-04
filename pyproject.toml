@@ -1,6 +1,6 @@
 [project]
 name = "resume-kit"
-version = "0.0.0"
+version = "0.1.0"
 description = "Resume Intelligence Toolkit — evaluate, match, align, validate, and generate resume materials against jobs."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -48,6 +48,8 @@ all = [
 
 [project.scripts]
 resume-tool = "resume_kit_cli.app:app"
+resume-kit-mcp = "resume_kit_mcp.server:main"
+resume-kit-api = "resume_kit_api.app:main"
 
 [project.urls]
 Homepage = "https://github.com/dcassil/resume-kit"

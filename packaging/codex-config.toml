@@ -1,0 +1,22 @@
+# Codex MCP registration for the resume-kit server.
+#
+# Append this block to your Codex config at ~/.codex/config.toml
+# (Codex reads MCP servers from $CODEX_HOME/config.toml; there is no per-repo
+# manifest, so this is global to your Codex install).
+#
+# Prerequisite: install the server so the `resume-kit-mcp` command exists:
+#     pip install "resume-kit[mcp]"
+# or, from a checkout of this repo:
+#     uv sync --all-packages   # then use the command form below
+#
+# Equivalent one-liner (newer Codex CLI):
+#     codex mcp add resume-kit -- resume-kit-mcp
+
+[mcp_servers.resume-kit]
+command = "resume-kit-mcp"
+args = []
+
+# --- Local checkout (dev) variant: run from the workspace without installing ---
+# [mcp_servers.resume-kit]
+# command = "uv"
+# args = ["run", "--directory", "/absolute/path/to/resume-kit", "resume-kit-mcp"]

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "resume-kit": {
+      "command": "resume-kit-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

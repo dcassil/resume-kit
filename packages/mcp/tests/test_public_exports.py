@@ -4,11 +4,12 @@ from __future__ import annotations
 
 
 def test_all_public_exports_importable() -> None:
-    from resume_kit_mcp import HANDLERS, TOOL_NAMES, server
+    from resume_kit_mcp import HANDLERS, TOOL_NAMES, main, server
 
     assert isinstance(HANDLERS, dict)
     assert isinstance(TOOL_NAMES, tuple)
     assert server is not None
+    assert callable(main)
 
 
 def test_all_names_in_dunder_all() -> None:

@@ -92,7 +92,26 @@ async def call_tool(
 
 server: Server[object] = Server(
     "resume-kit",
-    version="0.0.0",
+    version="0.1.0",
     on_list_tools=list_tools,
     on_call_tool=call_tool,
 )
+
+
+async def _serve_stdio() -> None:
+    """Serve the MCP server over stdio until the client disconnects."""
+    from mcp.server.stdio import stdio_server
+
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options(),
+        )
+
+
+def main() -> None:
+    """Console-script entry point: run the resume-kit MCP server on stdio."""
+    import anyio
+
+    anyio.run(_serve_stdio)
