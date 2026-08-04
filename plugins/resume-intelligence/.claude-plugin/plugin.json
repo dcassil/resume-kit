@@ -1,6 +1,6 @@
 {
   "name": "resume-intelligence",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Resume Intelligence Toolkit skills: extract, ATS check, job match, select, compare, gap analysis, controlled alignment, truth validation, candidate evidence, and PDF/DOCX export — over the resume-kit MCP server and resume-tool CLI.",
   "author": {
     "name": "Daniel Cassil"
@@ -8,7 +8,6 @@
   "homepage": "https://github.com/dcassil/resume-kit",
   "license": "Apache-2.0",
   "keywords": ["resume", "ats", "job-matching", "mcp", "cli"],
-  "hooks": "./hooks/hooks.json",
   "mcpServers": {
     "resume-kit": {
       "command": "resume-kit-mcp",
