@@ -34,6 +34,16 @@ BRIDGE_SRC = REPO_ROOT / "integrations" / "job-hunter" / "src"
 # Phase 5 transport packages — excluded from the "engine" scans.
 TRANSPORT_PACKAGES = {"cli", "mcp", "api"}
 
+# Phase 6 render package — the only package permitted to import reportlab /
+# python-docx (REQ-604/NFR-602). Engine-side, but excluded from the render-lib
+# leak scan below (which asserts render libs live ONLY in packages/export).
+RENDER_PACKAGES = frozenset({"export"})
+
+# Render libraries (python-docx's import name is ``docx``) that must not leak
+# out of packages/export into any other engine package, the transports, or the
+# pure-library bridge.
+RENDER_LIB_MODULES = ("reportlab", "docx")
+
 # Engine packages that ship a pyproject.toml we assert transport-dep-free against.
 ENGINE_PACKAGES = (
     "core",
@@ -161,6 +171,14 @@ _ENGINE_FILES = _engine_py_files(exclude=frozenset({"facade"}))
 _FACADE_FILES = _collect_py(FACADE_SRC)
 _BRIDGE_FILES = _collect_py(BRIDGE_SRC)
 
+# Render-lib leak scan: every engine package EXCEPT export, plus the transports
+# and the bridge. Render libs must be confined to packages/export.
+_RENDER_SCOPED_ENGINE_FILES = _engine_py_files(exclude=RENDER_PACKAGES)
+_TRANSPORT_FILES: list[Path] = []
+for _pkg in sorted(TRANSPORT_PACKAGES):
+    _TRANSPORT_FILES.extend(_collect_py(PACKAGES_ROOT / _pkg / "src"))
+_RENDER_NON_EXPORT_FILES = _RENDER_SCOPED_ENGINE_FILES + _TRANSPORT_FILES + _BRIDGE_FILES
+
 
 # ---------------------------------------------------------------------------
 # 1. Engine must not import interface packages (NFR-502)
@@ -224,6 +242,28 @@ def test_bridge_does_not_import_transport(py_file: Path, module: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 3b. Render libs (reportlab / python-docx) live ONLY in packages/export
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("py_file", _RENDER_NON_EXPORT_FILES, ids=_rel)
+@pytest.mark.parametrize("module", RENDER_LIB_MODULES)
+def test_render_libs_confined_to_export(py_file: Path, module: str) -> None:
+    """reportlab / python-docx must not leak outside packages/export.
+
+    Scans every engine package except export, plus the transports and the
+    bridge (REQ-604/NFR-602). ``packages/export`` is the sole legitimate home
+    for these render dependencies and is excluded from this scan.
+    """
+    source = py_file.read_text(encoding="utf-8")
+    matches = _import_pattern(module).findall(source)
+    assert not matches, (
+        f"{_rel(py_file)} imports render library {module!r} — reportlab and "
+        "python-docx are confined to packages/export (REQ-604/NFR-602)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # 4. Engine pyproject.toml files must not declare transport deps (NFR-503)
 # ---------------------------------------------------------------------------
 
@@ -238,4 +278,41 @@ def test_engine_pyproject_has_no_transport_deps(pkg: str) -> None:
     assert not offending, (
         f"engine package {pkg!r} ({_rel(pyproject)}) declares forbidden "
         f"transport dependency/dependencies {offending} (NFR-503)"
+    )
+
+
+# Render deps that must not appear in any engine pyproject EXCEPT export's own.
+FORBIDDEN_RENDER_DEPS = ("reportlab", "python-docx")
+
+
+@pytest.mark.parametrize("pkg", ENGINE_PACKAGES)
+def test_engine_pyproject_has_no_render_deps(pkg: str) -> None:
+    """Non-export engine pyproject.toml must not declare render deps (REQ-604).
+
+    ``ENGINE_PACKAGES`` deliberately omits ``export``; its pyproject legitimately
+    declares ``reportlab`` / ``python-docx``, so it is not scanned here.
+    """
+    pyproject = PACKAGES_ROOT / pkg / "pyproject.toml"
+    assert pyproject.exists(), f"expected pyproject.toml for engine package {pkg!r}"
+    declared = _declared_deps(pyproject)
+    offending = sorted(declared & set(FORBIDDEN_RENDER_DEPS))
+    assert not offending, (
+        f"engine package {pkg!r} ({_rel(pyproject)}) declares forbidden "
+        f"render dependency/dependencies {offending} — render libs are confined "
+        "to packages/export (REQ-604/NFR-602)"
+    )
+
+
+def test_export_is_not_in_engine_pyproject_scan() -> None:
+    """Guard: export must be excluded from the transport/render pyproject scans.
+
+    export is engine-side but legitimately declares reportlab / python-docx, so
+    it must never appear in ENGINE_PACKAGES (which both pyproject scans iterate).
+    """
+    assert "export" not in ENGINE_PACKAGES
+    export_pyproject = PACKAGES_ROOT / "export" / "pyproject.toml"
+    assert export_pyproject.exists(), "expected packages/export/pyproject.toml"
+    declared = _declared_deps(export_pyproject)
+    assert {"reportlab", "python-docx"} <= declared, (
+        "export pyproject is expected to declare reportlab and python-docx"
     )

@@ -30,6 +30,11 @@ PACKAGES_ROOT = Path(__file__).parents[2] / "packages"
 # Phase 5 transport packages — exempt from the transport-framework checks only.
 TRANSPORT_PACKAGES = {"cli", "mcp", "api"}
 
+# Phase 6 render package — the ONLY package permitted to import the render
+# libraries (reportlab / python-docx). It is engine-side (not a transport), so
+# it is subject to every other check; only the render-lib scan below exempts it.
+RENDER_PACKAGES = {"export"}
+
 # Patterns that must not appear anywhere in packages/*/src/**/*.py
 FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # upstream app namespace
@@ -57,6 +62,25 @@ FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(
             r"^\s*(from\s+anthropic(\s*\.|\s)|import\s+anthropic(\s+|$))", re.MULTILINE
         ),
+    ),
+]
+
+# Render libraries (reportlab / python-docx, import name ``docx``): forbidden in
+# EVERY engine package EXCEPT ``packages/export``. REQ-604/NFR-602 confines these
+# heavy render deps to the export package so the rest of the engine stays free of
+# them. Scanned via _collect_render_scoped_engine_files() (transports + export
+# excluded); NOT added to ENGINE_ONLY_FORBIDDEN_PATTERNS, whose scan includes
+# export and would false-positive on its legitimate render imports.
+RENDER_LIB_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "reportlab import",
+        re.compile(
+            r"^\s*(from\s+reportlab(\s*\.|\s)|import\s+reportlab(\s+|$))", re.MULTILINE
+        ),
+    ),
+    (
+        "python-docx (docx) import",
+        re.compile(r"^\s*(from\s+docx(\s*\.|\s)|import\s+docx(\s+|$))", re.MULTILINE),
     ),
 ]
 
@@ -120,6 +144,21 @@ def _collect_engine_python_files() -> list[Path]:
         p
         for p in _collect_python_files()
         if p.relative_to(PACKAGES_ROOT).parts[0] not in TRANSPORT_PACKAGES
+    ]
+
+
+def _collect_render_scoped_engine_files() -> list[Path]:
+    """Engine .py files subject to the render-lib ban: exclude transports + export.
+
+    ``packages/export`` legitimately imports reportlab / python-docx; every other
+    engine package (schemas/core/document-parser/job-parser/ats/matching/policy/
+    evidence/alignment/facade) must not.
+    """
+    excluded = TRANSPORT_PACKAGES | RENDER_PACKAGES
+    return [
+        p
+        for p in _collect_python_files()
+        if p.relative_to(PACKAGES_ROOT).parts[0] not in excluded
     ]
 
 
@@ -208,6 +247,35 @@ def test_no_transport_dep_in_engine(
     matches = pattern.findall(source)
     assert not matches, (
         f"{label!r} found in ENGINE file {py_file.relative_to(PACKAGES_ROOT.parent)!s}:\n"
+        + "\n".join(f"  {m!r}" for m in matches)
+    )
+
+
+@pytest.mark.parametrize(
+    "py_file",
+    _collect_render_scoped_engine_files(),
+    ids=lambda p: str(p.relative_to(PACKAGES_ROOT.parent)),
+)
+@pytest.mark.parametrize(
+    "label,pattern",
+    RENDER_LIB_PATTERNS,
+    ids=lambda x: x if isinstance(x, str) else None,
+)
+def test_no_render_lib_in_non_export_engine(
+    py_file: Path, label: str, pattern: re.Pattern[str]
+) -> None:
+    """Render libs (reportlab / python-docx) must live only in packages/export.
+
+    REQ-604/NFR-602: confine heavy render deps to the export package. Transport
+    packages and ``packages/export`` are excluded from this scan; every other
+    engine package must not import reportlab or ``docx``.
+    """
+    source = py_file.read_text(encoding="utf-8")
+    matches = pattern.findall(source)
+    assert not matches, (
+        f"{label!r} found in non-export engine file "
+        f"{py_file.relative_to(PACKAGES_ROOT.parent)!s} — render libs are "
+        "confined to packages/export (REQ-604/NFR-602):\n"
         + "\n".join(f"  {m!r}" for m in matches)
     )
 

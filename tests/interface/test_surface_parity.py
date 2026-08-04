@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib
 import json
 from collections.abc import Awaitable, Callable, Mapping
@@ -13,9 +14,11 @@ from typing import NamedTuple, cast
 import pytest
 from fastapi.testclient import TestClient
 from resume_kit_api.app import create_app
+from resume_kit_cli.io import InMemoryArtifactStore
 from resume_kit_core import InterfaceResponse, StructuredCompletionProvider
 from resume_kit_core.interface import ExitCode
 from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_export.models import ExportFormat, mime_type
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AlignResumeRequest,
@@ -23,6 +26,7 @@ from resume_kit_facade.models import (
     CapabilityOptions,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
@@ -587,3 +591,103 @@ def test_align_human_in_loop_surfaces_questions_across_surfaces(
     surfaces = {"direct": direct, "cli": cli, "mcp": mcp, "api": api}
     assert all(payload["requires_human_input"] is True for payload in surfaces.values())
     assert all(payload["questions"] for payload in surfaces.values())
+
+
+# ---------------------------------------------------------------------------
+# Export parity (REQ-604): facade ≡ CLI ≡ MCP ≡ API on artifact metadata
+# ---------------------------------------------------------------------------
+
+# Magic-byte signature each format's bytes must start with.
+_FORMAT_SIGNATURES: dict[ExportFormat, bytes] = {
+    ExportFormat.pdf: b"%PDF-",
+    ExportFormat.docx: b"PK",
+}
+
+
+class ArtifactResult(NamedTuple):
+    """The semantic export result, normalized across transports."""
+
+    content_type: str
+    signature: bytes
+
+
+def _artifact_result(content_type: str, data: bytes, fmt: ExportFormat) -> ArtifactResult:
+    signature = _FORMAT_SIGNATURES[fmt]
+    return ArtifactResult(content_type=content_type, signature=data[: len(signature)])
+
+
+def _export_direct(fmt: ExportFormat, resume: ResumeDocument) -> ArtifactResult:
+    """Direct facade: inject an in-memory store, read bytes back via the ref."""
+    store = InMemoryArtifactStore()
+    request = ExportResumeRequest(resume=resume, format=fmt)
+    response = asyncio.run(
+        _await_response(
+            REGISTRY["export-resume"](request, CapabilityOptions(artifact_store=store))
+        )
+    )
+    ref = response.artifacts[0]
+    data = asyncio.run(store.get(ref.artifact_id))
+    assert isinstance(data, bytes)
+    return _artifact_result(ref.content_type, data, fmt)
+
+
+def _export_cli(fmt: ExportFormat, resume_path: Path, out_path: Path) -> ArtifactResult:
+    """CLI ``export``: writes raw bytes to ``--out``; content_type is derived."""
+    result = _RUNNER.invoke(
+        _CLI_APP,
+        [
+            "export",
+            "--format",
+            fmt.value,
+            "--resume",
+            str(resume_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    data = out_path.read_bytes()
+    return _artifact_result(mime_type(fmt), data, fmt)
+
+
+def _export_mcp(fmt: ExportFormat, resume: JsonDict) -> ArtifactResult:
+    """MCP ``resume_export``: returns base64 bytes + the ArtifactRef in JSON."""
+    payload = asyncio.run(
+        _await_json(HANDLERS["resume_export"]({"resume": resume, "format": fmt.value}))
+    )
+    ref = cast(JsonDict, payload["data"])
+    content_type = cast(str, ref["content_type"])
+    data = base64.b64decode(cast(str, payload["artifact_bytes_base64"]))
+    return _artifact_result(content_type, data, fmt)
+
+
+def _export_api(fmt: ExportFormat, resume: JsonDict) -> ArtifactResult:
+    """API ``POST /export``: returns raw bytes as the body + Content-Type header."""
+    response = _CLIENT.post("/export", json={"resume": resume, "format": fmt.value})
+    assert response.status_code == 200, response.text
+    content_type = response.headers["content-type"]
+    return _artifact_result(content_type, response.content, fmt)
+
+
+@pytest.mark.parametrize("fmt", list(ExportFormat), ids=lambda f: f.value)
+def test_export_artifact_metadata_equivalent_across_surfaces(
+    tmp_path: Path, fmt: ExportFormat
+) -> None:
+    """Every surface agrees on export content_type + byte signature (REQ-604)."""
+    ctx = _context(tmp_path)
+    resume_json = _resume(ctx)
+
+    direct = _export_direct(fmt, ctx.data.resume)
+    cli = _export_cli(fmt, ctx.paths.resume, tmp_path / f"out.{fmt.value}")
+    mcp = _export_mcp(fmt, resume_json)
+    api = _export_api(fmt, resume_json)
+
+    # Each surface must expose the format's canonical MIME type ...
+    assert direct.content_type == mime_type(fmt)
+    for surface in (cli, mcp, api):
+        assert surface.content_type == direct.content_type
+
+    # ... and produce bytes carrying the format's magic signature.
+    expected_signature = _FORMAT_SIGNATURES[fmt]
+    for surface in (direct, cli, mcp, api):
+        assert surface.signature == expected_signature

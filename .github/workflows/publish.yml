@@ -1,0 +1,50 @@
+name: Publish to PyPI
+
+# Tag-gated: only runs when a version tag (vX.Y.Z) is pushed.
+# Ordinary pushes and PRs do NOT trigger a publish.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI (Trusted Publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    # Trusted Publishing environment; configure it in the PyPI project settings.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/resume-kit
+    permissions:
+      # OIDC token used by Trusted Publishing. No API tokens or secrets required.
+      id-token: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

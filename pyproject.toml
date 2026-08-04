@@ -4,20 +4,90 @@ version = "0.0.0"
 description = "Resume Intelligence Toolkit — evaluate, match, align, validate, and generate resume materials against jobs."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Daniel Cassil" }]
 keywords = ["resume", "ats", "job-matching", "mcp", "cli", "resume-tailoring"]
-dependencies = [
-    "resume-kit-schemas",
-    "resume-kit-core",
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
 ]
+
+# Base = engine + export third-party runtime deps ONLY. Every resume-kit import
+# package is VENDORED into the wheel (see force-include below), so no internal
+# resume-kit-* Requires-Dist appears in the shipped metadata.
+dependencies = [
+    "pydantic>=2",
+    "markitdown[docx]",
+    "pdfminer.six",
+    "python-docx>=1.1.0",
+    "reportlab",
+]
+
+[project.optional-dependencies]
+cli = ["typer>=0.12"]
+mcp = ["mcp>=1"]
+api = ["fastapi>=0.115", "uvicorn>=0.30"]
+all = [
+    "typer>=0.12",
+    "mcp>=1",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[project.scripts]
+resume-tool = "resume_kit_cli.app:app"
+
+[project.urls]
+Homepage = "https://github.com/dcassil/resume-kit"
+Repository = "https://github.com/dcassil/resume-kit"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# The umbrella wheel VENDORS every import package's source tree via force-include
+# (py.typed markers are copied because whole dirs are mapped). No hollow src/ target.
 [tool.hatch.build.targets.wheel]
-packages = ["src/resume_kit"]
+bypass-selection = true
+
+[tool.hatch.build.targets.wheel.force-include]
+"packages/schemas/src/resume_kit_schemas" = "resume_kit_schemas"
+"packages/core/src/resume_kit_core" = "resume_kit_core"
+"packages/document-parser/src/resume_kit_document_parser" = "resume_kit_document_parser"
+"packages/job-parser/src/resume_kit_job_parser" = "resume_kit_job_parser"
+"packages/ats/src/resume_kit_ats" = "resume_kit_ats"
+"packages/matching/src/resume_kit_matching" = "resume_kit_matching"
+"packages/policy/src/resume_kit_policy" = "resume_kit_policy"
+"packages/evidence/src/resume_kit_evidence" = "resume_kit_evidence"
+"packages/alignment/src/resume_kit_alignment" = "resume_kit_alignment"
+"packages/export/src/resume_kit_export" = "resume_kit_export"
+"packages/facade/src/resume_kit_facade" = "resume_kit_facade"
+"packages/cli/src/resume_kit_cli" = "resume_kit_cli"
+"packages/mcp/src/resume_kit_mcp" = "resume_kit_mcp"
+"packages/api/src/resume_kit_api" = "resume_kit_api"
+"integrations/job-hunter/src/resume_kit_job_hunter_bridge" = "resume_kit_job_hunter_bridge"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "packages/*/src/resume_kit_*",
+    "integrations/*/src/resume_kit_*",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "pyproject.toml",
+]
 
 [tool.uv.workspace]
 members = ["packages/*", "integrations/*"]

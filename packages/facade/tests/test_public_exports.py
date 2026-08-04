@@ -12,6 +12,7 @@ def test_all_public_exports_importable() -> None:
         CheckResumeAtsRequest,
         CheckResumeJobMatchRequest,
         CompareResumeVersionsRequest,
+        ExportResumeRequest,
         ExtractJobDescriptionRequest,
         ExtractResumeRequest,
         IdentifyResumeGapsRequest,
@@ -22,6 +23,7 @@ def test_all_public_exports_importable() -> None:
         check_resume_ats,
         check_resume_job_match,
         compare_resume_versions,
+        export_resume,
         extract_job_description,
         extract_resume,
         identify_resume_gaps,
@@ -31,12 +33,14 @@ def test_all_public_exports_importable() -> None:
 
     assert isinstance(REGISTRY, dict)
     assert len(REGISTRY) == 11
+    assert "export-resume" in REGISTRY
 
     assert callable(align_resume)
     assert callable(build_candidate_evidence_capability)
     assert callable(check_resume_ats)
     assert callable(check_resume_job_match)
     assert callable(compare_resume_versions)
+    assert callable(export_resume)
     assert callable(extract_job_description)
     assert callable(extract_resume)
     assert callable(identify_resume_gaps)
@@ -49,6 +53,7 @@ def test_all_public_exports_importable() -> None:
     assert CheckResumeAtsRequest is not None
     assert CheckResumeJobMatchRequest is not None
     assert CompareResumeVersionsRequest is not None
+    assert ExportResumeRequest is not None
     assert ExtractJobDescriptionRequest is not None
     assert ExtractResumeRequest is not None
     assert IdentifyResumeGapsRequest is not None
@@ -63,4 +68,6 @@ def test_all_names_in_dunder_all() -> None:
     all_names = resume_kit_facade.__all__
     assert "REGISTRY" in all_names
     assert "CapabilityOptions" in all_names
+    assert "ExportResumeRequest" in all_names
+    assert "export_resume" in all_names
     assert "extract_resume" in all_names

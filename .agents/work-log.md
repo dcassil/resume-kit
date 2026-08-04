@@ -256,3 +256,14 @@ Phase 6 Wave D executed (2 claude/opus + 1 claude/sonnet + 2 codex):
 Orchestrator fix: added export-resume to plugins/.../test_skill_markdown.py EXPECTED_SKILL_SLUGS + EXPECTED_CLI_OR_MCP (resume_export); ruff import-sort autofix in mcp tools.py.
 Gate after Wave D: **2105 passed, 1 skipped**, ruff clean, mypy --strict clean (74 files).
 Remaining: Wave E (RIT-T-0058 umbrella packaging, 0060 boundary/parity, 0061 exports), Wave F (RIT-T-0059 clean-venv install proof).
+
+Phase 6 Wave E executed (2 claude/opus + 1 codex):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| E | RIT-T-0058 umbrella packaging | claude/opus | DONE (root pyproject force-includes all 15 import pkgs; base=engine+export deps; extras [cli]/[mcp]/[api]/[all]; resume-tool script; LICENSE/NOTICE; Trusted-Publishing publish.yml tag-gated; wheel verified self-contained: 0 internal Requires-Dist) |
+| E | RIT-T-0060 boundary + export parity | claude/opus | DONE (reportlab/docx confined to packages/export via RENDER_PACKAGES exemption; export cross-surface parity facade≡CLI≡MCP≡API on artifact content_type + %PDF-/PK signature) |
+| E | RIT-T-0061 public exports for export | codex | DONE (65 tests; resume_kit_export/facade/bridge __all__ export the new symbols; REGISTRY==11) |
+
+Orchestrator verify: independent `uv build --wheel` → self-contained (no internal Requires-Dist, all 15 pkgs vendored, resume-tool entry present).
+Gate after Wave E: **2370 passed, 1 skipped**, ruff clean, mypy --strict clean (74 files).
+Remaining: Wave F (RIT-T-0059 clean-venv install proof) — final task.

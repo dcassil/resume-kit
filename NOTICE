@@ -3,7 +3,8 @@ Copyright 2026 Daniel Cassil
 
 This product includes software derived from Resume-Matcher
 (https://github.com/srbhr/Resume-Matcher), licensed under the
-Apache License, Version 2.0.
+Apache License, Version 2.0. Pinned upstream commit:
+116f9cc3b00e1ac91734a6c2679bf41ea64a0edc.
 
 Ported, extracted, or adapted subsystems retain attribution and the
 originating upstream commit SHA in references/attribution.md and

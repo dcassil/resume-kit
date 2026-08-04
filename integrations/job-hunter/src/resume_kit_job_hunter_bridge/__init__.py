@@ -17,6 +17,8 @@ from resume_kit_job_hunter_bridge.bridge import (
     analyze_resume_for_job_sync,
     build_evidence,
     build_evidence_sync,
+    export_resume,
+    export_resume_sync,
     validate_truth,
     validate_truth_sync,
 )
@@ -27,10 +29,12 @@ __all__ = [
     "ResumeJobAnalysis",
     "analyze_resume_for_job",
     "align_resume_for_job",
-    "validate_truth",
     "build_evidence",
+    "export_resume",
+    "validate_truth",
     "analyze_resume_for_job_sync",
     "align_resume_for_job_sync",
-    "validate_truth_sync",
     "build_evidence_sync",
+    "export_resume_sync",
+    "validate_truth_sync",
 ]

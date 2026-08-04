@@ -1331,8 +1331,29 @@ name = "resume-kit"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "resume-kit-core" },
-    { name = "resume-kit-schemas" },
+    { name = "markitdown", extra = ["docx"] },
+    { name = "pdfminer-six" },
+    { name = "pydantic" },
+    { name = "python-docx" },
+    { name = "reportlab" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "fastapi" },
+    { name = "mcp" },
+    { name = "typer" },
+    { name = "uvicorn" },
+]
+api = [
+    { name = "fastapi" },
+    { name = "uvicorn" },
+]
+cli = [
+    { name = "typer" },
+]
+mcp = [
+    { name = "mcp" },
 ]
 
 [package.dev-dependencies]
@@ -1346,9 +1367,21 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "resume-kit-core", editable = "packages/core" },
-    { name = "resume-kit-schemas", editable = "packages/schemas" },
+    { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.115" },
+    { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115" },
+    { name = "markitdown", extras = ["docx"] },
+    { name = "mcp", marker = "extra == 'all'", specifier = ">=1" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1" },
+    { name = "pdfminer-six" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "python-docx", specifier = ">=1.1.0" },
+    { name = "reportlab" },
+    { name = "typer", marker = "extra == 'all'", specifier = ">=0.12" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
+    { name = "uvicorn", marker = "extra == 'all'", specifier = ">=0.30" },
+    { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.30" },
 ]
+provides-extras = ["cli", "mcp", "api", "all"]
 
 [package.metadata.requires-dev]
 dev = [
