@@ -46,3 +46,20 @@ Note: `json_helpers.py` extracted but not on the current response path (provider
 
 Orchestrator gate after Wave B: **389 passed**, ruff clean, mypy --strict clean (35 files).
 Orchestrator fixes at gate: (1) updated `tests/boundary/test_boundary_no_upstream_imports.py` Phase-1-only assertion to include `document-parser`; (2) added `python-docx` dev dep so DOCX extraction tests run (un-skipped); (3) NOTE: gate must use `uv sync --all-packages` — plain `uv sync` does not install non-root workspace members.
+
+## Phase 3 — RIT-I-0004 (Matching & Deterministic Analysis)
+
+codex-decomp RIT-I-0004 → 10 tasks RIT-T-0016..0025 (`.agents/decomp-RIT-I-0004.json`).
+Three new packages: `matching` (resume_kit_matching), `ats` (resume_kit_ats), `job-parser` (resume_kit_job_parser).
+Waves by `depends_on`:
+- **A**: RIT-T-0016 scaffold 3 packages — haiku
+- **B** (after A, 5 parallel, disjoint): T-0017 schemas (opus/high, touches `packages/schemas`), T-0018 keyword matching (sonnet), T-0019 validation predicates (sonnet), T-0020 ATS engine (sonnet), T-0021 job-parser provider path (opus/med)
+- **C** (after T-0017,0018,0020): T-0022 explainable job-match scoring (opus/med)
+- **D** (after T-0022): T-0023 select-best + compare-versions (opus/med)
+- **E** (after all modules): T-0024 wire public `__init__` exports (haiku) + T-0025 attribution + import-boundary tests (sonnet) — disjoint, parallel
+
+Gate (Phase 3): `uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser && uv run pytest` (run `uv sync --all-packages` first).
+
+| Wave | Agent | Task | Files claimed | Status |
+| ---- | ----- | ---- | ------------- | ------ |
+| A | codex-decomp | RIT-I-0004 | Metis tasks RIT-T-0016..0025 | planned |
