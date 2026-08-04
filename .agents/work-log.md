@@ -133,3 +133,13 @@ Phase 4 Wave E executed (claude/opus):
 
 Orchestrator gate after Wave E: **948 passed, 1 skipped**, ruff clean (first pass), mypy --strict clean (95 files).
 Remaining: Wave F (RIT-T-0037 exports/attribution/import-boundaries) — final task, then close initiative.
+
+Phase 4 Wave F executed (claude/sonnet):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| F | RIT-T-0037 exports + attribution + boundaries | claude/sonnet | DONE (public __all__ for schemas[+12]/policy[24]/evidence/alignment; import-boundary + public-export tests for all 3 pkgs; 15 attribution rows (11 ported+4 new)) |
+
+**Phase 4 (RIT-I-0005) COMPLETE & pushed.** Final gate: **963 passed, 1 skipped**, ruff clean, mypy --strict clean (52 src files).
+Note on mypy count: 52 = actual src .py files across all 9 packages (mypy checks src only; hyphenated test dirs have no __init__.py → covered by pytest+ruff, not directory-mypy). Earlier 92/95 counts were an artifact of empty __init__.py changing module resolution; not a coverage regression.
+Public engine APIs now importable: resume_kit_alignment{align_resume, apply_diffs, calculate_resume_diff, verify_diff_result, generate_change_proposals, generate_skill_target_plan, ReviewController}; resume_kit_policy{evaluate_change_policy, verify_skill_target_plan, sanitize_user_input, freedom constants, truthfulness rules}; resume_kit_evidence{build_candidate_evidence, validate_resume_truth, structural predicates, fabrication helpers}; resume_kit_schemas{AlignmentResult, TruthReport, PolicyDecision, SkillTargetPlan, Review*}.
+NEXT: Phase 5 — Interfaces (CLI resume-tool, MCP server, agent plugin, REST API, job-hunter bridge).

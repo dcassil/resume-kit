@@ -37,6 +37,20 @@ from .common import Artifact, ArtifactKind, Severity, Warning
 from .evidence import CandidateEvidence, EvidenceKind
 from .job import JobDescription, Requirement, RequirementKind
 from .provenance import ClaimProvenance, ProvenanceStatus
+from .results import (
+    AlignmentResult,
+    PolicyDecision,
+    PolicyReasonCode,
+    PolicyRejection,
+    ReviewAction,
+    ReviewDecision,
+    ReviewSession,
+    SkillTarget,
+    SkillTargetPlan,
+    SkillTargetRejection,
+    SkillTargetSource,
+    TruthReport,
+)
 from .resume import (
     AdditionalInfo,
     Contact,
@@ -112,4 +126,17 @@ __all__ = [
     "Severity",
     "Artifact",
     "ArtifactKind",
+    # results (Phase 4)
+    "AlignmentResult",
+    "PolicyDecision",
+    "PolicyReasonCode",
+    "PolicyRejection",
+    "ReviewAction",
+    "ReviewDecision",
+    "ReviewSession",
+    "SkillTarget",
+    "SkillTargetPlan",
+    "SkillTargetRejection",
+    "SkillTargetSource",
+    "TruthReport",
 ]
