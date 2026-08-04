@@ -21,6 +21,36 @@ uv tool install "resume-kit[all]"      # or: pip install "resume-kit[all]"
 Without it the skill *docs* still load, but the `resume-tool` CLI and the
 `resume-kit` MCP tools won't launch.
 
+## Turning documents into JSON (agent-driven, no LLM provider)
+
+The analysis/alignment capabilities operate on canonical JSON, not raw files.
+Two conversion skills let the agent produce that JSON directly (best run as
+**subagents** — they are confined, high-token tasks):
+
+- **`resume-to-json`** — a PDF/DOCX/MD/text resume → faithful `ResumeDocument`
+  JSON, under strict no-alteration gates. Saved to
+  `resume-kit/resumes/<name>-original.json`.
+- **`job-to-json`** — a job posting → structured `JobDescription` JSON with
+  `requirements` + `keywords`, so deterministic **skills-coverage** scoring works
+  without an LLM provider. Saved to `resume-kit/jobs/<name>-original.json`.
+
+### Working directory convention
+
+All state lives under `resume-kit/` in the current project:
+
+```
+resume-kit/
+├── config.json                          # active_resume / active_job pointers + preferences
+├── resumes/<name>-original.json         # immutable faithful resume conversions
+├── jobs/<name>-original.json            # immutable job conversions
+├── working/<session-id>/resume.json     # the resume currently being changed/reviewed (mutable)
+└── learning/<skill>.md                  # accumulated hints; skills read these first, append new ones
+```
+
+`-original.json` files are the untouched conversions (the name maps back to the
+source file). To modify a resume, copy it into `working/<session-id>/` and edit
+the copy; leave the original pristine.
+
 These skills describe how an agent drives the `resume-tool` CLI or the MCP
 server to invoke each of the 10 built capabilities.  Skills are thin
 invocation guides — they do not implement resume intelligence logic and must

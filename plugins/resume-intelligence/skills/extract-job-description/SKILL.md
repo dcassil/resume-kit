@@ -6,6 +6,8 @@ description: >
   deterministic text-only path (--no-llm / no_llm=true).
 ---
 
+> **For scoring, prefer job-to-json.** The deterministic no-LLM path here captures only raw text, so `skills_coverage` (in check-resume-ats / check-resume-job-match) comes back 0. To get structured `requirements` + `keywords` without an LLM provider, use the **job-to-json** skill instead (run it in a subagent).
+
 ## Purpose
 
 Convert a raw job posting string into a canonical `JobDescription` schema
