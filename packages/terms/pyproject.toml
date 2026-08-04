@@ -3,21 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "resume-kit-ats"
+name = "resume-kit-terms"
 version = "0.0.0"
-description = "Phase 3 deterministic ATS engine for resume evaluation."
+description = "Deterministic term normalization + synonym matching shared by the ATS and matching engines."
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2",
-    "resume-kit-core",
     "resume-kit-schemas",
-    "resume-kit-terms",
+    "snowballstemmer>=2.2",
 ]
 
 [tool.uv.sources]
-resume-kit-core = { workspace = true }
 resume-kit-schemas = { workspace = true }
-resume-kit-terms = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/resume_kit_ats"]
+packages = ["src/resume_kit_terms"]

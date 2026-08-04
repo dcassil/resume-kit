@@ -33,6 +33,7 @@ dependencies = [
     "pdfminer.six",
     "python-docx>=1.1.0",
     "reportlab",
+    "snowballstemmer>=2.2",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +72,7 @@ bypass-selection = true
 "packages/job-parser/src/resume_kit_job_parser" = "resume_kit_job_parser"
 "packages/ats/src/resume_kit_ats" = "resume_kit_ats"
 "packages/matching/src/resume_kit_matching" = "resume_kit_matching"
+"packages/terms/src/resume_kit_terms" = "resume_kit_terms"
 "packages/policy/src/resume_kit_policy" = "resume_kit_policy"
 "packages/evidence/src/resume_kit_evidence" = "resume_kit_evidence"
 "packages/alignment/src/resume_kit_alignment" = "resume_kit_alignment"

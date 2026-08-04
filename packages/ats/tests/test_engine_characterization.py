@@ -101,14 +101,15 @@ def test_section_completeness_text_fallback() -> None:
 
 
 def test_skills_coverage_exact_match() -> None:
-    score = _compute_skills_coverage(FULL_RESUME, JOB_KEYWORDS_FULL)
+    score, _matched = _compute_skills_coverage(FULL_RESUME, JOB_KEYWORDS_FULL)
     # Python, FastAPI, Docker all present; Kubernetes not → 3/4 = 75.0
     assert score == 75.0
 
 
 def test_skills_coverage_no_jd_skills() -> None:
-    score = _compute_skills_coverage(FULL_RESUME, JOB_KEYWORDS_EMPTY)
+    score, matched = _compute_skills_coverage(FULL_RESUME, JOB_KEYWORDS_EMPTY)
     assert score == 0.0
+    assert matched == []
 
 
 def test_skills_coverage_no_resume_skills_text_fallback() -> None:
@@ -116,7 +117,7 @@ def test_skills_coverage_no_resume_skills_text_fallback() -> None:
         "summary": "Experienced Python developer using FastAPI and Docker.",
         "additional": {"technicalSkills": []},
     }
-    score = _compute_skills_coverage(resume, JOB_KEYWORDS_FULL)
+    score, _matched = _compute_skills_coverage(resume, JOB_KEYWORDS_FULL)
     # Python, FastAPI, Docker found in text; Kubernetes not → 3/4 = 75.0
     assert score == 75.0
 
@@ -127,7 +128,7 @@ def test_skills_coverage_full_match() -> None:
             "technicalSkills": ["Python", "FastAPI", "Docker", "Kubernetes"]
         }
     }
-    score = _compute_skills_coverage(resume, JOB_KEYWORDS_FULL)
+    score, _matched = _compute_skills_coverage(resume, JOB_KEYWORDS_FULL)
     assert score == 100.0
 
 
@@ -151,7 +152,7 @@ def test_compute_ats_score_returns_ats_score_instance() -> None:
 def test_compute_ats_score_seed_weights() -> None:
     """Verify the seed composite matches the upstream 0.55/0.25/0.20 weights."""
     kw = 80.0
-    sk = _compute_skills_coverage(FULL_RESUME, JOB_KEYWORDS_FULL)  # 75.0
+    sk, _matched = _compute_skills_coverage(FULL_RESUME, JOB_KEYWORDS_FULL)  # 75.0
     sec = _compute_section_completeness(FULL_RESUME)  # 100.0
     expected_overall = round(kw * 0.55 + sk * 0.25 + sec * 0.20, 1)
 

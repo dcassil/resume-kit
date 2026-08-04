@@ -22,7 +22,8 @@ from functools import lru_cache
 from typing import Any
 
 import resume_kit_schemas
-from resume_kit_schemas import KeywordGapAnalysis, ResumeDocument
+from resume_kit_schemas import KeywordGapAnalysis, MatchedKeyword, ResumeDocument
+from resume_kit_terms import AliasIndex, MatchResult, match, surface_form
 
 # Public surface ---------------------------------------------------------------
 
@@ -56,8 +57,77 @@ def _keyword_in_text(keyword: str, text: str) -> bool:
 
 
 def _normalize_skill_key(skill: str) -> str:
-    """Normalize a skill string for case-insensitive comparisons."""
-    return re.sub(r"\s+", " ", skill.strip()).casefold()
+    """Normalize a skill string for case-insensitive comparisons.
+
+    Delegates to the shared ``resume_kit_terms.surface_form`` normalizer (the
+    single source of truth for term comparison across ``matching`` and ``ats``)
+    so no second divergent normalizer lives in this package. ``surface_form``
+    folds case/punctuation/Unicode without stemming, which preserves the
+    case-insensitive whole-key semantics this helper historically provided.
+    """
+    return surface_form(skill)
+
+
+@lru_cache(maxsize=1)
+def _alias_index() -> AliasIndex:
+    """Return the process-wide curated alias index, built once and reused.
+
+    The lexicon is packaged data; loading it is deterministic and offline. The
+    ``lru_cache`` guarantees we build the index a single time rather than per
+    comparison.
+    """
+    return AliasIndex.load()
+
+
+# Token pattern for splitting resume text into whole terms. Mirrors the
+# word-boundary semantics of ``_keyword_in_text`` (``\w`` runs), so a keyword
+# like ``python`` is compared against the token ``python`` but never against a
+# fragment of ``pythonic``.
+_TOKEN_RE = re.compile(r"\w+")
+
+
+def _match_keyword_in_text(keyword: str, text: str) -> MatchResult | None:
+    """Return the highest-precedence synonym-aware match for *keyword* in *text*.
+
+    Comparison is delegated to ``resume_kit_terms.match`` using the shared alias
+    index, so ``mentorship`` hits resume ``mentoring`` (alias), ``k8s`` hits
+    ``Kubernetes`` (alias), and ``eslint`` hits ``linting`` (alias). Whole-term
+    semantics are preserved two ways:
+
+    - Exact / multi-word hits go through the original word-boundary regex
+      (:func:`_keyword_in_text`), so ``machine learning`` matches only as a
+      contiguous phrase and ``python`` never matches inside ``pythonic``.
+    - Synonym widening tokenizes *text* into ``\\w`` runs and compares each
+      whole token via the shared matcher, never a substring.
+
+    Stem-only matches are intentionally **not** accepted here: Snowball stemming
+    collapses derivational forms the upstream engine keeps distinct (``python``
+    ↔ ``pythonic``, ``go`` ↔ ``going``), which would violate the whole-term
+    guarantee locked by the characterization suite. Genuine cross-word synonyms
+    (including morphological pairs like ``mentoring`` ↔ ``mentorship``) are
+    carried by the curated alias lexicon instead, so provenance stays
+    ``exact`` | ``alias:<canonical>``. If the lexicon later needs a pair that is
+    only reachable by stemming, widen this to accept ``stem`` for that path.
+
+    Returns ``None`` when the keyword is absent. The returned
+    :class:`MatchResult` is always ``matched=True`` with a concrete ``kind``.
+    """
+    if not keyword.strip():
+        return None
+
+    # Exact / multi-word: preserve the original contiguous-boundary behavior.
+    if _keyword_in_text(keyword, text):
+        return MatchResult(matched=True, kind="exact")
+
+    # Alias widening: compare the keyword against each whole token in the text.
+    # Alias groups are curated true synonyms, so this never introduces the
+    # substring/derivational false positives that raw stemming would.
+    alias_index = _alias_index()
+    for token in _TOKEN_RE.findall(text):
+        result = match(keyword, token, alias_index)
+        if result.matched and result.kind == "alias":
+            return result
+    return None
 
 
 @lru_cache(maxsize=100)
@@ -225,7 +295,9 @@ def calculate_keyword_match(
     if not all_keywords:
         return 0.0
 
-    matched = sum(1 for kw in all_keywords if _keyword_in_text(kw, resume_text))
+    matched = sum(
+        1 for kw in all_keywords if _match_keyword_in_text(kw, resume_text) is not None
+    )
     return (matched / len(all_keywords)) * 100
 
 
@@ -262,14 +334,28 @@ def analyze_keyword_gaps(
     missing: list[str] = []
     injectable: list[str] = []
     non_injectable: list[str] = []
+    matched_keywords: list[MatchedKeyword] = []
 
-    for keyword in all_jd_keywords:
-        if not _keyword_in_text(keyword, tailored_text):
-            missing.append(keyword)
-            if _keyword_in_text(keyword, master_text):
-                injectable.append(keyword)
-            else:
-                non_injectable.append(keyword)
+    # Sorted iteration so output ordering is deterministic regardless of the
+    # set's iteration order (REQ: identical inputs → identical output ordering).
+    for keyword in sorted(all_jd_keywords):
+        result = _match_keyword_in_text(keyword, tailored_text)
+        if result is not None:
+            # REQ-805: a JD keyword present via exact/stem/alias is NOT missing.
+            # Carry its provenance so downstream can distinguish synonym hits.
+            matched_keywords.append(
+                MatchedKeyword(
+                    keyword=keyword,
+                    kind=result.kind if result.kind is not None else "exact",
+                    canonical=result.canonical,
+                )
+            )
+            continue
+        missing.append(keyword)
+        if _match_keyword_in_text(keyword, master_text) is not None:
+            injectable.append(keyword)
+        else:
+            non_injectable.append(keyword)
 
     total = len(all_jd_keywords) if all_jd_keywords else 1
     current_match = (total - len(missing)) / total * 100
@@ -281,4 +367,5 @@ def analyze_keyword_gaps(
         non_injectable_keywords=non_injectable,
         current_match_percentage=current_match,
         potential_match_percentage=potential_match,
+        matched_keywords=matched_keywords,
     )

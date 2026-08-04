@@ -1,23 +1,23 @@
 ---
-id: deterministic-synonym-matching
+id: synonym-aware-deterministic
 level: initiative
 title: "Synonym-Aware Deterministic Matching (engine core)"
 short_code: "RIT-I-0008"
 created_at: 2026-08-04T18:50:56+00:00
-updated_at: 2026-08-04T18:50:56+00:00
+updated_at: 2026-08-04T21:33:24.797435+00:00
 parent: RIT-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
 estimated_complexity: L
 strategy_id: NULL
-initiative_id: deterministic-synonym-matching
+initiative_id: synonym-aware-deterministic
 ---
 
 # Synonym-Aware Deterministic Matching (engine core) Initiative
@@ -122,10 +122,15 @@ carried in existing structures) so RIT-I-0010 can find synonym hits.
 
 ## Detailed Design **[REQUIRED]**
 
-1. Decide the normalizer's home: prefer extending `packages/matching` (ats already depends on schemas
-   only — evaluate whether ats should depend on matching, or whether the normalizer belongs in a tiny
-   shared module both import; keep the dependency graph acyclic). Document the decision in the scaffold
-   task.
+1. **DECIDED (2026-08-04):** The normalizer lives in a new dedicated package
+   **`resume-kit-terms`** (workspace member under `packages/terms`), depending only on `schemas`.
+   Both `ats` and `matching` add a dependency on it. Rationale: `matching` already depends on `ats`
+   (matching → ats → core → schemas), so `ats` is the lower package; putting shared term-matching in
+   `ats` would name "matching" primitives under `ats`, and putting it in `core` would pollute the
+   LLM-provider/storage infra module. A dedicated tiny package gives the clearest ownership and keeps
+   the dependency graph acyclic: `schemas ← terms ← {ats, matching}`. The **stemmer** is the
+   pure-Python **`snowballstemmer`** PyPI dependency (offline, deterministic, no compiled deps),
+   confined to `resume-kit-terms`. This package must be added to `packaging/` + PyPI publish flow.
 2. Implement `normalize(term)` (ascii-fold via `unicodedata`, casefold, punctuation/space collapse,
    Snowball stem) and an `AliasIndex` built from the seed lexicon data file; expose `match(a,b) ->
    (bool, kind)`.

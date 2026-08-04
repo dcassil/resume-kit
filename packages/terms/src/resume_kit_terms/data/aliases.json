@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "aliases": {
+    "Kubernetes": ["k8s"],
+    "JavaScript": ["js", "ecmascript"],
+    "TypeScript": ["ts"],
+    "Node.js": ["node", "nodejs", "node js"],
+    "PostgreSQL": ["postgres", "postgresql"],
+    "MongoDB": ["mongo"],
+    "row-level security": ["rls"],
+    "continuous integration": ["ci"],
+    "continuous delivery": ["cd", "continuous deployment"],
+    "CI/CD": ["cicd", "continuous integration and continuous delivery"],
+    "GitHub Actions": ["gh actions"],
+    "Golang": ["go"],
+    "Amazon Web Services": ["aws"],
+    "Google Cloud Platform": ["gcp", "google cloud"],
+    "Microsoft Azure": ["azure"],
+    "infrastructure as code": ["iac"],
+    "machine learning": ["ml"],
+    "artificial intelligence": ["ai"],
+    "natural language processing": ["nlp"],
+    "user interface": ["ui"],
+    "user experience": ["ux"],
+    "test-driven development": ["tdd"],
+    "object-oriented programming": ["oop"],
+    "command-line interface": ["cli"],
+    "application programming interface": ["api"],
+    "mentoring": ["mentorship"],
+    "linting": ["eslint"]
+  }
+}

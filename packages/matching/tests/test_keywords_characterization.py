@@ -273,9 +273,10 @@ class TestAnalyzeKeywordGaps:
     def test_catches_regression_substring_matching(self) -> None:
         """Regression: 'go' must NOT match 'going'.
 
-        If upstream's _keyword_in_text ever regresses to substring matching,
-        this test catches it: 'going' would falsely satisfy the 'go' keyword,
-        making it appear present in tailored when it is not.
+        If _keyword_in_text ever regresses to substring matching, this test
+        catches it: 'going' would falsely satisfy the 'go' keyword, making it
+        appear present in tailored when it is not. The synonym-aware rewire
+        (RIT-T-0064) preserves this by NOT accepting stem-only matches.
         """
         tailored = _resume_dict(summary="going to the office daily")
         master = _resume_dict(summary="experience with go programming")

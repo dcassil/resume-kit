@@ -18,13 +18,32 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import lru_cache
 from typing import Any
 
-from resume_kit_schemas import ATSScore, ATSSubScores
+from resume_kit_schemas import ATSScore, ATSSubScores, MatchedKeyword
 from resume_kit_schemas.job import JobDescription
 from resume_kit_schemas.resume import ResumeDocument
+from resume_kit_terms import (
+    AliasIndex,
+    MatchResult,
+    load_alias_lexicon,
+    match,
+    surface_form,
+)
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _alias_index() -> AliasIndex:
+    """Return the shared, process-wide curated :class:`AliasIndex`.
+
+    Built once from the packaged lexicon and reused across every comparison so
+    the ``ats`` engine and the sibling ``matching`` engine resolve synonyms
+    through the identical index — the "no divergent matching" guarantee.
+    """
+    return AliasIndex(load_alias_lexicon())
 
 # ---------------------------------------------------------------------------
 # Weights — MUST match the upstream seed contract (sum = 1.0).
@@ -66,51 +85,137 @@ def _extract_all_text(data: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def _keyword_in_text(keyword: str, text_lower: str) -> bool:
-    """Whole-word match against pre-lowercased text to avoid false positives.
+# Word boundary for tokenizing free text into surface tokens (mirrors the
+# alphanumeric-only splitting used by ``resume_kit_terms.surface_form``).
+_WORD_RE: re.Pattern[str] = re.compile(r"[a-z0-9]+")
 
-    Args:
-        keyword: The keyword to search for (will be lowercased internally).
-        text_lower: Full text that has already been lowercased by the caller.
+
+def _surface_tokens(text: str) -> list[str]:
+    """Tokenize *text* into lowercase alphanumeric surface tokens, in order."""
+    return _WORD_RE.findall(surface_form(text))
+
+
+def _keyword_match_in_candidates(
+    keyword: str,
+    candidate_terms: list[str],
+    token_windows: dict[int, set[str]],
+) -> MatchResult:
+    """Return the best :class:`MatchResult` for *keyword* against a resume.
+
+    The keyword is compared — via the shared ``resume_kit_terms.match`` (with the
+    curated :class:`AliasIndex`) — against two sources of resume "whole terms":
+
+    * ``candidate_terms`` — discrete listed skills (e.g. ``technicalSkills``),
+      each compared as a whole term (no substring containment).
+    * ``token_windows`` — contiguous whole-word n-grams drawn from the resume
+      free text, keyed by n-gram length, so a multi-word keyword like
+      ``row-level security`` matches only a run of whole words, never a
+      substring of a larger word.
+
+    Matching stays deterministic: candidates are iterated in the given order and
+    each window set is scanned sorted, with exact > alias precedence honored by
+    returning immediately on an exact hit (stemming is disabled — see the
+    ``allow_stem=False`` calls below).
     """
-    escaped = re.escape(keyword.strip().lower())
-    if not escaped:
-        return False
-    return bool(re.search(rf"(?<!\w){escaped}(?!\w)", text_lower))
+    if not surface_form(keyword):
+        return MatchResult(matched=False)
+
+    index = _alias_index()
+
+    # Discrete listed skills first (already deterministic input order).
+    # allow_stem=False: exact + curated-alias only, no Snowball stemming — the
+    # single policy shared with the ``matching`` engine so the two never diverge
+    # (RIT-I-0008; stem over-collapses python/pythonic, go/going).
+    best: MatchResult | None = None
+    for candidate in candidate_terms:
+        result = match(keyword, candidate, alias_index=index, allow_stem=False)
+        if result.matched:
+            if result.kind == "exact":
+                return result
+            if best is None:
+                best = result
+
+    # Free-text n-gram windows sized to the keyword's whole-word length.
+    kw_len = len(surface_form(keyword).split(" "))
+    for window in sorted(token_windows.get(kw_len, set())):
+        result = match(keyword, window, alias_index=index, allow_stem=False)
+        if result.matched:
+            if result.kind == "exact":
+                return result
+            if best is None:
+                best = result
+
+    return best if best is not None else MatchResult(matched=False)
+
+
+def _build_token_windows(text: str, max_len: int) -> dict[int, set[str]]:
+    """Return contiguous whole-word n-grams of *text*, keyed by length (1..max_len).
+
+    Windows are built from surface tokens so comparisons are whole-term, never
+    substring — ``lint`` will not match inside ``linting`` unless the shared
+    normalizer says so.
+    """
+    tokens = _surface_tokens(text)
+    windows: dict[int, set[str]] = {}
+    for size in range(1, max(1, max_len) + 1):
+        grams: set[str] = set()
+        for start in range(0, len(tokens) - size + 1):
+            grams.add(" ".join(tokens[start : start + size]))
+        if grams:
+            windows[size] = grams
+    return windows
 
 
 def _compute_skills_coverage(
     resume: dict[str, Any],
     job_keywords: dict[str, Any],
-) -> float:
-    """Return skills coverage score (0–100).
+) -> tuple[float, list[MatchedKeyword]]:
+    """Return ``(skills_coverage_score, matched_keywords)``.
 
-    Checks how many required_skills / preferred_skills from the JD appear
-    in the resume's technicalSkills list (falls back to full-text search).
+    Checks how many required_skills / preferred_skills from the JD appear in the
+    resume's technicalSkills list (falling back to whole-word text n-grams).
+    Comparison routes through the shared ``resume_kit_terms`` matcher so the
+    score is synonym-aware and consistent with the ``matching`` package. Every
+    JD skill found present yields a :class:`MatchedKeyword` carrying the match
+    ``kind`` (and ``canonical`` for alias hits).
     """
     jd_skills: list[str] = []
     jd_skills.extend(job_keywords.get("required_skills", []))
     jd_skills.extend(job_keywords.get("preferred_skills", []))
 
+    jd_skills = [s for s in jd_skills if isinstance(s, str)]
     if not jd_skills:
-        return 0.0
+        return 0.0, []
 
-    resume_skills: list[str] = (
-        resume.get("additional", {}).get("technicalSkills", []) or []
+    resume_skills: list[str] = [
+        s
+        for s in (resume.get("additional", {}).get("technicalSkills", []) or [])
+        if isinstance(s, str)
+    ]
+    resume_text = _extract_all_text(resume)
+
+    # Size the free-text n-gram windows to the longest JD skill (in whole words)
+    # so multi-word skills can match a run of whole words.
+    max_kw_len = max(
+        (len(surface_form(s).split(" ")) for s in jd_skills if surface_form(s)),
+        default=1,
     )
-    resume_text = _extract_all_text(resume).lower()
-    resume_skills_lower = {s.lower() for s in resume_skills if isinstance(s, str)}
+    token_windows = _build_token_windows(resume_text, max_kw_len)
 
-    matched = 0
+    matched_keywords: list[MatchedKeyword] = []
     for skill in jd_skills:
-        if not isinstance(skill, str):
-            continue
-        skill_lower = skill.lower()
-        # Direct skill list match or whole-word text match (resume_text is pre-lowercased)
-        if skill_lower in resume_skills_lower or _keyword_in_text(skill, resume_text):
-            matched += 1
+        result = _keyword_match_in_candidates(skill, resume_skills, token_windows)
+        if result.matched and result.kind is not None:
+            matched_keywords.append(
+                MatchedKeyword(
+                    keyword=skill,
+                    kind=result.kind,
+                    canonical=result.canonical,
+                )
+            )
 
-    return min(100.0, (matched / len(jd_skills)) * 100)
+    score = min(100.0, (len(matched_keywords) / len(jd_skills)) * 100)
+    return score, matched_keywords
 
 
 def _compute_section_completeness(resume: dict[str, Any]) -> float:
@@ -345,7 +450,7 @@ def compute_ats_score(
 
     # --- Seed composite (upstream-compatible) ---
     kw_score = min(100.0, max(0.0, keyword_match_percentage))
-    sk_score = _compute_skills_coverage(resume_dict, job_dict)
+    sk_score, matched_keywords = _compute_skills_coverage(resume_dict, job_dict)
     sec_score = _compute_section_completeness(resume_dict)
 
     overall = (
@@ -375,6 +480,7 @@ def compute_ats_score(
         missing_keywords=missing_keywords[:10],
         injectable_keywords=injectable_keywords[:10],
         recommendations=all_tips,
+        matched_keywords=matched_keywords,
     )
 
 

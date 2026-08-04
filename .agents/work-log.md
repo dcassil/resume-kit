@@ -276,3 +276,39 @@ Phase 6 Wave F executed (claude/sonnet):
 **Phase 6 (RIT-I-0007) COMPLETE & pushed.** Final gate: **2371 passed, 1 skipped**, ruff clean, mypy --strict clean (75 files incl packaging test).
 `pip install resume-kit[cli]` now genuinely works (self-contained umbrella wheel proven end-to-end in a clean venv).
 DEFERRED to a future Phase 7: cover-letter match/align, application-package audit, and the 4 engine capabilities (check-resume-consistency, score-resume-bullet, improve-resume-section, create-job-specific-resume) + their interfaces. Actual PyPI upload is Daniel's to run (Trusted-Publishing workflow tag-gated + ready).
+
+---
+
+## RIT-I-0008 — Synonym-Aware Deterministic Matching (engine core)
+
+Orchestrator: main session (teamwork-orchestration). Integration branch = `main` (greenfield, orchestrator pushes). Commit+push once per initiative when all tasks green.
+
+**Groundwork (already complete before this session):** RIT-T-0062 (packages/terms scaffold: normalize+AliasIndex+match, MatchResult{matched,kind,canonical}) + RIT-T-0063 (aliases.json seed + FORMAT.md). packages/terms tests green.
+
+**Shared contract owned by orchestrator (done):** packages/schemas — added `MatchKind` literal + `MatchedKeyword{keyword,kind,canonical, .annotation→"exact"/"stem"/"alias:<canonical>"}`; additive `matched_keywords: list[MatchedKeyword]` on BOTH `KeywordGapAnalysis` and `ATSScore` (default empty, back-compat). Exported. This is the single provenance vocabulary both rewires consume — agents MUST NOT edit packages/schemas or packages/terms.
+
+**DEV-VENV LANDMINE (found + workaround):** the umbrella root `resume-kit` install VENDORS physical package dirs into site-packages that SHADOW the editable workspace members. Plain `uv run`/`uv sync` re-install root from cache → source edits invisible. Gate recipe that works: `uv sync --all-packages --reinstall-package resume-kit` (re-vendors from CURRENT source) then run everything with `uv run --no-sync ...`.
+
+### Wave 1 (parallel, file-disjoint)
+| Wave | Task | Files (exclusive claim) | Agent | Result |
+| ---- | ---- | ----------------------- | ----- | ------ |
+| 1 | RIT-T-0064 rewire matching | packages/matching/** | opus | dispatched |
+| 1 | RIT-T-0065 rewire ats | packages/ats/** | opus | dispatched |
+
+### Wave 1 + packaging config — RESULT
+| Task | Result |
+| ---- | ------ |
+| RIT-T-0064 matching | DONE (opus). exact+alias via resume_kit_terms.match; kind threaded into KeywordGapAnalysis.matched_keywords; 15 synonym tests. |
+| RIT-T-0065 ats | DONE (opus). _compute_skills_coverage→tuple(float, list[MatchedKeyword]); weights untouched 0.55/0.25/0.20. |
+| RIT-T-0067 config | DONE (sonnet). root force-include + snowballstemmer>=2.2 dep + NOTICE. Orchestrator fixed NOTICE URL (snowball, not pystemmer) and resolved uv.lock. |
+
+**Reconciled divergence (orchestrator):** the two agents disagreed on stem — matching excluded stem (python↔pythonic over-match), ats included it. **User decision: exact + alias ONLY (stemming OFF).** Implemented as a single shared knob: added `allow_stem: bool = True` to `resume_kit_terms.match()` (default keeps terms tests green); BOTH engines call `match(..., allow_stem=False)`. This is the single-source-of-truth guarantee — no independent stem filters. Added terms tests for the flag; converted ats stem test into an anti-over-match guard (python↔pythonic must NOT match). Note: mentored↔mentoring matches via ALIAS (mentor group), not stem, so it still (correctly) counts.
+
+Gate after Wave 1 + config: **ruff clean, mypy --strict clean (77 src files), 2546 passed / 1 skipped.**
+
+### Wave 2 (join point, after 0064+0065)
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0066 integration + anti-over-match + cross-package consistency | opus | dispatched |
+
+**RIT-T-0067 build smoke check (orchestrator): PASS.** `uv build --wheel` → wheel contains `resume_kit_terms/*` incl `data/aliases.json` + `data/FORMAT.md`; fresh-venv `uv pip install resume_kit-0.1.1.whl` → `from resume_kit_terms import match` works, `match('k8s','Kubernetes',idx,allow_stem=False)` → alias/kubernet, `import snowballstemmer` OK. Umbrella ships the synonym engine correctly.

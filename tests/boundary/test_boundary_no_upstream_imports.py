@@ -185,6 +185,7 @@ def test_known_packages_present() -> None:
     expected = {
         "core",
         "schemas",
+        "terms",
         "document-parser",
         "matching",
         "ats",

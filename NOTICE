@@ -10,3 +10,8 @@ Ported, extracted, or adapted subsystems retain attribution and the
 originating upstream commit SHA in references/attribution.md and
 references/reuse-inventory.md. Modified source files are marked at the
 point of modification.
+
+This product depends on snowballstemmer
+(https://github.com/snowballstem/snowball), licensed under the
+BSD 3-Clause License. Copyright (c) 2013, Snowball Stemming Algorithms
+contributors.

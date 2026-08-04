@@ -19,9 +19,47 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from .common import Warning
+
+MatchKind = Literal["exact", "stem", "alias"]
+"""How a job-description keyword matched a resume term.
+
+- ``exact`` — same surface form (modulo case/punctuation/Unicode noise).
+- ``stem``  — equal only after Snowball stemming (``mentoring`` ↔ ``mentorship``).
+- ``alias`` — equal only through the curated alias lexicon (``k8s`` ↔ ``Kubernetes``).
+
+This mirrors ``resume_kit_terms.MatchKind`` and is the single provenance vocabulary
+shared by the ``matching`` and ``ats`` engines (RIT-I-0008).
+"""
+
+
+class MatchedKeyword(BaseModel):
+    """A job-description keyword found present in a resume, with match provenance.
+
+    Emitted by both the keyword-matching engine and the ATS engine so downstream
+    consumers (e.g. terminology alignment, RIT-I-0010) can distinguish an exact
+    hit versus a synonym hit. ``canonical`` is set only for ``alias`` matches.
+    """
+
+    model_config = {"frozen": True}
+
+    keyword: str = Field(description="The job-description keyword that matched.")
+    kind: MatchKind = Field(description="How it matched: exact, stem, or alias.")
+    canonical: str | None = Field(
+        default=None,
+        description="For alias matches, the canonical term of the alias group.",
+    )
+
+    @property
+    def annotation(self) -> str:
+        """Render provenance as a string: ``exact``/``stem``/``alias:<canonical>``."""
+        if self.kind == "alias" and self.canonical is not None:
+            return f"alias:{self.canonical}"
+        return self.kind
 
 
 class ATSSubScores(BaseModel):
@@ -48,6 +86,13 @@ class ATSScore(BaseModel):
     missing_keywords: list[str] = Field(default_factory=list)
     injectable_keywords: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+    matched_keywords: list[MatchedKeyword] = Field(
+        default_factory=list,
+        description=(
+            "JD keywords found present in the resume, with match provenance "
+            "(exact/stem/alias). Synonym-aware (RIT-I-0008)."
+        ),
+    )
 
 
 class KeywordGapAnalysis(BaseModel):
@@ -64,6 +109,13 @@ class KeywordGapAnalysis(BaseModel):
     )
     current_match_percentage: float = Field(default=0.0, ge=0.0, le=100.0)
     potential_match_percentage: float = Field(default=0.0, ge=0.0, le=100.0)
+    matched_keywords: list[MatchedKeyword] = Field(
+        default_factory=list,
+        description=(
+            "JD keywords found present in the resume, with match provenance "
+            "(exact/stem/alias). Synonym-aware (RIT-I-0008)."
+        ),
+    )
 
 
 class AlignmentViolation(BaseModel):

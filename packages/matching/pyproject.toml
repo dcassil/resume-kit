@@ -12,12 +12,14 @@ dependencies = [
     "resume-kit-core",
     "resume-kit-schemas",
     "resume-kit-ats",
+    "resume-kit-terms",
 ]
 
 [tool.uv.sources]
 resume-kit-core = { workspace = true }
 resume-kit-schemas = { workspace = true }
 resume-kit-ats = { workspace = true }
+resume-kit-terms = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/resume_kit_matching"]
