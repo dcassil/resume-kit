@@ -5,7 +5,7 @@ Copy-paste this into a fresh session to resume the autonomous build.
 ## ⭐ Current state (resume here)
 - **Done & pushed:** Phases 0–3 (initiatives RIT-I-0001..0004; tasks RIT-T-0001..0025 all completed).
 - **Next up: Phase 4 — Controlled Alignment** (create initiative RIT-I-0005; tasks continue at RIT-T-0026).
-- **`main` is green & clean:** last commit `fc8893d` (close RIT-I-0004). Full gate = ruff clean, mypy --strict clean (59 files), **573 tests pass**.
+- **`main` is green & clean:** working tree clean; last code commit `fc8893d` (close RIT-I-0004), followed by handoff-refresh commit `44a0b35`. Full gate at `fc8893d` = ruff clean, mypy --strict clean (59 files), **573 tests pass** (nothing touched since except this doc).
 - **First thing to do on resume:** `uv sync --all-packages` then run the gate (below) to confirm green before touching anything.
 - **Packages so far:** `schemas`, `core`, `document-parser`, `matching`, `ats`, `job-parser`.
 - **Current gate command:**
