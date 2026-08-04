@@ -10,10 +10,13 @@ params, HTTP bodies) into these models before calling a capability.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from resume_kit_core import StructuredCompletionProvider
+from resume_kit_core.storage import ArtifactStore
+from resume_kit_export import ExportFormat, ExportOptions
 from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
@@ -36,12 +39,17 @@ class CapabilityOptions:
             ``None``.  LLM-requiring capabilities return the stable
             provider-not-configured error when this is ``None`` and
             ``no_llm`` is False.
+        artifact_store: Optional :class:`~resume_kit_core.storage.ArtifactStore`
+            injection point for capabilities that persist rendered bytes (e.g.
+            ``export-resume``).  When ``None`` such capabilities fall back to a
+            deterministic in-memory store.  No concrete backend is required.
     """
 
     no_llm: bool = False
     strict: bool = False
     human_in_loop: bool = False
     provider: StructuredCompletionProvider | None = None
+    artifact_store: ArtifactStore | None = None
 
 
 @dataclass(frozen=True)
@@ -127,3 +135,26 @@ class BuildCandidateEvidenceRequest:
 
     resume: ResumeDocument
     approved_claims: list[CandidateEvidence] | list[str] | None = None
+
+
+@dataclass(frozen=True)
+class ExportResumeRequest:
+    """Inputs for the export-resume capability.
+
+    The exported artifact id is deterministic: a caller may supply an explicit
+    ``artifact_id``; otherwise :meth:`resolved_artifact_id` derives a stable id
+    from a SHA-256 hash of the format plus the rendered content — no UUIDs,
+    timestamps, or random values.
+    """
+
+    resume: ResumeDocument
+    format: ExportFormat
+    options: ExportOptions | None = None
+    artifact_id: str | None = None
+
+    def resolved_artifact_id(self, data: bytes) -> str:
+        """Return the caller-supplied id or a deterministic hash-derived one."""
+        if self.artifact_id is not None:
+            return self.artifact_id
+        digest = hashlib.sha256(self.format.value.encode("utf-8") + data)
+        return f"resume-{self.format.value}-{digest.hexdigest()}"

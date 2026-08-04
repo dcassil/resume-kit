@@ -17,6 +17,7 @@ dependencies = [
     "resume-kit-matching",
     "resume-kit-alignment",
     "resume-kit-evidence",
+    "resume-kit-export",
 ]
 
 [tool.uv.sources]
@@ -28,6 +29,7 @@ resume-kit-ats = { workspace = true }
 resume-kit-matching = { workspace = true }
 resume-kit-alignment = { workspace = true }
 resume-kit-evidence = { workspace = true }
+resume-kit-export = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/resume_kit_facade"]

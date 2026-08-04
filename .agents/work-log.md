@@ -236,3 +236,10 @@ Phase 6 Wave A/B executed:
 
 Orchestrator fix (integration seam): scaffold render() dispatcher called renderers positionally, but renderers use keyword-only `options`. Fixed dispatcher to call `options=...`, added a `Renderer` Protocol (keyword-only) typing the loaders (no cast), and updated 2 obsolete scaffold tests (they asserted render() raises ImportError before renderers land — now assert %PDF-/PK bytes).
 Gate after Wave B: **2082 passed, 1 skipped**, ruff clean, mypy --strict clean.
+
+Phase 6 Wave C executed (claude/opus):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| C | RIT-T-0052 export-resume facade capability | claude/opus | DONE (28 facade tests; ExportResumeRequest + CapabilityOptions.artifact_store; export_resume renders→ArtifactStore.put→ArtifactRef via build_success(artifacts=[ref]); deterministic sha256 artifact_id; _InMemoryArtifactStore default; no provider/no_llm needed; REGISTRY=11) |
+
+Gate after Wave C: **2089 passed, 1 skipped**, ruff clean, mypy --strict clean (74 files).

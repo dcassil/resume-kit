@@ -30,7 +30,7 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 10
+    assert len(REGISTRY) == 11
 
     assert callable(align_resume)
     assert callable(build_candidate_evidence_capability)

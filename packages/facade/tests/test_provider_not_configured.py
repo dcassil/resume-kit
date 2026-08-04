@@ -10,10 +10,12 @@ from __future__ import annotations
 from resume_kit_core import InterfaceResponse
 from resume_kit_core.errors import ErrorCode
 from resume_kit_core.interface import ExitCode, exit_code_for
+from resume_kit_export import ExportFormat
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
     AlignResumeRequest,
     CapabilityOptions,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
 )
@@ -50,3 +52,12 @@ async def test_align_resume_requires_provider() -> None:
         _NO_PROVIDER,
     )
     _assert_provider_not_configured(response)
+
+
+async def test_export_resume_succeeds_without_provider() -> None:
+    response = await caps.export_resume(
+        ExportResumeRequest(resume=ResumeDocument(), format=ExportFormat.pdf),
+        _NO_PROVIDER,
+    )
+    assert response.ok
+    assert len(response.artifacts) == 1

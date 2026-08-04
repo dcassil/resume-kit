@@ -45,11 +45,14 @@ from resume_kit_core.interface import (
 from resume_kit_core.interface import (
     from_resume_kit_error as _from_resume_kit_error,
 )
+from resume_kit_core.storage import ArtifactRef, ArtifactStore
 from resume_kit_document_parser import (
     extract_resume_text_only,
     parse_resume_structured,
 )
 from resume_kit_evidence import build_candidate_evidence, validate_resume_truth
+from resume_kit_export import render
+from resume_kit_export.models import mime_type
 from resume_kit_job_parser import (
     parse_job_description,
     parse_job_description_text_only,
@@ -80,6 +83,7 @@ from resume_kit_facade.models import (
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
@@ -424,6 +428,84 @@ async def build_candidate_evidence_capability(
     return build_success(evidence, strict=options.strict)
 
 
+class _InMemoryArtifactStore:
+    """Deterministic in-memory :class:`ArtifactStore` used as the export default.
+
+    Kept out of ``resume_kit_core.testing`` on purpose: production code must not
+    import test fakes.  Stores bytes in a plain dict keyed by artifact id.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, object] = {}
+
+    async def put(
+        self,
+        artifact_id: str,
+        artifact_type: str,
+        data: object,
+        *,
+        content_type: str = "application/json",
+        metadata: dict[str, object] | None = None,
+    ) -> ArtifactRef:
+        self._store[artifact_id] = data
+        return ArtifactRef(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            content_type=content_type,
+            metadata=metadata or {},
+        )
+
+    async def get(self, artifact_id: str) -> object:
+        if artifact_id not in self._store:
+            from resume_kit_core.errors import CoreError, ErrorCode
+
+            raise ResumeKitError(
+                CoreError(
+                    code=ErrorCode.ARTIFACT_NOT_FOUND,
+                    message=f"Artifact '{artifact_id}' not found.",
+                )
+            )
+        return self._store[artifact_id]
+
+    async def exists(self, artifact_id: str) -> bool:
+        return artifact_id in self._store
+
+
+async def export_resume(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Render a resume to bytes and persist them through an ArtifactStore.
+
+    Deterministic: never requires ``provider`` and ignores ``no_llm``.  Raw
+    bytes are kept out of ``data`` — the returned ``ArtifactRef`` (also carried
+    in ``artifacts``) is the retrieval handle.
+    """
+    if not isinstance(request, ExportResumeRequest):
+        return from_resume_kit_error(_bad_request(request, "ExportResumeRequest"))
+    try:
+        data = render(request.resume, request.format, request.options)
+        artifact_id = request.resolved_artifact_id(data)
+        content_type = mime_type(request.format)
+        store: ArtifactStore = (
+            options.artifact_store
+            if options.artifact_store is not None
+            else _InMemoryArtifactStore()
+        )
+        ref = await store.put(
+            artifact_id,
+            "resume",
+            data,
+            content_type=content_type,
+            metadata={"format": request.format.value},
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(ref, artifacts=[ref], strict=options.strict)
+
+
 # ---------------------------------------------------------------------------
 # Capability registry
 # ---------------------------------------------------------------------------
@@ -439,4 +521,5 @@ REGISTRY: dict[str, Capability] = {
     "align-resume": align_resume,
     "validate-resume-truth": validate_resume_truth_capability,
     "build-candidate-evidence": build_candidate_evidence_capability,
+    "export-resume": export_resume,
 }

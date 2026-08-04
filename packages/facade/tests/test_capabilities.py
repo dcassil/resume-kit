@@ -12,7 +12,9 @@ import subprocess
 import sys
 
 import pytest
-from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_core.storage import ArtifactRef
+from resume_kit_core.testing import FakeArtifactStore, FakeStructuredCompletionProvider
+from resume_kit_export import ExportFormat
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
     AlignResumeRequest,
@@ -21,6 +23,7 @@ from resume_kit_facade.models import (
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
+    ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     IdentifyResumeGapsRequest,
@@ -79,6 +82,7 @@ def test_registry_contains_all_ten_capabilities() -> None:
         "align-resume",
         "validate-resume-truth",
         "build-candidate-evidence",
+        "export-resume",
     }
 
 
@@ -262,3 +266,78 @@ def test_facade_imports_no_transport_package() -> None:
         [sys.executable, "-c", script], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
+
+
+# --- Export resume --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_export_resume_pdf_persists_to_injected_store() -> None:
+    store = FakeArtifactStore()
+    options = CapabilityOptions(artifact_store=store)
+    request = ExportResumeRequest(resume=_resume(), format=ExportFormat.pdf)
+    response = await caps.export_resume(request, options)
+    assert response.ok
+    assert len(response.artifacts) == 1
+    ref = response.artifacts[0]
+    assert isinstance(ref, ArtifactRef)
+    assert ref.content_type == "application/pdf"
+    assert ref.metadata == {"format": "pdf"}
+    data = await store.get(ref.artifact_id)
+    assert isinstance(data, bytes)
+    assert data.startswith(b"%PDF-")
+
+
+@pytest.mark.asyncio
+async def test_export_resume_docx_persists_to_injected_store() -> None:
+    store = FakeArtifactStore()
+    options = CapabilityOptions(artifact_store=store)
+    request = ExportResumeRequest(resume=_resume(), format=ExportFormat.docx)
+    response = await caps.export_resume(request, options)
+    assert response.ok
+    assert len(response.artifacts) == 1
+    ref = response.artifacts[0]
+    assert ref.content_type == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert ref.metadata == {"format": "docx"}
+    data = await store.get(ref.artifact_id)
+    assert isinstance(data, bytes)
+    assert data.startswith(b"PK")
+
+
+@pytest.mark.asyncio
+async def test_export_resume_is_deterministic() -> None:
+    request = ExportResumeRequest(resume=_resume(), format=ExportFormat.pdf)
+    store_a = FakeArtifactStore()
+    store_b = FakeArtifactStore()
+    first = await caps.export_resume(request, CapabilityOptions(artifact_store=store_a))
+    second = await caps.export_resume(request, CapabilityOptions(artifact_store=store_b))
+    id_a = first.artifacts[0].artifact_id
+    id_b = second.artifacts[0].artifact_id
+    assert id_a == id_b
+    assert await store_a.get(id_a) == await store_b.get(id_b)
+
+
+@pytest.mark.asyncio
+async def test_export_resume_rejects_wrong_request_type() -> None:
+    response = await caps.export_resume(_resume(), CapabilityOptions())
+    assert not response.ok
+    assert len(response.errors) == 1
+
+
+@pytest.mark.asyncio
+async def test_export_resume_needs_no_provider_and_ignores_no_llm() -> None:
+    options = CapabilityOptions(no_llm=True, provider=None)
+    request = ExportResumeRequest(resume=_resume(), format=ExportFormat.pdf)
+    response = await caps.export_resume(request, options)
+    assert response.ok
+    assert len(response.artifacts) == 1
+
+
+@pytest.mark.asyncio
+async def test_export_resume_uses_default_store_when_none_injected() -> None:
+    request = ExportResumeRequest(resume=_resume(), format=ExportFormat.pdf)
+    response = await caps.export_resume(request, CapabilityOptions())
+    assert response.ok
+    assert len(response.artifacts) == 1
