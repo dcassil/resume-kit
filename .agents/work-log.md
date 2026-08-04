@@ -114,3 +114,14 @@ Phase 4 Wave A/B/C executed (mixed claude + codex agents):
 
 Orchestrator gate after Wave C: **848 passed, 1 skipped**, ruff clean, mypy --strict clean (82 files).
 Gate fixes: boundary expected-set += policy/evidence/alignment; lint cleanup in ported truthfulness.py (implicit string concat to preserve verbatim prompt text under line-length), SIM108/SIM103 in review.py/path_policy.py.
+
+Phase 4 Wave D executed (2 claude/opus + 1 codex):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| D | RIT-T-0031 candidate evidence + truth | claude/opus | DONE (22 tests; build_candidate_evidence + validate_resume_truth → TruthReport across all 7 provenance statuses; content-addressed evidence IDs) |
+| D | RIT-T-0032 apply diffs engine | claude/opus | DONE (35 tests; apply_diffs gated by path_policy + skill_targets; factual fields blocked at F10 via PolicyReasonCode; deep-copy, reorder salvage) |
+| D | RIT-T-0034 provider proposal generation | codex | DONE (9 tests; generate_change_proposals + generate_skill_target_plan behind StructuredCompletionProvider; proposals-only, never returns final resume; sanitizes inputs) |
+
+Orchestrator gate after Wave D: **934 passed, 1 skipped**, ruff clean, mypy --strict clean (92 files).
+Gate fixes: lint E501 in ported prompt constants (prompts.py, generation.py) resolved via implicit string concatenation preserving verbatim prompt text (no rule suppression); import sorting auto-fixed.
+Remaining: Wave E (RIT-T-0036 align_resume orchestration + invariant tests), Wave F (RIT-T-0037 exports/attribution/boundaries).
