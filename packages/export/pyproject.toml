@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-export"
+version = "0.0.0"
+description = "Phase 6 export package for resume-kit: PDF and DOCX rendering."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-core",
+    "resume-kit-schemas",
+    "reportlab",
+    "python-docx",
+]
+
+[tool.uv.sources]
+resume-kit-core = { workspace = true }
+resume-kit-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_export"]
