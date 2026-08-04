@@ -32,7 +32,7 @@ from collections.abc import Awaitable, Callable
 
 from resume_kit_alignment import align_resume as _align_resume
 from resume_kit_ats import compute_ats_score
-from resume_kit_core import InterfaceResponse, ResumeKitError
+from resume_kit_core import InterfaceResponse, Question, ResumeKitError
 from resume_kit_core.interface import (
     build_provider_not_configured as _build_provider_not_configured,
 )
@@ -249,7 +249,33 @@ async def align_resume(
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
-    return build_success(result, strict=options.strict)
+    return _align_success(result, strict=options.strict)
+
+
+def _align_success(
+    result: AlignmentResult, *, strict: bool
+) -> InterfaceResponse[object]:
+    """Shape the alignment result into the canonical envelope.
+
+    When the human-in-loop review left unresolved questions, surface them as
+    ``requires_human_input`` + ``questions`` on the envelope (REQ-408) rather than
+    burying them in ``data`` — so every transport (CLI/MCP/API) reports the pause
+    identically. The ``AlignmentResult`` is still carried as ``data``.
+    """
+    response: InterfaceResponse[object] = build_success(result, strict=strict)
+    if response.errors or not result.unresolved_questions:
+        return response
+    questions = [
+        Question(
+            question_id=f"align-resume:{index}",
+            text=text,
+            metadata={"source": "alignment.review_state"},
+        )
+        for index, text in enumerate(result.unresolved_questions)
+    ]
+    return response.model_copy(
+        update={"requires_human_input": True, "questions": questions}
+    )
 
 
 # ---------------------------------------------------------------------------

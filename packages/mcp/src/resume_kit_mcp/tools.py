@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol, get_args, get_type_hints, runtime_checkable
+from typing import get_args, get_type_hints
 
 from pydantic import BaseModel
 from resume_kit_core import (
     CoreError,
     ErrorCode,
     InterfaceResponse,
-    Question,
     StructuredCompletionProvider,
 )
 from resume_kit_facade.capabilities import REGISTRY
@@ -47,11 +46,6 @@ TOOL_NAMES: tuple[str, ...] = (
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
-
-
-@runtime_checkable
-class _HumanReviewData(Protocol):
-    unresolved_questions: list[str]
 
 
 class _ValidationFailure(Exception):
@@ -242,47 +236,16 @@ def _approved_claims(arguments: ToolArguments) -> object:
     return [_evidence(item, "approved_claims") for item in value]
 
 
-def _surface_align_human_input(
-    response: InterfaceResponse[object],
-) -> InterfaceResponse[object]:
-    data = response.data
-    if response.errors or not isinstance(data, _HumanReviewData):
-        return response
-    if not data.unresolved_questions:
-        return response
-    questions = [
-        Question(
-            question_id=f"resume_align:{index}",
-            text=text,
-            metadata={"source": "alignment.review_state"},
-        )
-        for index, text in enumerate(data.unresolved_questions)
-    ]
-    return InterfaceResponse[object](
-        data=response.data,
-        warnings=response.warnings,
-        errors=response.errors,
-        requires_human_input=True,
-        questions=questions,
-        artifacts=response.artifacts,
-        provenance=response.provenance,
-    )
-
-
 async def _call(
     facade_name: str,
     request: object,
     arguments: ToolArguments,
-    *,
-    surface_human_input: bool = False,
 ) -> ToolResult:
     try:
         options = _options(arguments)
     except _ValidationFailure as exc:
         return _validation_error(exc)
     response = await REGISTRY[facade_name](request, options)
-    if surface_human_input:
-        response = _surface_align_human_input(response)
     return _dump(response)
 
 
@@ -405,12 +368,7 @@ async def resume_align(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call(
-        "align-resume",
-        request,
-        arguments,
-        surface_human_input=True,
-    )
+    return await _call("align-resume", request, arguments)
 
 
 async def resume_validate_truth(arguments: ToolArguments) -> ToolResult:

@@ -14,6 +14,18 @@ from resume_kit_core.errors import (
     WarningCode,
 )
 
+# Interface substrate helpers
+from resume_kit_core.interface import (
+    ExitCode,
+    build_needs_input,
+    build_provider_not_configured,
+    build_success,
+    escalate_warnings,
+    exit_code_for,
+    from_exception,
+    from_resume_kit_error,
+)
+
 # Provider contracts
 from resume_kit_core.providers import (
     CompletionProvider,
@@ -43,6 +55,15 @@ __all__ = [
     "ErrorCode",
     "ResumeKitError",
     "WarningCode",
+    # interface substrate
+    "ExitCode",
+    "build_needs_input",
+    "build_provider_not_configured",
+    "build_success",
+    "escalate_warnings",
+    "exit_code_for",
+    "from_exception",
+    "from_resume_kit_error",
     # providers
     "CompletionProvider",
     "CompletionRequest",

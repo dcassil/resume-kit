@@ -2,9 +2,10 @@
 
 Guards against:
 - ``from app`` / ``import app`` (upstream application namespace) — everywhere
-- ``litellm`` (concrete LLM provider SDK) — everywhere
+- ``litellm`` / ``openai`` / ``anthropic`` (concrete LLM provider SDKs) — everywhere
 - ``sqlalchemy`` (ORM / persistence) — everywhere
-- transport frameworks (``fastapi``, ``typer``, ``mcp``, ``uvicorn``, ``httpx``) —
+- transport frameworks (``fastapi``, ``typer``, ``click``, ``mcp``, ``uvicorn``,
+  ``httpx``, ``starlette``, ``requests``) —
   disallowed in ENGINE packages only. The Phase 5 transport packages (``cli``, ``mcp``,
   ``api``) legitimately depend on these, so they are exempt from the transport-framework
   checks (but never from the app/litellm/sqlalchemy checks). This encodes NFR-503: heavy
@@ -46,6 +47,17 @@ FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "sqlalchemy import",
         re.compile(r"^\s*(from\s+sqlalchemy|import\s+sqlalchemy)", re.MULTILINE),
     ),
+    # concrete provider SDKs (forbidden everywhere; engine and transports alike)
+    (
+        "openai import",
+        re.compile(r"^\s*(from\s+openai(\s*\.|\s)|import\s+openai(\s+|$))", re.MULTILINE),
+    ),
+    (
+        "anthropic import",
+        re.compile(
+            r"^\s*(from\s+anthropic(\s*\.|\s)|import\s+anthropic(\s+|$))", re.MULTILINE
+        ),
+    ),
 ]
 
 # Transport frameworks: forbidden in ENGINE packages, allowed in TRANSPORT_PACKAGES.
@@ -59,6 +71,10 @@ ENGINE_ONLY_FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"^\s*(from\s+typer|import\s+typer)", re.MULTILINE),
     ),
     (
+        "click import",
+        re.compile(r"^\s*(from\s+click(\s*\.|\s)|import\s+click(\s+|$))", re.MULTILINE),
+    ),
+    (
         "mcp SDK import",
         re.compile(r"^\s*(from\s+mcp(\s*\.|\s)|import\s+mcp(\s+|$))", re.MULTILINE),
     ),
@@ -69,6 +85,16 @@ ENGINE_ONLY_FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "httpx import",
         re.compile(r"^\s*(from\s+httpx|import\s+httpx)", re.MULTILINE),
+    ),
+    (
+        "starlette import",
+        re.compile(r"^\s*(from\s+starlette|import\s+starlette)", re.MULTILINE),
+    ),
+    (
+        "requests import",
+        re.compile(
+            r"^\s*(from\s+requests(\s*\.|\s)|import\s+requests(\s+|$))", re.MULTILINE
+        ),
     ),
 ]
 

@@ -4,9 +4,62 @@ Every Phase 5 transport (CLI, MCP, API, bridge) calls the capabilities in this
 package instead of touching engine functions directly, so all surfaces stay in
 parity and every result flows through the ``resume_kit_core`` interface
 substrate.
-
-The public export surface is defined in a later task (RIT-T-0048); this module
-intentionally stays minimal.
 """
 
 __version__ = "0.0.0"
+
+from resume_kit_facade.capabilities import (
+    REGISTRY,
+    align_resume,
+    build_candidate_evidence_capability,
+    check_resume_ats,
+    check_resume_job_match,
+    compare_resume_versions,
+    extract_job_description,
+    extract_resume,
+    identify_resume_gaps,
+    select_best_resume,
+    validate_resume_truth_capability,
+)
+from resume_kit_facade.models import (
+    AlignResumeRequest,
+    BuildCandidateEvidenceRequest,
+    CapabilityOptions,
+    CheckResumeAtsRequest,
+    CheckResumeJobMatchRequest,
+    CompareResumeVersionsRequest,
+    ExtractJobDescriptionRequest,
+    ExtractResumeRequest,
+    IdentifyResumeGapsRequest,
+    SelectBestResumeRequest,
+    ValidateResumeTruthRequest,
+)
+
+__all__ = [
+    # registry
+    "REGISTRY",
+    # capability callables
+    "align_resume",
+    "build_candidate_evidence_capability",
+    "check_resume_ats",
+    "check_resume_job_match",
+    "compare_resume_versions",
+    "extract_job_description",
+    "extract_resume",
+    "identify_resume_gaps",
+    "select_best_resume",
+    "validate_resume_truth_capability",
+    # options
+    "CapabilityOptions",
+    # request models
+    "AlignResumeRequest",
+    "BuildCandidateEvidenceRequest",
+    "CheckResumeAtsRequest",
+    "CheckResumeJobMatchRequest",
+    "CompareResumeVersionsRequest",
+    "ExtractJobDescriptionRequest",
+    "ExtractResumeRequest",
+    "IdentifyResumeGapsRequest",
+    "SelectBestResumeRequest",
+    "ValidateResumeTruthRequest",
+]

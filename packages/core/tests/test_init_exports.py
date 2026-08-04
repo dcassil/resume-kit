@@ -28,6 +28,29 @@ def test_all_public_types_importable() -> None:
     assert isinstance(FakeArtifactStore(), ArtifactStore)
 
 
+def test_interface_substrate_importable() -> None:
+    """New interface substrate symbols are importable from the package root."""
+    from resume_kit_core import (
+        ExitCode,
+        build_needs_input,
+        build_provider_not_configured,
+        build_success,
+        escalate_warnings,
+        exit_code_for,
+        from_exception,
+        from_resume_kit_error,
+    )
+
+    assert ExitCode is not None
+    assert callable(build_success)
+    assert callable(build_provider_not_configured)
+    assert callable(from_resume_kit_error)
+    assert callable(from_exception)
+    assert callable(build_needs_input)
+    assert callable(exit_code_for)
+    assert callable(escalate_warnings)
+
+
 def test_no_forbidden_imports() -> None:
     """Importing core in a clean interpreter pulls in no forbidden dependency.
 

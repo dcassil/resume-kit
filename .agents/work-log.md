@@ -182,3 +182,21 @@ Phase 5 Wave D executed (3 claude/opus + 1 claude/sonnet + 1 codex):
 Orchestrator integration + gate after Wave D: **1335 passed, 1 skipped**, ruff clean, mypy --strict clean (69 files).
 Orchestrator fixes: (1) added "integrations/*" to root workspace members so the bridge is gate-covered; (2) removed bridge `# type: ignore[arg-type]` — typed `_run` param as Coroutine (first-class, no suppression); (3) fixed 2 sys.modules-pollution test failures (core+facade no-transport-import tests) by running the import check in a clean subprocess; (4) MCP tools.py mypy: narrowed `_find_model_type` to `type[BaseModel]` via issubclass; (5) CLI ruff: StrEnum + PEP-695 generic.
 Remaining: Wave E (RIT-T-0046 parity, 0047 boundary, 0048 exports).
+
+Phase 5 Wave E executed (claude/opus + claude/sonnet + codex):
+| Wave | Task | Agent | Result |
+| ---- | ---- | ----- | ------ |
+| E | RIT-T-0046 cross-surface parity | codex | DONE; FOUND a real parity bug (align human-in-loop questions surfaced only by MCP) — flagged as strict xfail, then fixed by orchestrator |
+| E | RIT-T-0047 interface boundary tests | claude/opus | DONE (1233 boundary checks; NFR-502/503: engine↛interface, transport frameworks engine-forbidden, engine pyproject↛transport deps; openai/anthropic forbidden everywhere) |
+| E | RIT-T-0048 public exports | claude/sonnet | DONE (public __all__ for core/facade/cli/mcp/api/bridge + export tests) |
+
+PARITY BUG FIX (orchestrator, cross-cutting): align_resume human-in-loop surfaced requires_human_input/questions
+ONLY on MCP (which special-cased it); facade/CLI/API buried them in data.unresolved_questions. Fixed at the
+single shaping point: facade `_align_success` now promotes unresolved review questions into the envelope
+(requires_human_input=True + questions) via model_copy; removed MCP `_surface_align_human_input` special-casing.
+Parity xfail flipped to a passing assertion — all four surfaces now identical (REQ-408/REQ-508).
+
+**Phase 5 (RIT-I-0006) COMPLETE & pushed.** Final gate: **1971 passed, 1 skipped**, ruff clean, mypy --strict clean (69 src files).
+Surfaces: resume-tool CLI, MCP server (10 tools), FastAPI REST (10 endpoints), plugins/resume-intelligence (10 skills),
+integrations/job-hunter bridge — all thin adapters over resume_kit_facade over the engine. integrations/* now a workspace member.
+NEXT: Phase 6 — Export & package workflows (PDF/DOCX Replace→New, cover-letter match/align, app-package audit, then PyPI publishing).
