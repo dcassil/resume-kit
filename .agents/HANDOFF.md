@@ -3,19 +3,20 @@
 Copy-paste this into a fresh session to resume the autonomous build.
 
 ## ⭐ Current state (resume here)
-- **Done & pushed:** Phases 0–4 (initiatives RIT-I-0001..0005; tasks RIT-T-0001..0037 all completed).
-- **Next up: Phase 5 — Interfaces** (create initiative RIT-I-0006; tasks continue at RIT-T-0038). CLI `resume-tool`, MCP server, agent plugin skills, REST API as thin adapters, and the `job-hunter` bridge — all over the SAME core engine (no business rule may live only in a CLI/MCP/API/plugin layer).
-- **`main` is green & clean:** working tree clean; last commit `67ad569` (close RIT-I-0005). Full gate = ruff clean, mypy --strict clean (**52 src files**), **963 tests pass, 1 skipped**.
+- **Done & pushed:** Phases 0–5 (initiatives RIT-I-0001..0006; tasks RIT-T-0001..0048 all completed).
+- **Next up: Phase 6 — Export & Package Workflows** (create initiative RIT-I-0007; tasks continue at RIT-T-0049). PDF/DOCX export WITHOUT the upstream Next.js frontend (`pdf.py` hard-deps Playwright+Chromium+frontend → Replace→New); cover-letter match/align; application-package audit; the not-yet-built engine capabilities (consistency, bullet-score, section-improve, create-for-job) + their CLI/MCP/API/plugin surfaces; then configure **PyPI publishing** (fix root `pyproject.toml` wheel target first — see landmines).
+- **`main` is green & clean:** working tree clean; last commit `98cf73d` (close RIT-I-0006). Full gate = ruff clean, mypy --strict clean (**69 src files**), **1971 tests pass, 1 skipped**.
 - **First thing to do on resume:** `uv sync --all-packages` then run the gate (below) to confirm green before touching anything.
-- **Packages so far (9):** `schemas`, `core`, `document-parser`, `matching`, `ats`, `job-parser`, `policy`, `evidence`, `alignment`.
+- **Packages so far (13 + 1 integration):** engine — `schemas`, `core`, `document-parser`, `matching`, `ats`, `job-parser`, `policy`, `evidence`, `alignment`; facade — `facade`; transports — `cli`, `mcp`, `api`; integration — `integrations/job-hunter` (`resume_kit_job_hunter_bridge`). Plugin skills at `plugins/resume-intelligence/`.
 - **Current gate command:**
   ```
   uv sync --all-packages && \
-  uv run ruff check packages tests && \
-  uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser packages/policy packages/evidence packages/alignment && \
-  uv run pytest
+  uv run ruff check packages tests integrations plugins && \
+  uv run mypy packages/core packages/schemas packages/document-parser packages/matching packages/ats packages/job-parser packages/policy packages/evidence packages/alignment packages/facade packages/cli packages/mcp packages/api integrations/job-hunter/src/resume_kit_job_hunter_bridge && \
+  uv run pytest packages integrations plugins tests
   ```
-  (extend the mypy package list as new packages land each phase. NOTE: mypy counts SRC files only — 52 — because hyphenated test dirs have no `tests/__init__.py`; tests are covered by pytest+ruff, not directory-mypy. This is by design, not a gap.)
+  (extend lists as new packages land. NOTE: mypy counts SRC files only — 69 — because hyphenated test dirs have no `tests/__init__.py`; tests are covered by pytest+ruff. By design.)
+- **Interfaces architecture (Phase 5):** every transport (CLI/MCP/API/bridge) is a THIN adapter that calls the single `resume_kit_facade` capability REGISTRY (10 async capabilities returning `InterfaceResponse` via the `resume_kit_core.interface` substrate — `build_success`/`build_provider_not_configured`/`exit_code_for`/`ExitCode`). NO business rule lives in a transport (enforced by `tests/boundary/test_interface_boundaries.py` + cross-surface parity in `tests/interface/test_surface_parity.py`). Adding a capability = add engine fn → add facade capability+registry entry → each transport picks it up. LLM paths without a provider return a stable `PROVIDER_NOT_CONFIGURED` error; every surface has a no-LLM path.
 - **Orchestration method that worked for Phase 4:** mixed **claude Agent-tool subagents (opus/sonnet) + codex** (`codex exec -s workspace-write`, stdin from /dev/null, background) in file-disjoint waves; orchestrator runs the full gate + commits per wave. Codex occasionally makes a stray edit to the task `.md` (duplicate header) — harmless, ignore. Lint E501 on ported prompt/rule constants: fix with implicit string concatenation (byte-preserving), never noqa/rule-suppression (global lint policy).
 
 ## The directive (from Daniel)
@@ -88,9 +89,14 @@ Claude-Session: https://claude.ai/code/session_01WpLT8iXnxtXkgRQeHFbhNj
   - `packages/alignment` (`resume_kit_alignment`): `apply_diffs` (policy+skill gated, original-match, reorder salvage, deep-copy); `calculate_resume_diff` + `verify_diff_result` (upstream parity); `generate_change_proposals`/`generate_skill_target_plan` (proposal-only behind `StructuredCompletionProvider`); `ReviewController` (pure human-in-loop state machine); **`align_resume`** (async orchestrator: generation→policy→apply→verify→diff→truth→score→review; F≥3 forces truth; UNSUPPORTED/CONTRADICTED stripped+re-verified or deferred to review; NFR-405 adversarial test proves fabricated employer + unsupported claim never reach output).
   - schemas gained 12 Phase-4 result models in `results.py` (PolicyDecision/PolicyRejection, SkillTarget(Plan/Source/Rejection), TruthReport, ReviewAction/Decision/Session, AlignmentResult).
   - **Full gate green: ruff clean, mypy --strict clean (52 src files), 963 tests pass / 1 skipped.** Every ported unit attributed (SHA `116f9cc`) + import-boundary tests per package.
-- **Phases 5–6: NOT STARTED.** Next initiatives to create from vision roadmap:
-  - Phase 5 — Interfaces (CLI `resume-tool` {extract,check-ats,match,select,align,validate-truth,compare,create-for-job}; MCP server {resume_extract,resume_align,resume_validate_truth,…}; agent plugin skills; REST API as THIN adapters; job-hunter bridge). Vision rule: no business rule may live only in a CLI/MCP/API/plugin layer — all over the same core engine. JSON/text/Markdown output, no-LLM mode, strict mode, human-in-loop + non-interactive, automation-friendly exit codes.
-  - Phase 6 — Export & package workflows (PDF/DOCX export WITHOUT the upstream Next.js frontend — `pdf.py` hard-deps Playwright+Chromium+frontend, so Replace→New; app-package audit; cover-letter match/align). Then configure PyPI publishing (fix root `pyproject.toml` wheel target first — see landmines).
+- **Phase 5 — Interfaces (RIT-I-0006): COMPLETE & pushed.** All 11 tasks (RIT-T-0038..0048) done. Built with mixed claude+codex agents in 5 waves.
+  - `packages/core` gained `interface.py` — the shared result substrate (`build_success`/`build_provider_not_configured`/`from_resume_kit_error`/`from_exception`/`build_needs_input`/`exit_code_for`/`ExitCode`) + `ErrorCode.PROVIDER_NOT_CONFIGURED`.
+  - `packages/facade` (`resume_kit_facade`): 10 async capabilities + `REGISTRY` + request models + `CapabilityOptions(no_llm,strict,human_in_loop,provider)` — the single point every transport calls. Align surfaces human-in-loop questions in the envelope here.
+  - `packages/cli` (`resume-tool`, Typer, 10 commands, json/text/md, exit codes via `exit_code_for`); `packages/mcp` (official `mcp` SDK, 10 stable tools, direct handler registry); `packages/api` (FastAPI, 10 POST endpoints, envelope-derived HTTP status); `plugins/resume-intelligence/` (10 SKILL.md); `integrations/job-hunter/` (`resume_kit_job_hunter_bridge`: analyze/align/validate/build + sync wrappers, no state mutation).
+  - Boundary tests enforce NFR-502/503 (engine↛interface, transport frameworks engine-forbidden, engine pyproject↛transport deps, openai/anthropic forbidden everywhere). Cross-surface parity tests prove facade≡CLI≡MCP≡API. Heavy deps (typer/mcp/fastapi/uvicorn/httpx) isolated to their transport package.
+  - **Full gate green: ruff clean, mypy --strict clean (69 src files), 1971 tests pass / 1 skipped.**
+- **Phase 6: NOT STARTED.** Next initiative to create from vision roadmap:
+  - Phase 6 — Export & package workflows (PDF/DOCX export WITHOUT the upstream Next.js frontend — `pdf.py` hard-deps Playwright+Chromium+frontend, so Replace→New; app-package audit; cover-letter match/align; ALSO the not-yet-built engine capabilities deferred from Phase 5 — consistency, bullet-score, section-improve, create-for-job — plus their CLI/MCP/API/plugin surfaces). Then configure PyPI publishing (fix root `pyproject.toml` wheel target first — see landmines).
 
 ## Known landmines
 - **Metis tooling (this session):** the `mcp__plugin_metis_metis__*` create/read tools failed with
