@@ -38,5 +38,11 @@ Gate (Phase 2): `uv run ruff check packages tests && uv run mypy packages/core p
 | B | claude/sonnet | RIT-T-0012 (json+prompts) | `json_helpers.py`,`prompts.py`,`tests/test_json_helpers.py` | DONE (30 char tests) |
 | B | claude/sonnet | RIT-T-0013 (results) | `results.py`,`tests/test_results.py` | DONE (13 tests; ParseResult/ParseMethod compose core+schemas) |
 
+| C | claude/opus | RIT-T-0014 (structured adapter) | `structured.py`,`__init__.py`,`tests/test_structured_parse.py` | DONE (6 async tests; provider-injected, no crashes on non-fatal failures) |
+| D | claude/sonnet | RIT-T-0015 (attribution + boundary) | `references/attribution.md`,`tests/test_import_boundaries.py` | DONE (5 ledger rows; import-boundary test; markers all present) |
+
+**Phase 2 (RIT-I-0003) COMPLETE.** Final gate: **401 passed**, ruff clean, mypy --strict clean (38 files). Public API of `resume_kit_document_parser`: `extract_resume_text`, `parse_resume_structured`, `extract_resume_text_only`, `ParseResult`, `ParseMethod`, `TextExtractionResult`.
+Note: `json_helpers.py` extracted but not on the current response path (provider Protocol returns `dict` directly); retained as an attributed utility for the real provider in a later phase.
+
 Orchestrator gate after Wave B: **389 passed**, ruff clean, mypy --strict clean (35 files).
 Orchestrator fixes at gate: (1) updated `tests/boundary/test_boundary_no_upstream_imports.py` Phase-1-only assertion to include `document-parser`; (2) added `python-docx` dev dep so DOCX extraction tests run (un-skipped); (3) NOTE: gate must use `uv sync --all-packages` — plain `uv sync` does not install non-root workspace members.

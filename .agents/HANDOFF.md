@@ -49,14 +49,25 @@ Claude-Session: https://claude.ai/code/session_01WpLT8iXnxtXkgRQeHFbhNj
   - Boundary + integration guard tests under `tests/`. **Full gate green: ruff clean, mypy --strict clean (24 files), 284 tests pass.**
   - Gate command: `uv run ruff check packages tests && uv run mypy packages/core packages/schemas && uv run pytest`.
   - Note: NEXT session should START at Phase 2.
-- **Phases 2–6: NOT STARTED.** Next initiatives to create from vision roadmap:
-  - Phase 2 — Document extraction & parsing (MarkItDown, date-restoration, LLM parse behind provider iface, no-LLM text mode).
+- **Phase 2 — Document Extraction & Parsing (RIT-I-0003): COMPLETE & pushed.** All 7 tasks (RIT-T-0009..0015) done.
+  - `packages/document-parser` (`resume_kit_document_parser`): deterministic MarkItDown text extraction (`parse_document`, no-LLM `extract_resume_text` + `TextExtractionResult`), pure-regex date restoration, extracted JSON/text helpers + parse prompt constants, `ParseResult`/`ParseMethod` result models (compose core warnings/provenance + schemas), and provider-injected `parse_resume_structured(...)` behind `core.StructuredCompletionProvider` (+ `extract_resume_text_only` no-provider helper). All ported units attributed (SHA 116f9cc) + import-boundary test.
+  - **Full gate green: ruff clean, mypy --strict clean (38 files), 401 tests pass.**
+  - Gate command (UPDATED): `uv run ruff check packages tests && uv run mypy packages/core packages/schemas packages/document-parser && uv run pytest`. **IMPORTANT: run `uv sync --all-packages` first** — plain `uv sync` does NOT install non-root workspace members (document-parser), breaking test collection.
+  - Landmine cleared / added: added `python-docx` dev dep (DOCX extraction tests now run); `json_helpers.py` is extracted+attributed but currently unused on the response path (provider Protocol returns `dict`) — retain for the real provider (Phase 5).
+  - Note: NEXT session should START at Phase 3.
+- **Phases 3–6: NOT STARTED.** Next initiatives to create from vision roadmap:
   - Phase 3 — Matching & deterministic analysis (keyword/match, ATS engine — note `services/ats.py` is already deterministic+no-LLM, a strong seed — scoring dims; check-ats, check-job-match, select-best, compare-versions).
   - Phase 4 — Controlled alignment (diff apply/verify engine, allowed-path policy, freedom 0-10, evidence+provenance, human-in-loop, validate-truth).
   - Phase 5 — Interfaces (CLI `resume-tool`, MCP server, agent plugin, REST API, job-hunter bridge).
   - Phase 6 — Export & package workflows (PDF/DOCX export WITHOUT the upstream Next.js frontend — `pdf.py` hard-deps Playwright+Chromium+frontend, so Replace→New; app-package audit; cover-letter match/align). Then configure PyPI publishing.
 
 ## Known landmines
+- **Metis tooling (this session):** the `mcp__plugin_metis_metis__*` create/read tools failed with
+  `Missing configuration: project_prefix`, and `metis create initiative` rejects the `NULL` strategy
+  (streamlined preset). Reliable workaround used: author the `initiative.md`/`RIT-T-*.md` files
+  directly under `.metis/strategies/NULL/initiatives/RIT-I-XXXX/` with proper frontmatter, then
+  `metis sync` to index them into `metis.db` (auto-recovers the short-code counters). `metis list`,
+  `metis status`, and `metis transition <code> <phase>` all work fine via CLI.
 - Root `pyproject.toml` `[tool.hatch.build.targets.wheel] packages = ["src/resume_kit"]` points at a dir that doesn't exist (root is a meta-package). `uv sync` tolerates it in editable mode; fix before any root `uv build` (Phase 6 packaging).
 - Structured resume parsing is LLM-only upstream — no-LLM structured extraction is a known gap to design around (Phase 2).
 - `improver.py` upstream is a ~1500-line mega-module; decompose during Phase 4 extraction.

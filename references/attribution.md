@@ -174,6 +174,25 @@ upstream material to attribute; their tests (`test_new_models.py`) are original.
 
 ---
 
+## Ported Files — `packages/document-parser` (RIT-I-0003)
+
+> Concrete resume-kit files that port/adapt upstream parser material. Each source file below
+> carries the modified-source marker comment block (upstream path + pinned SHA
+> `116f9cc3b00e1ac91734a6c2679bf41ea64a0edc`). All modifications invert app-level dependencies:
+> no file imports `app.*`, `litellm`, `openai`, or any concrete LLM provider directly.
+
+| resume-kit file | Upstream source | Ported/adapted material | Modification note |
+|---|---|---|---|
+| `packages/document-parser/src/resume_kit_document_parser/dates.py` | `app/services/parser.py` (lines 35, 40: `restore_dates_from_markdown`, `_extract_markdown_dates`, `_MD_DATE_RE`) | Pure-regex date-restoration helpers | Extracted into a standalone module; no HTTP, LLM, markitdown, or `app.*` coupling; `logger` changed from module singleton to `logging.getLogger(__name__)`; behavior preserved exactly (characterization tests lock upstream regex behavior) |
+| `packages/document-parser/src/resume_kit_document_parser/text_extraction.py` | `app/services/parser.py` (line 119: `parse_document`) | MarkItDown PDF/DOCX→Markdown extraction | Wrapped in a pydantic result model (`ExtractionResult`) carrying warnings; `app.*` imports removed; logging preserved via stdlib; DOCX/PDF/text dispatch logic unchanged |
+| `packages/document-parser/src/resume_kit_document_parser/json_helpers.py` | `app/llm.py` (lines 218–352: `_extract_message_text`, `_to_code_block`, JSON-fence parsing helpers) | Pure response-text and JSON-fence parsing helpers | Isolated from LiteLLM/network coupling; safety constants and `parse_response_json()` entry-point added; no `app.*`, `litellm`, or provider imports |
+| `packages/document-parser/src/resume_kit_document_parser/prompts.py` | `app/prompts/templates.py` (lines 21–94: `PARSE_RESUME_PROMPT`, `RESUME_SCHEMA_EXAMPLE`) | LLM prompt constants for resume parsing | Extracted as standalone pure-string constants; all other templates (improve, diff, cover-letter) deliberately omitted; no `app.*` or LLM coupling |
+| `packages/document-parser/src/resume_kit_document_parser/structured.py` | `app/services/parser.py` (line 144: `parse_resume_to_json`) | Provider-injected structured resume parsing pipeline | `app.llm` / `app.prompts` / `app.schemas` / config-singleton coupling removed; LLM call goes through injected `StructuredCompletionProvider` Protocol; text extraction delegated to `extract_resume_text`; failures mapped to core warnings + reduced confidence rather than raised exceptions; result returned as `ParseResult` with warnings + provenance |
+
+Note: characterization tests under `packages/document-parser/tests/` lock the upstream behavior of the ported helpers (date-regex patterns, JSON-fence extraction, text dispatch logic) without importing any `app.*` module.
+
+---
+
 ## Intentionally Excluded Subsystems (Replace / Leave Behind)
 
 The following Resume-Matcher subsystems were reviewed during Phase 0 and intentionally
