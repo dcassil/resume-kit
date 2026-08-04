@@ -200,3 +200,29 @@ Parity xfail flipped to a passing assertion — all four surfaces now identical 
 Surfaces: resume-tool CLI, MCP server (10 tools), FastAPI REST (10 endpoints), plugins/resume-intelligence (10 skills),
 integrations/job-hunter bridge — all thin adapters over resume_kit_facade over the engine. integrations/* now a workspace member.
 NEXT: Phase 6 — Export & package workflows (PDF/DOCX Replace→New, cover-letter match/align, app-package audit, then PyPI publishing).
+
+---
+
+## Phase 6 — Export & Packaging (RIT-I-0007) — PLANNED
+
+Scope (human-decided): Export + Packaging ONLY; cover-letter/audit/4 deferred capabilities → Phase 7.
+Codex decomposed into 13 file-disjoint tasks RIT-T-0049..0061 (`.agents/decomp-RIT-I-0007.json`).
+Decisions: PDF=ReportLab (pure Python, deterministic), DOCX=python-docx; umbrella `resume-kit` dist +
+extras [cli]/[mcp]/[api]/[all], build-ready (Trusted-Publishing CI, NO actual upload — Daniel pushes).
+
+Wave plan (by DAG):
+| Wave | Tasks | Notes |
+| ---- | ----- | ----- |
+| A | RIT-T-0049 scaffold packages/export [sonnet] | ExportFormat/ExportOptions/render dispatch |
+| B | RIT-T-0050 PDF renderer [opus/high], 0051 DOCX renderer [opus/med] | parallel; deterministic bytes |
+| C | RIT-T-0052 export-resume facade capability [opus/high] | ArtifactStore-injected → ArtifactRef |
+| D | RIT-T-0053 CLI, 0054 MCP, 0055 API, 0056 bridge, 0057 plugin export | parallel thin adapters over facade |
+| E | RIT-T-0058 umbrella packaging [opus/high], 0060 boundary/parity, 0061 exports | packaging owns root pyproject+LICENSE+publish.yml |
+| F | RIT-T-0059 clean-venv install proof [sonnet] | build wheel → pip install in fresh venv → resume-tool --help |
+
+INTEGRATION NOTES for orchestrator: (1) reportlab/python-docx must be added to the engine-only boundary
+forbidden set for engine pkgs but ALLOWED in packages/export (task 0060). (2) known-package set += export.
+(3) codex network-sandbox: run `uv sync` (adds reportlab) as orchestrator; codex uses `uv run` only.
+(4) root pyproject wheel force-include is the load-bearing packaging fix (task 0058).
+
+Gate after each wave (uv sync --all-packages first): ruff + mypy(+packages/export) + pytest.
