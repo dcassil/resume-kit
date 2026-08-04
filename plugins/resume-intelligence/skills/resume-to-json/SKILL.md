@@ -54,7 +54,8 @@ truth:
 - **Preserve order** — keep sections, jobs, and bullets in the source order.
 - **No merging or splitting** of bullets or entries.
 - **Anything that does not fit the standard sections goes into `customSections`**
-  (never discard it) — use a `STRING_LIST` (bullets/lines) or `TEXT` block.
+  (never discard it) — use a `stringList` (bullets/lines) or `text` block. The
+  `sectionType` value is lowercase: `text`, `stringList`, or `itemList`.
 - **Leave unknown optional fields empty** (`""`, `null`, or `[]`) — do not guess
   emails, phones, links, or dates that are not present.
 - After building, **verify**: count the bullets per job in the source and in your
@@ -91,11 +92,10 @@ and note the uncertainty to the user — never fill gaps with invented content.
   },
   "customSections": {
     "<key>": {
-      "sectionType": "STRING_LIST",         // or "TEXT" or "ITEM_LIST"
-      "displayName": "Section Heading",
-      "strings": ["line verbatim"],          // for STRING_LIST
-      "text": null,                          // for TEXT
-      "items": null                          // for ITEM_LIST (title/subtitle/years/description[])
+      "sectionType": "stringList",           // exactly one of: "text" | "stringList" | "itemList"
+      "strings": ["line verbatim"],          // when sectionType == "stringList"
+      "text": null,                          // when sectionType == "text"
+      "items": null                          // when sectionType == "itemList": [{title, subtitle, location, years, description:[...]}]
     }
   }
 }
