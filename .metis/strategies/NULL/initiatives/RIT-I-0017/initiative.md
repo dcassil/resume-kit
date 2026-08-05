@@ -1,23 +1,23 @@
 ---
-id: scoredoc-buildoc-projection
+id: separate-scoring-representation
 level: initiative
 title: "Separate scoring representation (ScoreDoc) from build representation (BuildDoc) via deterministic projection"
 short_code: "RIT-I-0017"
-created_at: 2026-08-05T17:00:00.000000+00:00
-updated_at: 2026-08-05T17:00:00.000000+00:00
+created_at: 2026-08-05T17:00:00+00:00
+updated_at: 2026-08-05T19:19:44.075857+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0015]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/active"
 
 
 exit_criteria_met: false
 estimated_complexity: M
 strategy_id: NULL
-initiative_id: RIT-I-0017
+initiative_id: separate-scoring-representation
 ---
 
 # Separate scoring representation (ScoreDoc) from build representation (BuildDoc) via deterministic projection Initiative
