@@ -102,6 +102,35 @@ def _claim_set(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def claim_diff(before: ResumeDocument, after: ResumeDocument) -> dict[str, dict[str, list[str]]]:
+    """Return per-field added/removed claims between two resume versions.
+
+    Claims are the load-bearing facts a `base`/`standard` edit must preserve:
+    employers, titles, degrees, and skills. An empty diff means claims were
+    preserved exactly (only presentation/PII/format changed).
+    """
+    b = _claim_set(before.model_dump(by_alias=True))
+    a = _claim_set(after.model_dump(by_alias=True))
+    diff: dict[str, dict[str, list[str]]] = {}
+    for key in b:
+        added = sorted(set(a[key]) - set(b[key]))
+        removed = sorted(set(b[key]) - set(a[key]))
+        if added or removed:
+            diff[key] = {"added": added, "removed": removed}
+    return diff
+
+
+def claims_preserved(before: ResumeDocument, after: ResumeDocument) -> bool:
+    """True iff no employer/title/degree/skill claim was added or removed.
+
+    This is the base/standard write-gate invariant (RIT-A-0003, decided): the
+    edit may strip PII, normalize formatting/dates, and reword — but it must not
+    add, drop, or alter a claim. Distinct from extraction-faithfulness (which
+    compares to the source file and would wrongly reject intentional PII removal).
+    """
+    return not claim_diff(before, after)
+
+
 #: Which fix affordances the auto pass applies, and their transform.
 _AUTO_AFFORDANCES = {
     FixAffordance.AUTO_SAFE_STRIP,
