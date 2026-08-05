@@ -290,6 +290,10 @@ class CommitSessionBody(_Options):
 
     root: str = Field(default=".", description="Project root containing resume-kit/.")
     freedom: int = Field(default=10, ge=0, le=10)
+    alias_timestamp: str | None = Field(
+        default=None,
+        description="Optional ISO timestamp for accepted-edit alias provenance.",
+    )
 
 
 class InitProjectBody(_Options):

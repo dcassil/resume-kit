@@ -390,7 +390,11 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/review-edits/commit")
     async def review_edits_commit(body: CommitSessionBody) -> Response:
-        request = CommitSessionRequest(root=body.root, freedom=body.freedom)
+        request = CommitSessionRequest(
+            root=body.root,
+            freedom=body.freedom,
+            alias_timestamp=body.alias_timestamp,
+        )
         return _render(await REGISTRY["commit-session"](request, _options(body)))
 
     @app.post("/review-edits/status")

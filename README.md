@@ -65,6 +65,18 @@ not faithful, so an unfaithful conversion never silently reaches disk. The
 their source paths, and `alias_file`) are owned by code via `init` / `set-active`
 — not hand-authored.
 
+### Project aliases and accepted terminology edits
+
+The deterministic matcher loads the packaged seed alias lexicon plus an optional
+project alias file from `resume-kit/config.json`'s `alias_file` pointer. Manual
+synonym growth still goes through the truth-gated `manage-synonyms` workflow.
+In addition, `review-edits commit` self-heals that project file for accepted
+terminology edits: when a user accepts or edits a terminology proposal that
+mirrors the employer's wording, the commit records the resume term as an alias
+of the accepted employer term with `source: "accepted_edit"` provenance and the
+caller-supplied timestamp. Rejected, skipped, auto-mode, non-terminology, and
+malformed edits never grow aliases.
+
 ## Building & publishing
 
 Build the umbrella wheel and sdist locally with [`uv`](https://docs.astral.sh/uv/):

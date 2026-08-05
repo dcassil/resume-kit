@@ -810,11 +810,20 @@ def review_edits_decide(
 def review_edits_commit(
     root: str = _Root,
     freedom: int = typer.Option(10, "--freedom", min=0, max=10),
+    alias_timestamp: str | None = typer.Option(
+        None,
+        "--alias-timestamp",
+        help="Optional ISO timestamp for accepted-edit alias provenance.",
+    ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
     """Commit approved changes through the hard write gate."""
-    request = CommitSessionRequest(root=root, freedom=freedom)
+    request = CommitSessionRequest(
+        root=root,
+        freedom=freedom,
+        alias_timestamp=alias_timestamp,
+    )
     options = _options(False, strict, False)
     _run(caps.commit_session_capability(request, options), output)
 

@@ -921,6 +921,7 @@ async def edit_session_commit(arguments: ToolArguments) -> ToolResult:
             {
                 "root": _optional_string(arguments, "root", "."),
                 "freedom": 10 if freedom is None else freedom,
+                "alias_timestamp": _optional_str(arguments, "alias_timestamp"),
             },
         )
     except _ValidationFailure as exc:

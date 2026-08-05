@@ -43,6 +43,7 @@ from resume_kit_facade.capabilities import (
 from resume_kit_facade.models import (
     AddEvidenceRequest,
     AddEvidenceResult,
+    AliasGrowthEntry,
     AlignResumeRequest,
     AlignTerminologyRequest,
     AlignTerminologyResult,
@@ -162,6 +163,7 @@ __all__ = [
     "ValidateResumeTruthRequest",
     # response models
     "AddEvidenceResult",
+    "AliasGrowthEntry",
     "AlignTerminologyResult",
     "CommitSessionResult",
     "EditSessionStatus",

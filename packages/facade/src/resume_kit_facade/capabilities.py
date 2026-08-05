@@ -772,6 +772,7 @@ async def commit_session_capability(
         result = _edit_session.commit_session(
             root=request.root,
             freedom=request.freedom,
+            alias_timestamp=request.alias_timestamp,
         )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)

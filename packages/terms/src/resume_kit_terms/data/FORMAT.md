@@ -65,7 +65,15 @@ justification channel:
   },
   "justifications": {
     "row-level security": "Our docs abbreviate this everywhere as RLS."
-  }
+  },
+  "provenance": [
+    {
+      "source": "accepted_edit",
+      "timestamp": "2026-08-05T12:00:00+00:00",
+      "canonical": "feature flag",
+      "alias": "feature toggle"
+    }
+  ]
 }
 ```
 
@@ -74,6 +82,9 @@ justification channel:
   reason the entry was added (human review / provenance only). It is validated
   for shape (string → string) but is **metadata**: it is dropped on load and can
   NEVER affect matching. Keys need not correspond one-to-one with `aliases`.
+- `provenance` — OPTIONAL top-level array of audit records. The edit-session
+  commit path writes `source: "accepted_edit"` records for user-accepted
+  terminology swaps. It is metadata only and can NEVER affect matching.
 
 The seed file itself may omit `justifications` entirely (back-compatible).
 

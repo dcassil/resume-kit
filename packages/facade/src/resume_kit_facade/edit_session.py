@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,8 +34,10 @@ from resume_kit_schemas import (
     ReviewDecision,
     ScoreDelta,
 )
+from resume_kit_terms import load_effective_alias_index, normalize, surface_form
 
 from resume_kit_facade.models import (
+    AliasGrowthEntry,
     CommitSessionResult,
     EditSessionState,
     EditSessionStatus,
@@ -56,6 +59,8 @@ _AUTO_ALLOWED = {
     ProvenanceStatus.USER_CONFIRMED,
 }
 _MODES = {"interactive", "review_at_end", "auto"}
+_TERMINOLOGY_REASON_PREFIX = "Mirror the employer's exact terminology:"
+_TOKEN_RE = re.compile(r"\w+")
 
 
 def open_session(
@@ -208,6 +213,7 @@ def commit_session(
     *,
     root: str | Path,
     freedom: int,
+    alias_timestamp: str | None = None,
 ) -> CommitSessionResult:
     """Run the hard write gate, apply approved diffs, and persist the result."""
     state = load_session(root)
@@ -236,6 +242,11 @@ def commit_session(
     before_match, before_ats = _score(root, original, state.active_job)
     result_dict, applied, rejected = apply_diffs(original, accepted, freedom=freedom)
     updated_resume = ResumeDocument.model_validate(result_dict)
+    grown_aliases = grow_aliases_from_accepted_terminology(
+        root=root,
+        state=state,
+        timestamp=alias_timestamp or datetime.now(UTC).isoformat(),
+    )
     after_match, after_ats = _score(root, updated_resume, state.active_job)
     working_path = _state_working_path(root, state)
     atomic_write_json(working_path, updated_resume.model_dump(mode="json"))
@@ -245,6 +256,7 @@ def commit_session(
         state=state,
         applied=applied,
         rejected=rejected,
+        grown_aliases=grown_aliases,
         before_match_report=before_match,
         after_match_report=after_match,
         before_ats_score=before_ats,
@@ -271,6 +283,33 @@ def reconcile_session(root: str | Path) -> ReconcileSessionResult:
         previous_hash=previous,
         reconciled_hash=current,
     )
+
+
+def grow_aliases_from_accepted_terminology(
+    *,
+    root: str | Path,
+    state: EditSessionState,
+    timestamp: str,
+) -> list[AliasGrowthEntry]:
+    """Append aliases learned from human-accepted terminology decisions."""
+    if state.mode == "auto":
+        return []
+    config = load_config(root)
+    if config.alias_file is None or not config.alias_file.strip():
+        return []
+
+    alias_file = _project_file(root, config.alias_file)
+    candidates = _accepted_terminology_alias_candidates(
+        state=state,
+        timestamp=timestamp,
+        alias_file=alias_file,
+    )
+    if not candidates:
+        return []
+    grown = _append_project_aliases(alias_file, candidates)
+    if grown:
+        _clear_alias_index_caches()
+    return grown
 
 
 def _auto_resolve(state: EditSessionState) -> tuple[EditSessionState, list[EditFeedback]]:
@@ -316,6 +355,210 @@ def _auto_resolve(state: EditSessionState) -> tuple[EditSessionState, list[EditF
         )
         state = auto_state
     return state, feedback
+
+
+def _accepted_terminology_alias_candidates(
+    *,
+    state: EditSessionState,
+    timestamp: str,
+    alias_file: Path,
+) -> list[AliasGrowthEntry]:
+    candidates: list[AliasGrowthEntry] = []
+    for decision in state.review_session.decisions:
+        if decision.action not in _APPLYING:
+            continue
+        for change in decision.changes:
+            if not _is_terminology_change(change):
+                continue
+            accepted_text = (
+                decision.edited_content
+                if decision.action == ReviewAction.EDIT and decision.edited_content is not None
+                else change.value
+            )
+            if not isinstance(change.original, str) or not isinstance(accepted_text, str):
+                continue
+            candidate = _candidate_from_text_swap(
+                original_text=change.original,
+                accepted_text=accepted_text,
+                timestamp=timestamp,
+                alias_file=alias_file,
+            )
+            if candidate is not None:
+                candidates.append(candidate)
+    return candidates
+
+
+def _is_terminology_change(change: ChangeProposal) -> bool:
+    return (
+        change.action == "replace"
+        and isinstance(change.original, str)
+        and isinstance(change.value, str)
+        and change.reason.startswith(_TERMINOLOGY_REASON_PREFIX)
+    )
+
+
+def _candidate_from_text_swap(
+    *,
+    original_text: str,
+    accepted_text: str,
+    timestamp: str,
+    alias_file: Path,
+) -> AliasGrowthEntry | None:
+    original_tokens = _TOKEN_RE.findall(original_text)
+    accepted_tokens = _TOKEN_RE.findall(accepted_text)
+    if len(original_tokens) != len(accepted_tokens):
+        return None
+
+    changed_pairs = [
+        (old, new)
+        for old, new in zip(original_tokens, accepted_tokens, strict=True)
+        if surface_form(old) != surface_form(new)
+    ]
+    if not changed_pairs:
+        return None
+
+    original_by_norm = {normalize(old) for old, _new in changed_pairs}
+    accepted_by_norm = {normalize(new) for _old, new in changed_pairs}
+    original_by_norm.discard("")
+    accepted_by_norm.discard("")
+    if len(original_by_norm) != 1 or len(accepted_by_norm) != 1:
+        return None
+    if original_by_norm == accepted_by_norm:
+        return None
+
+    original_term = changed_pairs[0][0]
+    accepted_term = changed_pairs[0][1]
+    return AliasGrowthEntry(
+        canonical=accepted_term,
+        alias=original_term,
+        original_term=original_term,
+        accepted_term=accepted_term,
+        timestamp=timestamp,
+        alias_file=alias_file.as_posix(),
+    )
+
+
+def _append_project_aliases(
+    alias_file: Path,
+    candidates: list[AliasGrowthEntry],
+) -> list[AliasGrowthEntry]:
+    payload = _load_project_alias_payload(alias_file)
+    aliases = payload["aliases"]
+    assert isinstance(aliases, dict)
+    provenance = payload.setdefault("provenance", [])
+    if not isinstance(provenance, list):
+        provenance = []
+        payload["provenance"] = provenance
+
+    grown: list[AliasGrowthEntry] = []
+    effective = load_effective_alias_index(alias_file if alias_file.exists() else None)
+    for candidate in candidates:
+        existing_alias = effective.canonical_for(candidate.alias)
+        existing_canonical = effective.canonical_for(candidate.canonical)
+        if existing_alias is not None and existing_canonical is not None:
+            if existing_alias != existing_canonical:
+                continue
+            continue
+
+        canonical_norm = existing_canonical or normalize(candidate.canonical)
+        alias_norm = normalize(candidate.alias)
+        if not canonical_norm or not alias_norm or canonical_norm == alias_norm:
+            continue
+
+        canonical_key = _canonical_key_for(aliases, canonical_norm, candidate.canonical)
+        alias_values = aliases.setdefault(canonical_key, [])
+        if not isinstance(alias_values, list):
+            continue
+        group_norms = {normalize(canonical_key)}
+        group_norms.update(normalize(str(value)) for value in alias_values)
+        if alias_norm in group_norms:
+            continue
+
+        alias_values.append(candidate.alias)
+        alias_values.sort(key=lambda value: surface_form(str(value)))
+        grown.append(
+            candidate.model_copy(
+                update={
+                    "canonical": canonical_key,
+                    "alias_file": alias_file.as_posix(),
+                }
+            )
+        )
+
+    if not grown:
+        return []
+
+    existing_provenance = {
+        (
+            str(item.get("source", "")),
+            str(item.get("canonical_normalized", "")),
+            str(item.get("alias_normalized", "")),
+        )
+        for item in provenance
+        if isinstance(item, dict)
+    }
+    for entry in grown:
+        key = ("accepted_edit", normalize(entry.canonical), normalize(entry.alias))
+        if key in existing_provenance:
+            continue
+        provenance.append(
+            {
+                "accepted_term": entry.accepted_term,
+                "alias": entry.alias,
+                "alias_normalized": normalize(entry.alias),
+                "canonical": entry.canonical,
+                "canonical_normalized": normalize(entry.canonical),
+                "original_term": entry.original_term,
+                "source": "accepted_edit",
+                "timestamp": entry.timestamp,
+            }
+        )
+        existing_provenance.add(key)
+
+    atomic_write_json(alias_file, payload)
+    load_effective_alias_index(alias_file)
+    return grown
+
+
+def _load_project_alias_payload(alias_file: Path) -> dict[str, object]:
+    if not alias_file.exists():
+        return {"version": 1, "aliases": {}, "justifications": {}, "provenance": []}
+    raw = json.loads(alias_file.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{alias_file} must contain a JSON object.")
+    aliases = raw.setdefault("aliases", {})
+    if not isinstance(aliases, dict):
+        raise ValueError(f"{alias_file} must contain an aliases object.")
+    raw.setdefault("version", 1)
+    return raw
+
+
+def _canonical_key_for(
+    aliases: dict[object, object],
+    canonical_norm: str,
+    fallback: str,
+) -> str:
+    for key in aliases:
+        if isinstance(key, str) and normalize(key) == canonical_norm:
+            return key
+    if normalize(fallback) == canonical_norm:
+        return fallback
+    return canonical_norm
+
+
+def _clear_alias_index_caches() -> None:
+    try:
+        from resume_kit_matching.keywords import _effective_alias_index as matching_cache
+
+        matching_cache.cache_clear()
+    except Exception:  # noqa: BLE001 - cache invalidation is best-effort
+        pass
+    try:
+        from resume_kit_ats.engine import _effective_alias_index as ats_cache
+
+        ats_cache.cache_clear()
+    except Exception:  # noqa: BLE001 - cache invalidation is best-effort
+        pass
 
 
 def _auto_can_apply(state: EditSessionState, change: ChangeProposal) -> bool:
@@ -384,9 +627,7 @@ def _change_keys(state: EditSessionState) -> dict[str, ChangeProposal]:
     return keyed
 
 
-def _key_for_change(
-    change_keys: dict[str, ChangeProposal], target: ChangeProposal
-) -> str | None:
+def _key_for_change(change_keys: dict[str, ChangeProposal], target: ChangeProposal) -> str | None:
     for key, change in change_keys.items():
         if change == target:
             return key
@@ -396,9 +637,7 @@ def _key_for_change(
     return None
 
 
-def _matching_provenance(
-    state: EditSessionState, change: ChangeProposal
-) -> list[ClaimProvenance]:
+def _matching_provenance(state: EditSessionState, change: ChangeProposal) -> list[ClaimProvenance]:
     value = change.value if isinstance(change.value, str) else ""
     return [
         item
@@ -407,9 +646,7 @@ def _matching_provenance(
     ]
 
 
-def _contradicted_paths(
-    state: EditSessionState, changes: list[ChangeProposal]
-) -> list[str]:
+def _contradicted_paths(state: EditSessionState, changes: list[ChangeProposal]) -> list[str]:
     paths: list[str] = []
     for change in changes:
         if any(
@@ -470,11 +707,7 @@ def _feedback_for_decision(
     elif action in {ReviewAction.REJECT, ReviewAction.SKIP}:
         outcome = "rejected"
     kept_text = (
-        final_text
-        if final_text is not None
-        else proposed
-        if outcome == "accepted"
-        else None
+        final_text if final_text is not None else proposed if outcome == "accepted" else None
     )
     return EditFeedback(
         edit_id=_edit_id(state, change, action),
@@ -552,10 +785,15 @@ def _score(
     try:
         from resume_kit_matching import check_job_match
 
+        from resume_kit_facade.alias_scope import use_alias_file
+
         job = JobDescription.model_validate_json(
             _project_file(root, active_job).read_text(encoding="utf-8")
         )
-        report = check_job_match(resume, job)
+        config = load_config(root)
+        alias_file = _project_file(root, config.alias_file) if config.alias_file else None
+        with use_alias_file(alias_file):
+            report = check_job_match(resume, job)
         return report, report.ats_score
     except Exception:  # noqa: BLE001 - scoring is advisory for commit results
         return None, None

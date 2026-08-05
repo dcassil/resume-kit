@@ -333,6 +333,7 @@ class CommitSessionRequest:
 
     root: str | Path = "."
     freedom: int = 10
+    alias_timestamp: str | None = None
 
 
 @dataclass(frozen=True)
@@ -378,12 +379,25 @@ class EditSessionStatus(BaseModel):
     committed_hash: str | None = None
 
 
+class AliasGrowthEntry(BaseModel):
+    """Project alias learned from an accepted terminology edit."""
+
+    canonical: str
+    alias: str
+    original_term: str
+    accepted_term: str
+    source: str = "accepted_edit"
+    timestamp: str
+    alias_file: str
+
+
 class CommitSessionResult(BaseModel):
     """Result of a gated edit-session commit."""
 
     state: EditSessionState
     applied: list[ChangeProposal] = Field(default_factory=list)
     rejected: list[PolicyRejection] = Field(default_factory=list)
+    grown_aliases: list[AliasGrowthEntry] = Field(default_factory=list)
     before_match_report: JobMatchReport | None = None
     after_match_report: JobMatchReport | None = None
     before_ats_score: ATSScore | None = None
