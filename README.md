@@ -70,12 +70,26 @@ their source paths, and `alias_file`) are owned by code via `init` / `set-active
 The deterministic matcher loads the packaged seed alias lexicon plus an optional
 project alias file from `resume-kit/config.json`'s `alias_file` pointer. Manual
 synonym growth still goes through the truth-gated `manage-synonyms` workflow.
-In addition, `review-edits commit` self-heals that project file for accepted
-terminology edits: when a user accepts or edits a terminology proposal that
-mirrors the employer's wording, the commit records the resume term as an alias
-of the accepted employer term with `source: "accepted_edit"` provenance and the
-caller-supplied timestamp. Rejected, skipped, auto-mode, non-terminology, and
-malformed edits never grow aliases.
+In addition, `resume-tool review-edits commit` self-heals that project file for
+accepted terminology edits: when a user accepts or edits a terminology proposal
+that mirrors the employer's wording, the commit records the resume term as an
+alias of the accepted employer term with `source: "accepted_edit"` provenance
+and the caller-supplied timestamp. Rejected, skipped, auto-mode,
+non-terminology, and malformed edits never grow aliases.
+
+### Improve-phase edit sessions
+
+Targeted resume improvements are written through the code-owned edit-session
+orchestrator, not direct JSON edits. The flow is: build truthful
+`ChangeProposal` records, ask for a mode (`interactive`, `review_at_end`, or
+`auto`), run `resume-tool review-edits open`, then loop through
+`resume-tool review-edits prompt` and `resume-tool review-edits decide`.
+Rejections and user-modified edits carry a structured `EditFeedbackReasonCode`
+plus an optional note. Finally `resume-tool review-edits commit` applies the
+hard gate and writes the tailored resume to the reported `working_path`;
+`resume-tool validate-truth` remains the final truth check. Intentional
+out-of-band edits must be accepted with `resume-tool review-edits reconcile`
+before the session continues.
 
 ## Building & publishing
 

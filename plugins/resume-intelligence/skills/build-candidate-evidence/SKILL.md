@@ -75,5 +75,11 @@ Input fields: `resume`, `approved_claims` (optional), `strict`.
 - Fully deterministic.  No provider needed.
 - The returned evidence list is the authoritative input for truth validation
   and alignment.  Do not modify evidence records in agent code.
-- If the user needs to approve claims before alignment, surface the returned
-  list and collect approval before passing to `inject-keywords` / `update-terminology` as `evidence`.
+- If the user needs to add a new confirmed evidence statement before alignment,
+  persist it through `resume-tool add-evidence --confirmed --content ...` (MCP:
+  `candidate_evidence_add` with `confirmed: true`). Do not write evidence JSON
+  by hand.
+- If the user only needs to approve derived claims for the current run, surface
+  the returned list and pass the approved records through `resume-tool
+  build-evidence --approved-claims <claims.json>` or as `evidence` to the
+  edit-session flow.

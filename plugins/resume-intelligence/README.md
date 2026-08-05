@@ -43,14 +43,17 @@ resume-kit/
 ├── config.json                          # active_resume / active_job / alias_file pointers + preferences
 ├── resumes/<name>-original.json         # immutable faithful resume conversions
 ├── jobs/<name>-original.json            # immutable job conversions
-├── working/<session-id>/resume.json     # the resume currently being changed/reviewed (mutable)
+├── working/edit-session.json            # code-owned active edit-session state
+├── working/<name>.tailored.json         # commit-session output for a tailored resume
 ├── learning/synonyms.json               # grown project alias index (default alias_file target)
 └── learning/<skill>.md                  # accumulated hints; skills read these first, append new ones
 ```
 
 `-original.json` files are the untouched conversions (the name maps back to the
-source file). To modify a resume, copy it into `working/<session-id>/` and edit
-the copy; leave the original pristine.
+source file). To modify a resume, propose `ChangeProposal` records and run the
+`resume-tool review-edits` session loop; `commit-session` writes the tailored copy under
+`working/`. Direct hand-editing of the working resume is unsupported unless the
+session is reconciled with `resume-tool review-edits reconcile`.
 
 #### `config.json` `alias_file` pointer
 
@@ -87,15 +90,15 @@ facts, bypass evidence, or create business rules in prompt text.
 2. **Check** — `check-ats-structure` (structural/parse issues, resume-only),
    `check-keyword-match` (resume↔job keyword coverage), `identify-resume-gaps`
    (missing / injectable keywords).
-3. **Improve** (optional, no LLM, truth-gated) — `inject-keywords` (surface
-   missing-but-true keywords), `update-terminology` (mirror the employer's exact
-   wording for a synonym the resume already satisfies).
-   *Preference-learning loop (optional, no LLM):* `rank-edits` ranks the truthful
-   candidate edits against past outcomes + learned preferences and presents the
-   best one(s) with an explanation (human-in-loop, never auto-applies; a
-   fabricated candidate is truth-hard-blocked); apply the chosen one via the
-   improve skills above; then `log-edit-feedback` records the outcome so future
-   rankings improve.
+3. **Improve** (no LLM, truth-gated) — `inject-keywords` and
+   `update-terminology` produce truthful `ChangeProposal` records, prompt for
+   mode (`interactive`, `review_at_end`, or `auto`), then drive
+   `resume-tool review-edits open` → `resume-tool review-edits prompt` →
+   `resume-tool review-edits decide` → `resume-tool review-edits commit` →
+   `validate-resume-truth`. When several truthful candidates exist,
+   `rank-edits` calls `resume-tool rank-edit-candidates` first; after a
+   decision, `log-edit-feedback` calls `resume-tool record-edit-feedback` and
+   refreshes preferences.
 4. **Verify** — `validate-resume-truth`; then re-run the checks to see the delta.
 5. **Review** (optional, no LLM provider) — `review-tailored-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes
@@ -117,17 +120,18 @@ by keyword matching + terminology).
 | `check-ats-structure` | `resume-tool check-ats-structure` | `resume_check_ats_structure` | No (deterministic) |
 | `check-keyword-match` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
 | `identify-resume-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |
-| `inject-keywords` | (agent-driven, truth-gated) | — | No (agent edits) |
-| `update-terminology` | `resume-tool suggest-terminology` / `align-terminology` | `resume_suggest_terminology` / `resume_align_terminology` | No (deterministic) |
+| `inject-keywords` | `resume-tool review-edits open`; `resume-tool review-edits prompt`; `resume-tool review-edits decide`; `resume-tool review-edits commit`; `resume-tool review-edits status`; `resume-tool review-edits reconcile` | `edit_session_open` / `edit_session_prompt` / `edit_session_decide` / `edit_session_commit` / `edit_session_status` / `edit_session_reconcile` | No (deterministic gate) |
+| `update-terminology` | `resume-tool suggest-terminology` + `resume-tool review-edits open`; `resume-tool review-edits prompt`; `resume-tool review-edits decide`; `resume-tool review-edits commit`; `resume-tool review-edits status`; `resume-tool review-edits reconcile` | `resume_suggest_terminology` + `edit_session_open` / `edit_session_prompt` / `edit_session_decide` / `edit_session_commit` / `edit_session_status` / `edit_session_reconcile` | No (deterministic gate) |
 | `validate-resume-truth` | `resume-tool validate-truth` | `resume_validate_truth` | No (deterministic) |
 | `build-candidate-evidence` | `resume-tool build-evidence` | `candidate_evidence_build` | No (deterministic) |
 | `compare-resume-versions` | `resume-tool compare` | `resume_compare_versions` | No (deterministic) |
 | `select-best-resume` | `resume-tool select` | `resume_select_best` | No (deterministic) |
 | `export-resume` | `resume-tool export` | `resume_export` | No (deterministic) |
+| `add-evidence` | `resume-tool add-evidence --confirmed` | `candidate_evidence_add` | No (deterministic) |
 | `manage-synonyms` | (agent-driven) | — | No (grows alias index) |
 | `review-tailored-resume` | (agent-driven, advice-only) | — | No (subagent) |
-| `rank-edits` | (agent-driven; drives `resume_kit_feedback`, no CLI/MCP) | — | No (deterministic ranking) |
-| `log-edit-feedback` | (agent-driven; drives `resume_kit_feedback`, no CLI/MCP) | — | No (records outcome) |
+| `rank-edits` | `resume-tool rank-edit-candidates` | `edit_candidates_rank` | No (deterministic ranking) |
+| `log-edit-feedback` | `resume-tool record-edit-feedback` / `resume-tool refresh-preferences` | `edit_feedback_record` / `preferences_refresh` | No (records outcome) |
 | `resume-workflow` | (guide) | — | No (orchestration) |
 
 **Disabled / not surfaced as skills:** LLM auto-rewrite (`align-resume`) is
