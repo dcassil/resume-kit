@@ -39,6 +39,7 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
     SuggestTerminologyRequest,
@@ -120,6 +121,28 @@ def extract(
     request = ExtractResumeRequest(content=io.read_bytes(resume), filename=filename)
     options = _options(no_llm, strict, False)
     _run(caps.extract_resume(request, options), output)
+
+
+@app.command(name="extract-text")
+def extract_text(
+    file: str = typer.Argument(..., help="Resume/job file path, or '-' for stdin."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+) -> None:
+    """Extract raw text from a resume/job file (docx/pdf/md/txt) — no LLM, no network.
+
+    Deterministic EXTRACTION primitive: returns the raw ``TextExtractionResult``
+    (text + warnings + method). Accepts ``-`` for stdin bytes like ``extract``;
+    for stdin the filename defaults to ``resume.txt`` so plain-text decode is
+    used (pass a real path to extract PDF/DOCX).
+    """
+    filename = file if file != "-" else "resume.txt"
+    request = ExtractResumeTextRequest(
+        content=io.read_bytes(file), filename=filename
+    )
+    options = _options(False, strict, False)
+    _run(caps.extract_resume_text_capability(request, options), output)
 
 
 @app.command(name="extract-job")

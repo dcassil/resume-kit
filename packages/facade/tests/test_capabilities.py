@@ -73,6 +73,7 @@ _DETERMINISTIC = CapabilityOptions(no_llm=True)
 def test_registry_contains_all_capabilities() -> None:
     assert set(caps.REGISTRY) == {
         "extract-resume",
+        "extract-resume-text",
         "extract-job-description",
         "check-resume-ats",
         "check-ats-structure",

@@ -3,9 +3,9 @@ name: job-to-json
 description: >
   Convert a job posting (text, URL content, PDF/DOCX/MD, or pasted text) into the
   canonical resume-kit JobDescription JSON, with structured requirements and skill
-  keywords. The agent does the extraction — no LLM provider needed. Run this so
-  deterministic scoring (ATS skills-coverage, job-match) has real skill keywords
-  to work with. Best run in a subagent.
+  keywords. For file inputs, use `resume-tool extract --no-llm <file>` (bundled
+  in the base install — no optional extras needed) to extract text, then
+  structure it — no LLM provider required. Best run in a subagent.
 ---
 
 # job-to-json — build a JobDescription from a posting
@@ -45,7 +45,13 @@ gotcha you hit so future runs benefit.
 
 ## Steps
 
-1. **Read the posting** (read the file directly, or use pasted text/URL content).
+1. **Obtain the posting text:**
+   - For a **file input** (PDF/DOCX/MD/text): run `resume-tool extract --no-llm
+     <file>` (or `resume-tool extract-text <file>` if available). The base
+     install's bundled libraries handle PDF, DOCX, Markdown, and plain-text
+     — no optional extra required. Fall back to reading the file directly only
+     if the CLI is unavailable.
+   - For **pasted text or URL content**: use it directly.
 2. Put the **entire posting verbatim** in `raw_text`.
 3. Extract **`requirements`** and **`qualifications`** — each a short statement
    plus the concrete **skill/technology keywords** it names.

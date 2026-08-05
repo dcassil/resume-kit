@@ -44,6 +44,19 @@ class ExtractResumeBody(_Options):
     filename: str = Field(default="resume.txt", description="Source filename.")
 
 
+class ExtractResumeTextBody(_Options):
+    """Body for ``POST /extract-text`` — raw file text plus a filename.
+
+    Deterministic, no-LLM primitive (RIT-T-0090): returns the extracted
+    ``TextExtractionResult``. Over HTTP ``content`` is a UTF-8 string (encoded
+    to bytes by the route), so this endpoint serves the plain-text / Markdown
+    decode path; the filename extension drives deterministic dispatch.
+    """
+
+    content: str = Field(description="Raw file text to extract from.")
+    filename: str = Field(default="resume.txt", description="Source filename.")
+
+
 class ExtractJobDescriptionBody(_Options):
     """Body for ``POST /extract-job``."""
 

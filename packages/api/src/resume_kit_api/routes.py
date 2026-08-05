@@ -54,6 +54,7 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
     SuggestTerminologyRequest,
@@ -71,6 +72,7 @@ from resume_kit_api.models import (
     ExportResumeBody,
     ExtractJobDescriptionBody,
     ExtractResumeBody,
+    ExtractResumeTextBody,
     IdentifyResumeGapsBody,
     SelectBestResumeBody,
     SuggestTerminologyBody,
@@ -162,6 +164,15 @@ def register_routes(app: FastAPI) -> None:
             content=body.content.encode("utf-8"), filename=body.filename
         )
         return _render(await REGISTRY["extract-resume"](request, _options(body)))
+
+    @app.post("/extract-text")
+    async def extract_text(body: ExtractResumeTextBody) -> Response:
+        request = ExtractResumeTextRequest(
+            content=body.content.encode("utf-8"), filename=body.filename
+        )
+        return _render(
+            await REGISTRY["extract-resume-text"](request, _options(body))
+        )
 
     @app.post("/extract-job")
     async def extract_job(body: ExtractJobDescriptionBody) -> Response:

@@ -2,10 +2,11 @@
 name: resume-to-json
 description: >
   Convert a resume file (PDF, DOCX, Markdown, or plain text) into the canonical
-  resume-kit ResumeDocument JSON, faithfully and losslessly. The agent does the
-  structuring under strict no-alteration gates — no LLM provider or extra
-  dependency required. Run FIRST whenever another resume-intelligence skill or
-  tool needs a resume but you only have a document file. Best run in a subagent.
+  resume-kit ResumeDocument JSON, faithfully and losslessly. Text extraction is
+  deterministic and bundled in the base install (no optional extras needed).
+  Structuring is done under strict no-alteration gates — no LLM provider
+  required. Run FIRST whenever another resume-intelligence skill or tool needs a
+  resume but you only have a document file. Best run in a subagent.
 ---
 
 # resume-to-json — build a ResumeDocument from a resume file
@@ -29,9 +30,13 @@ compare-resume-versions, identify-resume-gaps, build-candidate-evidence,
 export-resume) operates on a structured **ResumeDocument JSON** — not on a raw
 PDF/DOCX/MD file. This skill turns a document into that JSON.
 
-**You (the agent) are the converter.** You can already read PDF/DOCX/Markdown/
-text files directly, so no LLM provider and no PDF library are required. Your job
-is to transcribe the resume into the schema **without changing or losing anything**.
+**The primary extraction path is the deterministic CLI** — `resume-tool extract
+--no-llm <file>` (or `resume-tool extract-text <file>` if available). This
+extracts raw text from PDF, DOCX, Markdown, and plain-text files using the base
+install's bundled libraries (`markitdown`, `pdfminer.six`, `python-docx`) — **no
+optional extra and no LLM provider required.** Direct agent file-reading is a
+fallback when the CLI is unavailable. Your job is to take the extracted text and
+transcribe the resume into the schema **without changing or losing anything**.
 
 ## Run me in a subagent
 
@@ -51,8 +56,11 @@ next agent does not rediscover it.
 
 ## Steps
 
-1. **Read the source file directly** with your own file-reading capability
-   (handles PDF, DOCX, Markdown, and text — nothing to install).
+1. **Extract text from the source file** using `resume-tool extract --no-llm
+   <file>` (preferred) or `resume-tool extract-text <file>` if available. Both
+   work with the base install for PDF, DOCX, Markdown, and plain-text — nothing
+   extra to install. Fall back to reading the file directly only if the CLI is
+   not reachable.
 2. **Transcribe** the content into the ResumeDocument schema below.
 3. **Apply the Faithfulness Gates** — this is the whole point.
 4. **Validate** the JSON against the schema, **self-check** completeness, then
@@ -180,19 +188,17 @@ resume-kit/
 - Record the saved path (and update `resume-kit/config.json`'s `active_resume`)
   so downstream skills know which file to use.
 
-## Optional: the deterministic text extractor (asks before installing)
+## Deterministic text extractor
 
-The recommended path (you reading the file) needs nothing installed. If you
-specifically want the deterministic `resume-tool extract` output as a cross-check
-and it fails on a **PDF** with a missing-dependency error, that is the optional
-`markitdown[pdf]` extra. **Do not install it silently — ask the user first**:
+Use `resume-tool extract --no-llm <file>` (or `resume-tool extract-text <file>`
+if available) as the **primary extraction path**. The base install bundles
+`markitdown`, `pdfminer.six`, and `python-docx`, so PDF, DOCX, Markdown, and
+plain-text extraction all work out of the box — **no optional extra is required**.
 
-> "Reading this PDF with the deterministic extractor needs the optional
-> `markitdown[pdf]` support. Want me to install it? (`uv tool install
-> "resume-kit[all]" --with "markitdown[pdf]"`)"
-
-For DOCX/Markdown/text the extractor works without it. In agent contexts you
-should just read the file yourself and skip this.
+If the CLI is genuinely unavailable (e.g. running in an environment where
+`resume-tool` was not installed), fall back to reading the file directly with
+your own file-reading capability. Do not improvise raw binary/XML parsing — if
+neither path works, tell the user rather than guessing.
 
 ## Output
 

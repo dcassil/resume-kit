@@ -29,6 +29,7 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
     SuggestTerminologyRequest,
@@ -42,6 +43,7 @@ ModelValidator = Callable[[object], object]
 
 TOOL_NAMES: tuple[str, ...] = (
     "resume_extract",
+    "resume_extract_text",
     "job_description_extract",
     "resume_check_ats",
     "resume_check_ats_structure",
@@ -350,6 +352,20 @@ async def resume_extract(arguments: ToolArguments) -> ToolResult:
     return await _call("extract-resume", request, arguments)
 
 
+async def resume_extract_text(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            ExtractResumeTextRequest,
+            {
+                "content": _bytes(arguments, "content"),
+                "filename": _string(arguments, "filename"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("extract-resume-text", request, arguments)
+
+
 async def job_description_extract(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -574,6 +590,7 @@ async def resume_align_terminology(arguments: ToolArguments) -> ToolResult:
 
 HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
+    "resume_extract_text": resume_extract_text,
     "job_description_extract": job_description_extract,
     "resume_check_ats": resume_check_ats,
     "resume_check_ats_structure": resume_check_ats_structure,

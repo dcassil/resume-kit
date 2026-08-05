@@ -66,6 +66,20 @@ class ExtractResumeRequest:
 
 
 @dataclass(frozen=True)
+class ExtractResumeTextRequest:
+    """Inputs for the extract-resume-text capability (RIT-T-0090).
+
+    Deterministic, no-LLM, no-network primitive: returns the raw extracted
+    text of a resume/job file (docx/pdf/md/txt) as a ``TextExtractionResult``.
+    Mirrors :class:`ExtractResumeRequest` (raw bytes + filename) — the filename
+    extension drives deterministic dispatch in the document-parser engine.
+    """
+
+    content: bytes
+    filename: str
+
+
+@dataclass(frozen=True)
 class ExtractJobDescriptionRequest:
     """Inputs for the extract-job-description capability."""
 

@@ -49,6 +49,8 @@ from resume_kit_core.interface import (
 )
 from resume_kit_core.storage import ArtifactRef, ArtifactStore
 from resume_kit_document_parser import (
+    TextExtractionResult,
+    extract_resume_text,
     extract_resume_text_only,
     parse_resume_structured,
 )
@@ -95,6 +97,7 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     SelectBestResumeRequest,
     SuggestTerminologyRequest,
@@ -232,6 +235,33 @@ async def extract_job_description(
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
     return build_success(job, strict=options.strict)
+
+
+async def extract_resume_text_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Extract raw text from a resume/job file — deterministic, no LLM, no network.
+
+    First-class EXTRACTION primitive (RIT-T-0090): delegates to the
+    document-parser :func:`extract_resume_text` engine function and returns its
+    :class:`TextExtractionResult` (text + warnings + method). Never contacts a
+    provider and never requires one; ``no_llm`` is irrelevant here because the
+    operation is deterministic by construction.
+    """
+    if not isinstance(request, ExtractResumeTextRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ExtractResumeTextRequest")
+        )
+    try:
+        result: TextExtractionResult = extract_resume_text(
+            request.content, request.filename
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(result, warnings=result.warnings, strict=options.strict)
 
 
 async def align_resume(
@@ -633,6 +663,7 @@ async def align_terminology(
 
 REGISTRY: dict[str, Capability] = {
     "extract-resume": extract_resume,
+    "extract-resume-text": extract_resume_text_capability,
     "extract-job-description": extract_job_description,
     "check-resume-ats": check_resume_ats,
     "check-ats-structure": check_ats_structure,

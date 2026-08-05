@@ -36,6 +36,7 @@ def test_help_lists_all_commands() -> None:
     assert result.exit_code == 0
     expected = [
         "extract",
+        "extract-text",
         "extract-job",
         "check-ats",
         "check-ats-structure",

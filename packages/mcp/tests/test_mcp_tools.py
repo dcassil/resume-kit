@@ -84,6 +84,7 @@ def _assert_export_envelope(payload: dict[str, object]) -> None:
 def test_registers_exactly_the_stable_tools() -> None:
     expected = {
         "resume_extract",
+        "resume_extract_text",
         "job_description_extract",
         "resume_check_ats",
         "resume_check_ats_structure",
