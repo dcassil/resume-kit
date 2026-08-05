@@ -33,6 +33,7 @@ from collections.abc import Awaitable, Callable
 from resume_kit_alignment import accept_terminology_alignment
 from resume_kit_alignment import align_resume as _align_resume
 from resume_kit_ats import check_ats_structure as _check_ats_structure
+from resume_kit_ats import check_faithfulness as _check_faithfulness
 from resume_kit_ats import compute_ats_score
 from resume_kit_core import InterfaceResponse, Question, ResumeKitError
 from resume_kit_core.interface import (
@@ -73,6 +74,7 @@ from resume_kit_schemas import (
     ATSScore,
     AtsStructureReport,
     CandidateEvidence,
+    FaithfulnessReport,
     JobDescription,
     JobMatchReport,
     KeywordGapAnalysis,
@@ -104,6 +106,7 @@ from resume_kit_facade.models import (
     SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 from resume_kit_facade.project_config import init_project, set_active
@@ -480,6 +483,60 @@ async def validate_resume_truth_capability(
     return build_success(report, strict=options.strict)
 
 
+async def validate_faithfulness_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Deterministic faithfulness HARD GATE: source vs. ResumeDocument (RIT-T-0092).
+
+    Pure and deterministic: never requires a provider and ignores ``no_llm``.
+    Resolves the source text (either supplied directly, or decoded from source
+    file bytes via the deterministic ``extract_resume_text`` engine) and returns
+    a :class:`~resume_kit_schemas.FaithfulnessReport`. The report's ``passed`` is
+    ``False`` iff a hard-fail finding exists; transports map that to a non-zero
+    exit. Setting ``strict`` escalates the report's advisory warnings too, but
+    the ``passed`` contract itself is driven only by error-severity findings.
+    """
+    if not isinstance(request, ValidateFaithfulnessRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ValidateFaithfulnessRequest")
+        )
+    try:
+        source_text = _resolve_source_text(request)
+        report: FaithfulnessReport = _check_faithfulness(source_text, request.resume)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
+def _resolve_source_text(request: ValidateFaithfulnessRequest) -> str:
+    """Return the source text: given directly, or decoded from file bytes.
+
+    Exactly one source input is expected. ``source_text`` wins when present;
+    otherwise the raw ``source_content`` bytes are decoded through the
+    deterministic ``extract_resume_text`` engine using ``source_filename`` (its
+    extension drives docx/pdf/md/txt dispatch). A missing source is rejected.
+    """
+    if request.source_text is not None:
+        return request.source_text
+    if request.source_content is not None:
+        filename = request.source_filename or "source.txt"
+        result: TextExtractionResult = extract_resume_text(
+            request.source_content, filename
+        )
+        return result.text
+    from resume_kit_core.errors import CoreError, ErrorCode
+
+    raise ResumeKitError(
+        CoreError(
+            code=ErrorCode.INVALID_INPUT,
+            message="Provide either source_text or source_content for the source.",
+        )
+    )
+
+
 async def build_candidate_evidence_capability(
     request: object,
     options: CapabilityOptions,
@@ -731,6 +788,7 @@ REGISTRY: dict[str, Capability] = {
     "identify-resume-gaps": identify_resume_gaps,
     "align-resume": align_resume,
     "validate-resume-truth": validate_resume_truth_capability,
+    "validate-faithfulness": validate_faithfulness_capability,
     "build-candidate-evidence": build_candidate_evidence_capability,
     "export-resume": export_resume,
     "suggest-terminology": suggest_terminology,

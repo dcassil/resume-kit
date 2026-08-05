@@ -26,6 +26,7 @@ def test_all_public_exports_importable() -> None:
         SetActiveRequest,
         SuggestTerminologyRequest,
         TerminologyAlignmentDelta,
+        ValidateFaithfulnessRequest,
         ValidateResumeTruthRequest,
         align_resume,
         align_terminology,
@@ -47,11 +48,13 @@ def test_all_public_exports_importable() -> None:
         set_active,
         set_active_capability,
         suggest_terminology,
+        validate_faithfulness_capability,
         validate_resume_truth_capability,
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 17
+    assert len(REGISTRY) == 18
+    assert "validate-faithfulness" in REGISTRY
     assert "extract-resume-text" in REGISTRY
     assert "export-resume" in REGISTRY
     assert "check-ats-structure" in REGISTRY
@@ -90,6 +93,8 @@ def test_all_public_exports_importable() -> None:
     assert callable(identify_resume_gaps)
     assert callable(select_best_resume)
     assert callable(validate_resume_truth_capability)
+    assert callable(validate_faithfulness_capability)
+    assert ValidateFaithfulnessRequest is not None
 
     assert CapabilityOptions is not None
     assert AlignResumeRequest is not None

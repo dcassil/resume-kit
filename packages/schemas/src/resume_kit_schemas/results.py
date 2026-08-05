@@ -136,6 +136,65 @@ class TruthReport(BaseModel):
         return self
 
 
+class FaithfulnessCode(StrEnum):
+    """Stable finding codes for the deterministic faithfulness gate.
+
+    Each code names one class of drift between an original source document and
+    the agent-produced :class:`ResumeDocument` JSON. ``severity`` on the finding
+    (error vs warning) — not the code — decides whether the gate hard-fails; the
+    code identifies *what* drifted.
+    """
+
+    BULLET_COUNT_MISMATCH = "BULLET_COUNT_MISMATCH"
+    SECTION_COUNT_MISMATCH = "SECTION_COUNT_MISMATCH"
+    DROPPED_SPANS = "DROPPED_SPANS"
+    DROPPED_TOKENS = "DROPPED_TOKENS"
+    ALTERED_FIELD = "ALTERED_FIELD"
+    ADDED_TOKENS = "ADDED_TOKENS"
+    NON_ASCII = "NON_ASCII"
+
+
+class FaithfulnessFinding(BaseModel):
+    """One drift finding from the deterministic faithfulness comparison.
+
+    ``severity`` is ``"error"`` for HARD-FAIL findings (which set the report's
+    ``passed`` to ``False``) and ``"warning"`` for advisory ones that never fail
+    the gate. ``items`` carries the offending content (dropped spans, altered
+    field values, added tokens, non-ASCII glyphs) so a caller can act on it.
+    """
+
+    model_config = {"frozen": True}
+
+    code: FaithfulnessCode = Field(description="Which class of drift was found.")
+    severity: str = Field(description="'error' (hard-fail) or 'warning' (advisory).")
+    message: str = Field(description="Human-readable explanation of the finding.")
+    items: list[str] = Field(
+        default_factory=list, description="The offending items, if any."
+    )
+
+
+class FaithfulnessReport(BaseModel):
+    """Deterministic source-vs-JSON faithfulness report (RIT-T-0092).
+
+    Produced by comparing an original source document (extracted text) against
+    the agent-produced :class:`ResumeDocument`. ``passed`` is ``False`` iff any
+    finding carries ``severity == "error"`` (a HARD-FAIL). The report is data,
+    never an exception; a transport maps ``passed=False`` to a non-zero exit.
+    """
+
+    passed: bool = Field(
+        default=True, description="False iff any error-severity finding exists."
+    )
+    findings: list[FaithfulnessFinding] = Field(
+        default_factory=list, description="All drift findings, error and warning."
+    )
+
+    @model_validator(mode="after")
+    def _derive_passed(self) -> FaithfulnessReport:
+        self.passed = not any(f.severity == "error" for f in self.findings)
+        return self
+
+
 class ReviewAction(StrEnum):
     """Human review actions supported by the section review controller."""
 

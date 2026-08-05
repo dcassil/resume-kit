@@ -35,6 +35,7 @@ from resume_kit_facade.models import (
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -55,6 +56,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_identify_gaps",
     "resume_align",
     "resume_validate_truth",
+    "resume_validate_faithfulness",
     "candidate_evidence_build",
     "resume_export",
     "resume_suggest_terminology",
@@ -508,6 +510,25 @@ async def resume_validate_truth(arguments: ToolArguments) -> ToolResult:
     return await _call("validate-resume-truth", request, arguments)
 
 
+async def resume_validate_faithfulness(arguments: ToolArguments) -> ToolResult:
+    try:
+        fields: ToolArguments = {
+            "resume": _resume(_required(arguments, "resume"), "resume"),
+        }
+        source_text = _optional_str(arguments, "source_text")
+        if source_text is not None:
+            fields["source_text"] = source_text
+        else:
+            fields["source_content"] = _bytes(arguments, "source_content")
+            fields["source_filename"] = _optional_string(
+                arguments, "source_filename", "source.txt"
+            )
+        request = _make_request(ValidateFaithfulnessRequest, fields)
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("validate-faithfulness", request, arguments)
+
+
 async def candidate_evidence_build(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -641,6 +662,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_identify_gaps": resume_identify_gaps,
     "resume_align": resume_align,
     "resume_validate_truth": resume_validate_truth,
+    "resume_validate_faithfulness": resume_validate_faithfulness,
     "candidate_evidence_build": candidate_evidence_build,
     "resume_export": resume_export,
     "resume_suggest_terminology": resume_suggest_terminology,

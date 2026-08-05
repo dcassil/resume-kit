@@ -45,6 +45,7 @@ from resume_kit_facade.models import (
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -357,6 +358,40 @@ def validate_truth(
     )
     options = _options(False, strict, False)
     _run(caps.validate_resume_truth_capability(request, options), output)
+
+
+@app.command(name="validate-faithfulness")
+def validate_faithfulness(
+    source: str = typer.Option(
+        ..., "--source", help="Source file path (docx/pdf/md/txt), or '-' for stdin."
+    ),
+    json_path: str = typer.Option(
+        ..., "--json", help="ResumeDocument JSON path to check against the source."
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+) -> None:
+    """Deterministic faithfulness HARD GATE — exits non-zero on drift.
+
+    Compares the agent-produced ``ResumeDocument`` JSON against the ORIGINAL
+    source document (no LLM, no network). Reports dropped/added/altered content
+    and count mismatches; exits non-zero when the report's ``passed`` is False.
+    ``-`` reads the source text from stdin; a real path decodes docx/pdf/md/txt.
+    """
+    if source == "-":
+        request = ValidateFaithfulnessRequest(
+            resume=io.load_resume(json_path),
+            source_text=io.read_text(source),
+        )
+    else:
+        request = ValidateFaithfulnessRequest(
+            resume=io.load_resume(json_path),
+            source_content=io.read_bytes(source),
+            source_filename=source,
+        )
+    options = _options(False, strict, False)
+    _run(caps.validate_faithfulness_capability(request, options), output)
 
 
 @app.command(name="build-evidence")

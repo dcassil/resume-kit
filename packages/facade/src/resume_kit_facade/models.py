@@ -112,6 +112,27 @@ class SetActiveRequest:
 
 
 @dataclass(frozen=True)
+class ValidateFaithfulnessRequest:
+    """Inputs for the validate-faithfulness capability (RIT-T-0092).
+
+    Deterministic HARD GATE: compares ``resume`` (the agent-produced
+    :class:`~resume_kit_schemas.ResumeDocument`) against the ORIGINAL source
+    document and returns a :class:`~resume_kit_schemas.FaithfulnessReport`. Never
+    requires a provider and ignores ``no_llm`` — the check is pure/deterministic.
+
+    Exactly one source input must be given: either pre-extracted ``source_text``
+    OR the raw bytes of a source file (``source_content`` + ``source_filename``),
+    which the capability decodes via the deterministic ``extract_resume_text``
+    engine (docx/pdf/md/txt) before diffing.
+    """
+
+    resume: ResumeDocument
+    source_text: str | None = None
+    source_content: bytes | None = None
+    source_filename: str | None = None
+
+
+@dataclass(frozen=True)
 class ExtractJobDescriptionRequest:
     """Inputs for the extract-job-description capability."""
 

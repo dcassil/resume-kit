@@ -83,6 +83,7 @@ def test_registry_contains_all_capabilities() -> None:
         "identify-resume-gaps",
         "align-resume",
         "validate-resume-truth",
+        "validate-faithfulness",
         "build-candidate-evidence",
         "export-resume",
         "suggest-terminology",

@@ -27,6 +27,7 @@ from resume_kit_facade.capabilities import (
     select_best_resume,
     set_active_capability,
     suggest_terminology,
+    validate_faithfulness_capability,
     validate_resume_truth_capability,
 )
 from resume_kit_facade.models import (
@@ -49,6 +50,7 @@ from resume_kit_facade.models import (
     SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 from resume_kit_facade.project_config import (
@@ -79,6 +81,7 @@ __all__ = [
     "select_best_resume",
     "set_active_capability",
     "suggest_terminology",
+    "validate_faithfulness_capability",
     "validate_resume_truth_capability",
     # options
     "CapabilityOptions",
@@ -107,6 +110,7 @@ __all__ = [
     "SelectBestResumeRequest",
     "SetActiveRequest",
     "SuggestTerminologyRequest",
+    "ValidateFaithfulnessRequest",
     "ValidateResumeTruthRequest",
     # response models
     "AlignTerminologyResult",

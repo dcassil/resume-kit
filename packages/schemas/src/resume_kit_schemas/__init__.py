@@ -50,6 +50,9 @@ from .job import JobDescription, Requirement, RequirementKind
 from .provenance import ClaimProvenance, ProvenanceStatus
 from .results import (
     AlignmentResult,
+    FaithfulnessCode,
+    FaithfulnessFinding,
+    FaithfulnessReport,
     PolicyDecision,
     PolicyReasonCode,
     PolicyRejection,
@@ -149,6 +152,9 @@ __all__ = [
     "ArtifactKind",
     # results (Phase 4)
     "AlignmentResult",
+    "FaithfulnessCode",
+    "FaithfulnessFinding",
+    "FaithfulnessReport",
     "PolicyDecision",
     "PolicyReasonCode",
     "PolicyRejection",

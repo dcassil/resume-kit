@@ -60,6 +60,7 @@ from resume_kit_facade.models import (
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -80,6 +81,7 @@ from resume_kit_api.models import (
     SelectBestResumeBody,
     SetActiveBody,
     SuggestTerminologyBody,
+    ValidateFaithfulnessBody,
     ValidateResumeTruthBody,
     _Options,
 )
@@ -278,6 +280,22 @@ def register_routes(app: FastAPI) -> None:
         )
         return _render(
             await REGISTRY["validate-resume-truth"](request, _options(body))
+        )
+
+    @app.post("/validate-faithfulness")
+    async def validate_faithfulness(body: ValidateFaithfulnessBody) -> Response:
+        request = ValidateFaithfulnessRequest(
+            resume=body.resume,
+            source_text=body.source_text,
+            source_content=(
+                body.source_content.encode("utf-8")
+                if body.source_content is not None
+                else None
+            ),
+            source_filename=body.source_filename,
+        )
+        return _render(
+            await REGISTRY["validate-faithfulness"](request, _options(body))
         )
 
     @app.post("/build-evidence")

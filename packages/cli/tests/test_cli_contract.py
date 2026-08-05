@@ -48,6 +48,7 @@ def test_help_lists_all_commands() -> None:
         "align-terminology",
         "align",
         "validate-truth",
+        "validate-faithfulness",
         "build-evidence",
         "export",
         "init",

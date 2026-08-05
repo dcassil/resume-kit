@@ -169,6 +169,27 @@ class ValidateResumeTruthBody(_Options):
     evidence: list[CandidateEvidence] = Field(default_factory=list)
 
 
+class ValidateFaithfulnessBody(_Options):
+    """Body for ``POST /validate-faithfulness`` — deterministic HARD GATE.
+
+    Compares ``resume`` against the ORIGINAL source. Supply exactly one source
+    input: ``source_text`` (pre-extracted) OR ``source_content`` (raw file text,
+    UTF-8 encoded to bytes by the route) plus ``source_filename`` whose extension
+    drives docx/pdf/md/txt dispatch.
+    """
+
+    resume: ResumeDocument
+    source_text: str | None = Field(
+        default=None, description="Pre-extracted source text to diff against."
+    )
+    source_content: str | None = Field(
+        default=None, description="Raw source file text (encoded to bytes)."
+    )
+    source_filename: str = Field(
+        default="source.txt", description="Source filename (extension drives decode)."
+    )
+
+
 class BuildCandidateEvidenceBody(_Options):
     """Body for ``POST /build-evidence``."""
 

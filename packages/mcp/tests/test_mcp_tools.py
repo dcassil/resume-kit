@@ -94,6 +94,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_identify_gaps",
         "resume_align",
         "resume_validate_truth",
+        "resume_validate_faithfulness",
         "candidate_evidence_build",
         "resume_export",
         "resume_suggest_terminology",
