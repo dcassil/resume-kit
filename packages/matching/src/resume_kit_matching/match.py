@@ -24,6 +24,7 @@ Design principles (vision):
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from resume_kit_ats.engine import compute_ats_score
@@ -31,11 +32,13 @@ from resume_kit_schemas import (
     JobDescription,
     JobMatchReport,
     KeywordGapAnalysis,
+    KeywordZone,
     MatchDimensionScore,
     Requirement,
     RequirementKind,
     ResumeDocument,
 )
+from resume_kit_scoring import project_scoredoc
 
 from .keywords import analyze_keyword_gaps, calculate_keyword_match
 
@@ -79,19 +82,29 @@ def _requirement_is_covered(req: Requirement, text_lower: str) -> bool:
     return any(_keyword_in_text(term, text_lower) for term in _requirement_terms(req))
 
 
+#: Zones counted as high-value for placement. Sourcing from ScoreDoc means a
+#: skill in a *categorized* custom section (e.g. "Cloud Skills") is treated as a
+#: canonical skill, not incidental body text — the RIT-T-0107 fix. Placement
+#: ignores dates, so a fixed reference date keeps the projection deterministic.
+_HIGH_VALUE_ZONES = frozenset({KeywordZone.SKILLS_LIST, KeywordZone.EXPERIENCE})
+_PLACEMENT_REF_DATE = date(2000, 1, 1)
+
+
 def _high_value_text(resume: ResumeDocument) -> str:
     """Concatenated text from high-value placement zones (skills + experience).
 
     Placement credit derives ONLY from presence in these structured, high-value
-    locations — never from how many times a term is repeated anywhere.
+    locations — never from how many times a term is repeated anywhere. The zones
+    are read from the canonical ``ScoreDoc`` projection, so categorized skills in
+    custom sections that map to the skills/experience zones count here too.
     """
-    parts: list[str] = []
-    parts.extend(resume.additional.technicalSkills)
-    for exp in resume.workExperience:
-        parts.append(exp.title)
-        parts.append(exp.company)
-        parts.extend(exp.description)
-    return " ".join(p for p in parts if p).lower()
+    scoredoc = project_scoredoc(resume, reference_date=_PLACEMENT_REF_DATE)
+    parts = [
+        section.text
+        for section in scoredoc.sections
+        if section.zone in _HIGH_VALUE_ZONES and section.text
+    ]
+    return " ".join(parts).lower()
 
 
 def _coverage_dimension(

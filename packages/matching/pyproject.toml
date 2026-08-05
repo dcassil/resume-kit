@@ -12,6 +12,7 @@ dependencies = [
     "resume-kit-core",
     "resume-kit-schemas",
     "resume-kit-ats",
+    "resume-kit-scoring",
     "resume-kit-terms",
 ]
 
@@ -19,6 +20,7 @@ dependencies = [
 resume-kit-core = { workspace = true }
 resume-kit-schemas = { workspace = true }
 resume-kit-ats = { workspace = true }
+resume-kit-scoring = { workspace = true }
 resume-kit-terms = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
