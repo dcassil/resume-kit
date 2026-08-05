@@ -36,17 +36,23 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
     CompareResumeVersionsRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    OpenEditSessionRequest,
     RankEditCandidatesRequest,
+    ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
     SelectBestResumeRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
@@ -55,10 +61,15 @@ from resume_kit_facade.models import (
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_schemas import (
     CandidateEvidence,
+    ChangeProposal,
+    ClaimProvenance,
     EditFeedback,
+    EditFeedbackReasonCode,
     EvidenceKind,
     FaithfulnessReport,
     PreferencePair,
+    ReviewAction,
+    ScoreDelta,
     UserPreferenceProfile,
 )
 
@@ -69,6 +80,11 @@ app = typer.Typer(
     help="Resume Kit command-line transport over the capability facade.",
     no_args_is_help=True,
 )
+review_edits_app = typer.Typer(
+    help="Open, review, decide, commit, and reconcile edit sessions.",
+    no_args_is_help=True,
+)
+app.add_typer(review_edits_app, name="review-edits")
 
 # Optional injected provider seam.  In production this stays ``None`` (there is
 # no concrete provider in Phase 5); tests may set it to a fake to exercise the
@@ -127,6 +143,12 @@ _UpdateActive = typer.Option(
     False,
     "--update-active",
     help="Update config.active_evidence to this evidence file.",
+)
+_ReviewAction = typer.Option(..., "--action", help="Review action.")
+_FeedbackReasonCode = typer.Option(
+    None,
+    "--reason-code",
+    help="Optional structured feedback reason.",
 )
 
 
@@ -199,6 +221,34 @@ def _load_feedback_records(source: str) -> list[EditFeedback]:
     if not isinstance(value, list):
         raise typer.BadParameter("--records must contain a JSON array.")
     return [EditFeedback.model_validate(item) for item in value]
+
+
+def _load_changes(source: str) -> list[ChangeProposal]:
+    """Load a JSON array of ``ChangeProposal`` records."""
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--changes must contain a JSON array.")
+    return [ChangeProposal.model_validate(item) for item in value]
+
+
+def _load_claim_provenance(source: str | None) -> list[ClaimProvenance]:
+    """Load optional claim-provenance records."""
+    if source is None:
+        return []
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--claim-provenance must contain a JSON array.")
+    return [ClaimProvenance.model_validate(item) for item in value]
+
+
+def _load_score_deltas(source: str | None) -> list[ScoreDelta]:
+    """Load optional expected score deltas."""
+    if source is None:
+        return []
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--expected-score-deltas must contain a JSON array.")
+    return [ScoreDelta.model_validate(item) for item in value]
 
 
 # ---------------------------------------------------------------------------
@@ -682,6 +732,115 @@ def set_active(
     )
     options = _options(False, strict, False)
     _run(caps.set_active_capability(request, options), output)
+
+
+@review_edits_app.command(name="open")
+def review_edits_open(
+    mode: str = typer.Option(..., "--mode", help="interactive, review_at_end, or auto."),
+    changes: str = typer.Option(..., "--changes", help="ChangeProposal array JSON path."),
+    root: str = _Root,
+    evidence: str | None = typer.Option(None, "--evidence", help="Evidence array JSON path."),
+    claim_provenance: str | None = typer.Option(
+        None,
+        "--claim-provenance",
+        help="ClaimProvenance array JSON path.",
+    ),
+    expected_score_deltas: str | None = typer.Option(
+        None,
+        "--expected-score-deltas",
+        help="ScoreDelta array JSON path.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Open the single active edit session."""
+    request = OpenEditSessionRequest(
+        mode=mode,
+        changes=_load_changes(changes),
+        root=root,
+        evidence=io.load_evidence(evidence) if evidence is not None else [],
+        claim_provenance=_load_claim_provenance(claim_provenance),
+        expected_score_deltas=_load_score_deltas(expected_score_deltas),
+    )
+    options = _options(False, strict, False)
+    _run(caps.open_edit_session_capability(request, options), output)
+
+
+@review_edits_app.command(name="prompt")
+def review_edits_prompt(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Return the next review prompt for the active session."""
+    request = SessionPromptRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.session_prompt_capability(request, options), output)
+
+
+@review_edits_app.command(name="decide")
+def review_edits_decide(
+    path: str = typer.Option(..., "--path", help="ChangeProposal path to decide."),
+    action: ReviewAction = _ReviewAction,
+    reason_code: EditFeedbackReasonCode | None = _FeedbackReasonCode,
+    note: str | None = typer.Option(None, "--note", help="Optional free-text note."),
+    edited_content: str | None = typer.Option(
+        None,
+        "--edited-content",
+        help="Final text for an edit action.",
+    ),
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Record a decision for one proposed change."""
+    request = DecideChangeRequest(
+        path=path,
+        action=action,
+        reason_code=reason_code,
+        note=note,
+        root=root,
+        edited_content=edited_content,
+    )
+    options = _options(False, strict, False)
+    _run(caps.decide_change_capability(request, options), output)
+
+
+@review_edits_app.command(name="commit")
+def review_edits_commit(
+    root: str = _Root,
+    freedom: int = typer.Option(10, "--freedom", min=0, max=10),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Commit approved changes through the hard write gate."""
+    request = CommitSessionRequest(root=root, freedom=freedom)
+    options = _options(False, strict, False)
+    _run(caps.commit_session_capability(request, options), output)
+
+
+@review_edits_app.command(name="status")
+def review_edits_status(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Return progress for the active edit session."""
+    request = SessionStatusRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.session_status_capability(request, options), output)
+
+
+@review_edits_app.command(name="reconcile")
+def review_edits_reconcile(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Re-hash intentional manual edits to the working resume."""
+    request = ReconcileSessionRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.reconcile_session_capability(request, options), output)
 
 
 def main() -> None:

@@ -17,11 +17,16 @@ from resume_kit_export.models import ExportFormat, ExportOptions
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_schemas import (
     CandidateEvidence,
+    ChangeProposal,
+    ClaimProvenance,
     EditFeedback,
+    EditFeedbackReasonCode,
     EvidenceKind,
     JobDescription,
     PreferencePair,
     ResumeDocument,
+    ReviewAction,
+    ScoreDelta,
     TerminologyAlignment,
     UserPreferenceProfile,
 )
@@ -250,6 +255,41 @@ class RefreshPreferencesBody(_Options):
     now: str = Field(description="Caller-supplied ISO timestamp.")
     records: list[EditFeedback] | None = None
     base_path: str | None = None
+
+
+class OpenEditSessionBody(_Options):
+    """Body for ``POST /review-edits/open``."""
+
+    mode: str = Field(description="interactive, review_at_end, or auto.")
+    changes: list[ChangeProposal]
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    evidence: list[CandidateEvidence] = Field(default_factory=list)
+    claim_provenance: list[ClaimProvenance] = Field(default_factory=list)
+    expected_score_deltas: list[ScoreDelta] = Field(default_factory=list)
+
+
+class SessionRootBody(_Options):
+    """Body for session operations that only need a project root."""
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+
+
+class DecideChangeBody(_Options):
+    """Body for ``POST /review-edits/decide``."""
+
+    path: str
+    action: ReviewAction
+    reason_code: EditFeedbackReasonCode | None = None
+    note: str | None = None
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    edited_content: str | None = None
+
+
+class CommitSessionBody(_Options):
+    """Body for ``POST /review-edits/commit``."""
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    freedom: int = Field(default=10, ge=0, le=10)
 
 
 class InitProjectBody(_Options):

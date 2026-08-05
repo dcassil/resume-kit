@@ -22,12 +22,20 @@ from resume_kit_export import ExportFormat, ExportOptions
 from resume_kit_feedback.features import Candidate, FeatureContext
 from resume_kit_feedback.ranker import RankedCandidate
 from resume_kit_schemas import (
+    ATSScore,
     CandidateEvidence,
+    ClaimProvenance,
     EditFeedback,
+    EditFeedbackReasonCode,
     EvidenceKind,
     JobDescription,
+    JobMatchReport,
     PreferencePair,
+    ProvenanceStatus,
     ResumeDocument,
+    ReviewAction,
+    ReviewSession,
+    ScoreDelta,
     TerminologyAlignment,
     UserPreferenceProfile,
 )
@@ -283,6 +291,111 @@ class RefreshPreferencesRequest:
     now: str
     records: list[EditFeedback] | None = None
     base_path: str | Path | None = None
+
+
+EditSessionMode = str
+
+
+@dataclass(frozen=True)
+class OpenEditSessionRequest:
+    """Inputs for opening the single active edit session."""
+
+    mode: EditSessionMode
+    changes: list[ChangeProposal]
+    root: str | Path = "."
+    evidence: list[CandidateEvidence] = field(default_factory=list)
+    claim_provenance: list[ClaimProvenance] = field(default_factory=list)
+    expected_score_deltas: list[ScoreDelta] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SessionPromptRequest:
+    """Inputs for loading and prompting the active edit session."""
+
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class DecideChangeRequest:
+    """Inputs for recording one terminal or reopen decision."""
+
+    path: str
+    action: ReviewAction
+    reason_code: EditFeedbackReasonCode | None = None
+    note: str | None = None
+    root: str | Path = "."
+    edited_content: str | None = None
+
+
+@dataclass(frozen=True)
+class CommitSessionRequest:
+    """Inputs for committing gated, reviewed changes to the working resume."""
+
+    root: str | Path = "."
+    freedom: int = 10
+
+
+@dataclass(frozen=True)
+class SessionStatusRequest:
+    """Inputs for reading edit-session progress."""
+
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class ReconcileSessionRequest:
+    """Inputs for accepting an intentional out-of-band working-file edit."""
+
+    root: str | Path = "."
+
+
+class EditSessionState(BaseModel):
+    """Persisted edit-session envelope wrapping ``ReviewSession``."""
+
+    session_id: str
+    mode: str
+    active_resume: str
+    active_job: str
+    working_path: str
+    review_session: ReviewSession
+    original_hash: str
+    committed_hash: str | None = None
+
+
+class EditSessionStatus(BaseModel):
+    """Serializable progress report for the active edit session."""
+
+    session_id: str
+    mode: str
+    active_resume: str
+    active_job: str
+    working_path: str
+    progress: dict[str, int]
+    decided: list[str] = Field(default_factory=list)
+    pending: list[str] = Field(default_factory=list)
+    deferred: list[str] = Field(default_factory=list)
+    truth_summary: dict[ProvenanceStatus, int] = Field(default_factory=dict)
+    committed_hash: str | None = None
+
+
+class CommitSessionResult(BaseModel):
+    """Result of a gated edit-session commit."""
+
+    state: EditSessionState
+    applied: list[ChangeProposal] = Field(default_factory=list)
+    rejected: list[PolicyRejection] = Field(default_factory=list)
+    before_match_report: JobMatchReport | None = None
+    after_match_report: JobMatchReport | None = None
+    before_ats_score: ATSScore | None = None
+    after_ats_score: ATSScore | None = None
+
+
+class ReconcileSessionResult(BaseModel):
+    """Result of re-hashing a manually edited working resume."""
+
+    state: EditSessionState
+    previous_hash: str | None = None
+    reconciled_hash: str | None = None
 
 
 @dataclass(frozen=True)

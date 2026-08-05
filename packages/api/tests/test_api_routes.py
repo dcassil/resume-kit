@@ -216,6 +216,18 @@ def test_feedback_and_evidence_routes(tmp_path: Path) -> None:
     assert add_payload["data"]["evidence"]["user_confirmed"] is True
 
 
+def test_review_edits_routes_registered() -> None:
+    paths = {route.path for route in client.app.routes}
+    assert {
+        "/review-edits/open",
+        "/review-edits/prompt",
+        "/review-edits/decide",
+        "/review-edits/commit",
+        "/review-edits/status",
+        "/review-edits/reconcile",
+    }.issubset(paths)
+
+
 def test_build_evidence_approved_claims_envelope_feeds_validate_truth() -> None:
     built = client.post(
         "/build-evidence",

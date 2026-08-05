@@ -95,6 +95,7 @@ from resume_kit_schemas import (
     TruthReport,
 )
 
+from resume_kit_facade import edit_session as _edit_session
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.models import (
     AddEvidenceRequest,
@@ -107,19 +108,25 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
     CompareResumeVersionsRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    OpenEditSessionRequest,
     RankEditCandidatesRequest,
     RankEditCandidatesResult,
+    ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RecordEditFeedbackResult,
     RefreshPreferencesRequest,
     SelectBestResumeRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
@@ -671,6 +678,140 @@ async def add_evidence_capability(
     return build_success(result, strict=options.strict)
 
 
+async def open_edit_session_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Open and persist the single active edit session."""
+    if not isinstance(request, OpenEditSessionRequest):
+        return from_resume_kit_error(_bad_request(request, "OpenEditSessionRequest"))
+    try:
+        state, feedback = _edit_session.open_session(
+            root=request.root,
+            mode=request.mode,
+            changes=request.changes,
+            evidence=request.evidence,
+            claim_provenance=request.claim_provenance,
+            expected_score_deltas=request.expected_score_deltas,
+        )
+        for record in feedback:
+            response = await record_edit_feedback_capability(
+                RecordEditFeedbackRequest(
+                    feedback=record,
+                    base_path=working_dir(request.root),
+                ),
+                options,
+            )
+            if response.errors:
+                return response
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(state, strict=options.strict)
+
+
+async def session_prompt_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Load the active session and delegate prompt rendering to ReviewController."""
+    if not isinstance(request, SessionPromptRequest):
+        return from_resume_kit_error(_bad_request(request, "SessionPromptRequest"))
+    try:
+        response = _edit_session.prompt_session(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    if isinstance(response, InterfaceResponse):
+        return response
+    return build_success(response, strict=options.strict)
+
+
+async def decide_change_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Record one review decision and append the corresponding feedback log."""
+    if not isinstance(request, DecideChangeRequest):
+        return from_resume_kit_error(_bad_request(request, "DecideChangeRequest"))
+    try:
+        state, feedback = _edit_session.decide_change(
+            root=request.root,
+            path=request.path,
+            action=request.action,
+            reason_code=request.reason_code,
+            note=request.note,
+            edited_content=request.edited_content,
+        )
+        response = await record_edit_feedback_capability(
+            RecordEditFeedbackRequest(
+                feedback=feedback,
+                base_path=working_dir(request.root),
+            ),
+            options,
+        )
+        if response.errors:
+            return response
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(state, strict=options.strict)
+
+
+async def commit_session_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Commit approved changes through the hard write gate."""
+    if not isinstance(request, CommitSessionRequest):
+        return from_resume_kit_error(_bad_request(request, "CommitSessionRequest"))
+    try:
+        result = _edit_session.commit_session(
+            root=request.root,
+            freedom=request.freedom,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence/apply failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def session_status_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Return progress for the active edit session."""
+    if not isinstance(request, SessionStatusRequest):
+        return from_resume_kit_error(_bad_request(request, "SessionStatusRequest"))
+    try:
+        result = _edit_session.session_status(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def reconcile_session_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Re-hash the working resume after an intentional manual edit."""
+    if not isinstance(request, ReconcileSessionRequest):
+        return from_resume_kit_error(_bad_request(request, "ReconcileSessionRequest"))
+    try:
+        result = _edit_session.reconcile_session(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
 def _optional_path(value: str | Path | None) -> Path | None:
     """Return ``value`` as a Path when supplied."""
     if value is None:
@@ -938,6 +1079,12 @@ REGISTRY: dict[str, Capability] = {
     "rank-edit-candidates": rank_edit_candidates_capability,
     "refresh-preferences": refresh_preferences_capability,
     "add-evidence": add_evidence_capability,
+    "open-edit-session": open_edit_session_capability,
+    "session-prompt": session_prompt_capability,
+    "decide-change": decide_change_capability,
+    "commit-session": commit_session_capability,
+    "session-status": session_status_capability,
+    "reconcile-session": reconcile_session_capability,
     "export-resume": export_resume,
     "suggest-terminology": suggest_terminology,
     "align-terminology": align_terminology,

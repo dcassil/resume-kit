@@ -16,20 +16,30 @@ def test_all_public_exports_importable() -> None:
         CheckAtsStructureRequest,
         CheckResumeAtsRequest,
         CheckResumeJobMatchRequest,
+        CommitSessionRequest,
+        CommitSessionResult,
         CompareResumeVersionsRequest,
+        DecideChangeRequest,
+        EditSessionState,
+        EditSessionStatus,
         ExportResumeRequest,
         ExtractJobDescriptionRequest,
         ExtractResumeRequest,
         ExtractResumeTextRequest,
         IdentifyResumeGapsRequest,
         InitProjectRequest,
+        OpenEditSessionRequest,
         ProjectConfig,
         RankEditCandidatesRequest,
         RankEditCandidatesResult,
+        ReconcileSessionRequest,
+        ReconcileSessionResult,
         RecordEditFeedbackRequest,
         RecordEditFeedbackResult,
         RefreshPreferencesRequest,
         SelectBestResumeRequest,
+        SessionPromptRequest,
+        SessionStatusRequest,
         SetActiveRequest,
         SuggestTerminologyRequest,
         TerminologyAlignmentDelta,
@@ -42,7 +52,9 @@ def test_all_public_exports_importable() -> None:
         check_ats_structure,
         check_resume_ats,
         check_resume_job_match,
+        commit_session_capability,
         compare_resume_versions,
+        decide_change_capability,
         export_resume,
         extract_job_description,
         extract_resume,
@@ -51,11 +63,15 @@ def test_all_public_exports_importable() -> None:
         init_project,
         init_project_capability,
         load_config,
+        open_edit_session_capability,
         rank_edit_candidates_capability,
+        reconcile_session_capability,
         record_edit_feedback_capability,
         refresh_preferences_capability,
         save_config,
         select_best_resume,
+        session_prompt_capability,
+        session_status_capability,
         set_active,
         set_active_capability,
         suggest_terminology,
@@ -64,7 +80,7 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 22
+    assert len(REGISTRY) == 28
     assert "validate-faithfulness" in REGISTRY
     assert "extract-resume-text" in REGISTRY
     assert "export-resume" in REGISTRY
@@ -77,12 +93,24 @@ def test_all_public_exports_importable() -> None:
     assert "rank-edit-candidates" in REGISTRY
     assert "refresh-preferences" in REGISTRY
     assert "add-evidence" in REGISTRY
+    assert "open-edit-session" in REGISTRY
+    assert "session-prompt" in REGISTRY
+    assert "decide-change" in REGISTRY
+    assert "commit-session" in REGISTRY
+    assert "session-status" in REGISTRY
+    assert "reconcile-session" in REGISTRY
 
     assert callable(init_project_capability)
     assert callable(add_evidence_capability)
     assert callable(record_edit_feedback_capability)
     assert callable(rank_edit_candidates_capability)
     assert callable(refresh_preferences_capability)
+    assert callable(open_edit_session_capability)
+    assert callable(session_prompt_capability)
+    assert callable(decide_change_capability)
+    assert callable(commit_session_capability)
+    assert callable(session_status_capability)
+    assert callable(reconcile_session_capability)
     assert callable(set_active_capability)
     assert callable(init_project)
     assert callable(load_config)
@@ -95,6 +123,16 @@ def test_all_public_exports_importable() -> None:
     assert RankEditCandidatesRequest is not None
     assert RefreshPreferencesRequest is not None
     assert SetActiveRequest is not None
+    assert OpenEditSessionRequest is not None
+    assert SessionPromptRequest is not None
+    assert DecideChangeRequest is not None
+    assert CommitSessionRequest is not None
+    assert SessionStatusRequest is not None
+    assert ReconcileSessionRequest is not None
+    assert EditSessionState is not None
+    assert EditSessionStatus is not None
+    assert CommitSessionResult is not None
+    assert ReconcileSessionResult is not None
 
     assert callable(suggest_terminology)
     assert callable(align_terminology)

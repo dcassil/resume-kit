@@ -6,7 +6,7 @@ short_code: "RIT-I-0018"
 created_at: 2026-08-05T16:56:34.879671+00:00
 updated_at: 2026-08-05T16:56:34.879671+00:00
 parent: RIT-V-0001
-blocked_by: []
+blocked_by: [RIT-I-0016, RIT-I-0017]
 archived: false
 
 tags:
@@ -137,6 +137,27 @@ Discovery should produce a design brief with these artifacts before implementati
 - Keep the advice only in documentation. Rejected as the default because several items are concrete enough to become structured warnings, rewrite constraints, review prompts, or export checks.
 - Create a new all-in-one resume grooming tool immediately. Deferred until discovery determines whether the right shape is a composite report, smaller updates to existing tools, skill workflow changes, or a new wrapper capability.
 - Treat source-layout ATS parsing as already solved. Rejected because current parsed JSON and text scans cannot reliably detect columns, text boxes, headers/footers, images, scanned PDFs, or PDF text-layer issues.
+
+## Cross-Initiative Coordination
+
+This initiative is sequenced **after** [[RIT-I-0017]] and [[RIT-I-0016]] (see `blocked_by`) and is the eventual **consolidator/source-of-truth for the full resume-guidance inventory**. To avoid duplicating work those initiatives own, 0018 is **reference-not-duplicate**. Ownership split:
+
+- **Owned by [[RIT-I-0017]] / [[RIT-A-0002]] — consume, do not rebuild:**
+  - **ScoreDoc is the scoring read model.** All of 0018's keyword/tailoring/anti-stuffing guidance checks (keywords-in-context, required>optional, natural repetition, no keyword-stuffing/over-optimization) must be designed against **ScoreDoc's zoned keyword index + entities**, never `additional.technicalSkills` or raw BuildDoc field walks. This inherits RIT-A-0002's determinism/offline/no-LLM invariant for anything in the scoring path.
+  - **The "what the ATS sees" report** is 0017's single surface; 0018 references/extends it rather than building a second report.
+  - The **"an ATS score does not guarantee recruiter advancement"** messaging requirement is specified by 0018 but lands on **0017-owned score + report surfaces**.
+
+- **Owned by [[RIT-I-0016]] / [[RIT-A-0003]] — consume/extend, do not fork:**
+  - **Severity taxonomy.** 0016 establishes the grooming-finding severity taxonomy (hard-gate / warning / recommendation / review-note / out-of-scope-future). 0018 **adopts and, if needed, extends** that single taxonomy — it must not define a competing one.
+  - **Best-practices engine.** 0016 owns the job-INDEPENDENT best-practices analyzer. In design, 0018 decides whether job-DEPENDENT guidance extends that same engine or lives in the tailoring tools — it does not stand up a parallel rule engine.
+  - **Job-independent guidance slice.** 0016 owns the job-INDEPENDENT subset of the consolidated dos/donts. 0018 owns the **job-DEPENDENT** remainder (tailor-per-role, mirror employer terminology, keyword-in-context/anti-stuffing, required>optional, seniority/scope, review/version-selection, export/submission hygiene). The single consolidated list is inventoried once (here); 0016 references its job-independent slice rather than maintaining a copy.
+  - **Source-file layout / selectable-text inspection is owned by 0016 REQ-011.** 0018's "Candidate Future Work" layout/render-parse and PDF text-layer/selectable-text items **defer to RIT-I-0016 REQ-011** as the owner; 0018 must not re-scope them into a competing capability. If 0018's design finds export-side selectable-text checks are needed, it coordinates with REQ-011.
+
+- **Shared guardrails (already reused, not rebuilt):** truth/faithfulness gates (`resume_validate_truth`, `candidate_evidence_build`, `resume_validate_faithfulness`) and the [[RIT-I-0015]] edit-session orchestrator. 0018's truth-gate integration references the shared wiring; it adds no parallel gate.
+
+- **LLM-shaped guidance routing:** guidance items that are inherently judgment-based (relevance framing, coherent voice, natural repetition) must be routed to reviewer-prompt / review-note lanes in 0018's severity model, **never into the deterministic scoring path**, preserving RIT-A-0002's invariant.
+
+**Recommended follow-up:** 0018 likely warrants its own ADR (0016 has RIT-A-0003, 0017 has RIT-A-0002) for at least the severity-taxonomy adoption and the check-vs-prompt-vs-doc classification decision. Flag for human decision before 0018 exits discovery.
 
 ## Implementation Plan **[REQUIRED]**
 

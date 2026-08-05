@@ -26,23 +26,34 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
     CompareResumeVersionsRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    OpenEditSessionRequest,
     RankEditCandidatesRequest,
+    ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
     SelectBestResumeRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
-from resume_kit_schemas import EvidenceKind, UserPreferenceProfile
+from resume_kit_schemas import (
+    EditFeedbackReasonCode,
+    EvidenceKind,
+    ReviewAction,
+    UserPreferenceProfile,
+)
 
 ToolArguments = dict[str, object]
 ToolResult = dict[str, object]
@@ -67,6 +78,12 @@ TOOL_NAMES: tuple[str, ...] = (
     "edit_feedback_record",
     "edit_candidates_rank",
     "preferences_refresh",
+    "edit_session_open",
+    "edit_session_prompt",
+    "edit_session_decide",
+    "edit_session_commit",
+    "edit_session_status",
+    "edit_session_reconcile",
     "resume_export",
     "resume_suggest_terminology",
     "resume_align_terminology",
@@ -147,6 +164,9 @@ _VALIDATE_FEEDBACK = _model_validator(RecordEditFeedbackRequest, "feedback")
 _VALIDATE_PREFERENCE_PAIR = _model_validator(RecordEditFeedbackRequest, "preference_pair")
 _VALIDATE_CANDIDATE = _model_validator(RankEditCandidatesRequest, "candidates")
 _VALIDATE_FEATURE_CONTEXT = _model_validator(RankEditCandidatesRequest, "context")
+_VALIDATE_CHANGE = _model_validator(OpenEditSessionRequest, "changes")
+_VALIDATE_CLAIM_PROVENANCE = _model_validator(OpenEditSessionRequest, "claim_provenance")
+_VALIDATE_SCORE_DELTA = _model_validator(OpenEditSessionRequest, "expected_score_deltas")
 
 
 def _dump(response: InterfaceResponse[object]) -> ToolResult:
@@ -247,6 +267,32 @@ def _export_format(arguments: ToolArguments, field: str) -> ExportFormat:
         raise _ValidationFailure(
             "Field 'format' must be one of: pdf, docx.",
             field=field,
+        ) from exc
+
+
+def _review_action(arguments: ToolArguments) -> ReviewAction:
+    value = _string(arguments, "action")
+    try:
+        return ReviewAction(value)
+    except ValueError as exc:
+        raise _ValidationFailure(
+            "Field 'action' must be a supported review action.",
+            field="action",
+        ) from exc
+
+
+def _optional_feedback_reason(arguments: ToolArguments) -> EditFeedbackReasonCode | None:
+    value = arguments.get("reason_code")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise _ValidationFailure("Field 'reason_code' must be a string.", field="reason_code")
+    try:
+        return EditFeedbackReasonCode(value)
+    except ValueError as exc:
+        raise _ValidationFailure(
+            "Field 'reason_code' must be a supported edit-feedback reason.",
+            field="reason_code",
         ) from exc
 
 
@@ -358,6 +404,18 @@ def _candidate(value: object, field: str) -> object:
 
 def _feature_context(value: object, field: str) -> object:
     return _validated(_VALIDATE_FEATURE_CONTEXT, value, field)
+
+
+def _change(value: object, field: str) -> object:
+    return _validated(_VALIDATE_CHANGE, value, field)
+
+
+def _claim_provenance(value: object, field: str) -> object:
+    return _validated(_VALIDATE_CLAIM_PROVENANCE, value, field)
+
+
+def _score_delta(value: object, field: str) -> object:
+    return _validated(_VALIDATE_SCORE_DELTA, value, field)
 
 
 def _preference_profile(arguments: ToolArguments) -> UserPreferenceProfile:
@@ -791,6 +849,107 @@ async def project_set_active(arguments: ToolArguments) -> ToolResult:
     return await _call("set-active", request, arguments)
 
 
+async def edit_session_open(arguments: ToolArguments) -> ToolResult:
+    try:
+        changes = [_change(item, "changes") for item in _object_list(arguments, "changes")]
+        claim_value = arguments.get("claim_provenance", [])
+        if not isinstance(claim_value, list):
+            raise _ValidationFailure(
+                "Field 'claim_provenance' must be a list.",
+                field="claim_provenance",
+            )
+        delta_value = arguments.get("expected_score_deltas", [])
+        if not isinstance(delta_value, list):
+            raise _ValidationFailure(
+                "Field 'expected_score_deltas' must be a list.",
+                field="expected_score_deltas",
+            )
+        request = _make_request(
+            OpenEditSessionRequest,
+            {
+                "mode": _string(arguments, "mode"),
+                "changes": changes,
+                "root": _optional_string(arguments, "root", "."),
+                "evidence": _optional_evidence_list(arguments, "evidence") or [],
+                "claim_provenance": [
+                    _claim_provenance(item, "claim_provenance") for item in claim_value
+                ],
+                "expected_score_deltas": [
+                    _score_delta(item, "expected_score_deltas") for item in delta_value
+                ],
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("open-edit-session", request, arguments)
+
+
+async def edit_session_prompt(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            SessionPromptRequest,
+            {"root": _optional_string(arguments, "root", ".")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("session-prompt", request, arguments)
+
+
+async def edit_session_decide(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            DecideChangeRequest,
+            {
+                "path": _string(arguments, "path"),
+                "action": _review_action(arguments),
+                "reason_code": _optional_feedback_reason(arguments),
+                "note": _optional_str(arguments, "note"),
+                "root": _optional_string(arguments, "root", "."),
+                "edited_content": _optional_str(arguments, "edited_content"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("decide-change", request, arguments)
+
+
+async def edit_session_commit(arguments: ToolArguments) -> ToolResult:
+    try:
+        freedom = _optional_freedom(arguments)
+        request = _make_request(
+            CommitSessionRequest,
+            {
+                "root": _optional_string(arguments, "root", "."),
+                "freedom": 10 if freedom is None else freedom,
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("commit-session", request, arguments)
+
+
+async def edit_session_status(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            SessionStatusRequest,
+            {"root": _optional_string(arguments, "root", ".")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("session-status", request, arguments)
+
+
+async def edit_session_reconcile(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            ReconcileSessionRequest,
+            {"root": _optional_string(arguments, "root", ".")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("reconcile-session", request, arguments)
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
     "resume_extract_text": resume_extract_text,
@@ -809,6 +968,12 @@ HANDLERS: dict[str, ToolHandler] = {
     "edit_feedback_record": edit_feedback_record,
     "edit_candidates_rank": edit_candidates_rank,
     "preferences_refresh": preferences_refresh,
+    "edit_session_open": edit_session_open,
+    "edit_session_prompt": edit_session_prompt,
+    "edit_session_decide": edit_session_decide,
+    "edit_session_commit": edit_session_commit,
+    "edit_session_status": edit_session_status,
+    "edit_session_reconcile": edit_session_reconcile,
     "resume_export": resume_export,
     "resume_suggest_terminology": resume_suggest_terminology,
     "resume_align_terminology": resume_align_terminology,

@@ -62,11 +62,19 @@ def test_help_lists_all_commands() -> None:
         "record-edit-feedback",
         "rank-edit-candidates",
         "refresh-preferences",
+        "review-edits",
         "export",
         "init",
         "set-active",
     ]
     for name in expected:
+        assert name in result.stdout
+
+
+def test_review_edits_help_lists_lifecycle_commands() -> None:
+    result = runner.invoke(app, ["review-edits", "--help"])
+    assert result.exit_code == 0
+    for name in ["open", "prompt", "decide", "commit", "status", "reconcile"]:
         assert name in result.stdout
 
 

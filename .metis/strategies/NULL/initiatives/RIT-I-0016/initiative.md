@@ -153,6 +153,24 @@ Prioritize: (1) truth-safety of `auto` fixes, (2) correct auto-vs-needs-input cl
 ### Bug Tracking
 Defects tracked as Metis backlog tasks under this initiative; truth-safety or faithfulness regressions are release-blocking.
 
+## Cross-Initiative Coordination **[REQUIRED]**
+
+This initiative interlocks with two siblings; the boundaries below prevent duplicated or conflicting work. **Sequence:** [[RIT-A-0002]] (decided) → [[RIT-I-0017]] → **RIT-I-0016** → [[RIT-I-0018]]; both RIT-I-0016 and RIT-I-0017 sit after [[RIT-I-0015]] (the edit-session orchestrator).
+
+- **Depends on [[RIT-I-0017]] / [[RIT-A-0002]] (ScoreDoc/BuildDoc projection) — consume, do not rebuild:**
+  - **ScoreDoc is the scoring/segmentation read model.** 0017 introduces a pure deterministic `project_scoredoc(BuildDoc) → ScoreDoc` and repoints all scoring — including `packages/ats` `check_ats_structure`, `skills_coverage`, `section_completeness` — to read ScoreDoc's canonical sections/entities/zoned index, never raw BuildDoc fields. **Our REQ-003/REQ-005 engines (the structural-check extension and the new best-practices analyzer) read ScoreDoc**, not `additional.technicalSkills` or hand-rolled section segmentation.
+  - **Ordering on the shared `check_ats_structure`.** Both initiatives touch this engine: 0017 changes *where* it reads (ScoreDoc); we change *what* it checks (the fuller job-independent ruleset + issue codes/fix affordances). To avoid writing new rules against BuildDoc and reworking them, **0017's projection + ats repoint (RIT-T-0106/RIT-T-0108) land before our Phase 2 engine extension**, and our new rules are authored against ScoreDoc from the start.
+  - **Reuse the "what the ATS sees" report.** 0017 owns the single read-only ATS-view report (facade/CLI/MCP/API + skill). Our `base` structural-check step **surfaces that report** rather than printing a second ATS-view.
+  - **Feed the projection.** Where our `base` fixer renames/normalizes/reorders sections, those canonicalization decisions **feed 0017's `customSections → KeywordZone` mapping** (RIT-T-0106) so projection and normalization agree. Per [[RIT-A-0002]], if we force a canonical structure, 0017's projection simplifies but its contract does not change.
+  - **No ProjectConfig conflict.** 0017 is additive scoring only; the `base`/`standard` version pointers (REQ-001/002) are **owned here** and are additive/backward-compatible.
+
+- **Owned here; referenced by [[RIT-I-0018]] (industry guidance audit):**
+  - **The grooming-finding severity taxonomy.** This initiative establishes the single severity model (hard-gate / warning / recommendation / review-note / out-of-scope-future) used by best-practices findings. 0018 **adopts and may extend** it; it must not define a competing taxonomy.
+  - **The job-INDEPENDENT best-practices engine** and the **job-INDEPENDENT slice** of the consolidated ATS dos/donts. 0018 owns the **job-DEPENDENT** remainder (tailoring, employer-terminology mirroring, keyword-in-context/anti-stuffing, required>optional, review/version-selection, export/submission hygiene) and is the single consolidated inventory of the full list — we **reference its job-independent slice** rather than forking the master list.
+  - **REQ-011 (bounded source-file PDF/DOCX layout parse-risk detection).** This is the render-catching gap that [[RIT-A-0002]] and 0018 both defer to us. We own it; 0018 references REQ-011 rather than re-scoping layout / selectable-text checks.
+
+- **Shared guardrails (reused, not rebuilt):** the truth/faithfulness gates (`resume_validate_truth`, `candidate_evidence_build`, `resume_validate_faithfulness`) and the [[RIT-I-0015]] edit-session orchestrator + hard write gate ([[RIT-A-0001]]).
+
 ## Alternatives Considered **[REQUIRED]**
 
 - **Fold baselining into the existing tailoring flow instead of a distinct phase.** Rejected: it conflates job-independent quality with job-specific optimization, keeps us tailoring from a weak baseline, and gives no stable `standard` artifact. The whole point is a clean pre-tailoring baseline.

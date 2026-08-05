@@ -51,17 +51,23 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
     CompareResumeVersionsRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    OpenEditSessionRequest,
     RankEditCandidatesRequest,
+    ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
     SelectBestResumeRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
@@ -76,7 +82,9 @@ from resume_kit_api.models import (
     CheckAtsStructureBody,
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
+    CommitSessionBody,
     CompareResumeVersionsBody,
+    DecideChangeBody,
     EvidenceEnvelope,
     ExportResumeBody,
     ExtractJobDescriptionBody,
@@ -84,10 +92,12 @@ from resume_kit_api.models import (
     ExtractResumeTextBody,
     IdentifyResumeGapsBody,
     InitProjectBody,
+    OpenEditSessionBody,
     RankEditCandidatesBody,
     RecordEditFeedbackBody,
     RefreshPreferencesBody,
     SelectBestResumeBody,
+    SessionRootBody,
     SetActiveBody,
     SuggestTerminologyBody,
     ValidateFaithfulnessBody,
@@ -348,6 +358,50 @@ def register_routes(app: FastAPI) -> None:
             base_path=body.base_path,
         )
         return _render(await REGISTRY["refresh-preferences"](request, _options(body)))
+
+    @app.post("/review-edits/open")
+    async def review_edits_open(body: OpenEditSessionBody) -> Response:
+        request = OpenEditSessionRequest(
+            mode=body.mode,
+            changes=body.changes,
+            root=body.root,
+            evidence=body.evidence,
+            claim_provenance=body.claim_provenance,
+            expected_score_deltas=body.expected_score_deltas,
+        )
+        return _render(await REGISTRY["open-edit-session"](request, _options(body)))
+
+    @app.post("/review-edits/prompt")
+    async def review_edits_prompt(body: SessionRootBody) -> Response:
+        request = SessionPromptRequest(root=body.root)
+        return _render(await REGISTRY["session-prompt"](request, _options(body)))
+
+    @app.post("/review-edits/decide")
+    async def review_edits_decide(body: DecideChangeBody) -> Response:
+        request = DecideChangeRequest(
+            path=body.path,
+            action=body.action,
+            reason_code=body.reason_code,
+            note=body.note,
+            root=body.root,
+            edited_content=body.edited_content,
+        )
+        return _render(await REGISTRY["decide-change"](request, _options(body)))
+
+    @app.post("/review-edits/commit")
+    async def review_edits_commit(body: CommitSessionBody) -> Response:
+        request = CommitSessionRequest(root=body.root, freedom=body.freedom)
+        return _render(await REGISTRY["commit-session"](request, _options(body)))
+
+    @app.post("/review-edits/status")
+    async def review_edits_status(body: SessionRootBody) -> Response:
+        request = SessionStatusRequest(root=body.root)
+        return _render(await REGISTRY["session-status"](request, _options(body)))
+
+    @app.post("/review-edits/reconcile")
+    async def review_edits_reconcile(body: SessionRootBody) -> Response:
+        request = ReconcileSessionRequest(root=body.root)
+        return _render(await REGISTRY["reconcile-session"](request, _options(body)))
 
     @app.post("/init")
     async def init(body: InitProjectBody) -> Response:

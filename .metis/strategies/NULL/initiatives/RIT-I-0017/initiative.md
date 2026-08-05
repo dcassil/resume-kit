@@ -56,6 +56,22 @@ build schema, renderer, and export are untouched.
   The one thing projection cannot do (catch a *render* bug) is RIT-I-0016's concern, or a later optional
   parity check (per [[RIT-A-0002]]). If RIT-I-0016 forces resumes into a canonical structure, this
   initiative's projection simplifies but does not change contract.
+- **Downstream consumers of ScoreDoc — this initiative is the substrate.** Both [[RIT-I-0016]] (resume
+  baselining) and [[RIT-I-0018]] (industry guidance audit) **read ScoreDoc and reuse the "what the ATS
+  sees" report** rather than re-deriving scoring or building a second report. Concretely:
+  - **Shared `check_ats_structure` ordering.** RIT-I-0016 *extends* `packages/ats` `check_ats_structure`
+    with a fuller job-independent ruleset while this initiative *repoints* it onto ScoreDoc. To avoid
+    rework, **this initiative's projection + ats repoint ([[RIT-T-0106]], [[RIT-T-0108]]) land before**
+    RIT-I-0016's engine extension, and RIT-I-0016 authors its new rules against ScoreDoc.
+  - **Section canonicalization feeds the projection.** If RIT-I-0016's `base` fixer renames/normalizes
+    sections, those decisions inform this initiative's `customSections → KeywordZone` mapping
+    ([[RIT-T-0106]]); contract is unchanged, mapping only simplifies.
+  - **Report is the single ATS-view surface.** RIT-I-0018 specifies the "an ATS score does not guarantee
+    recruiter advancement" messaging, which **lands on this initiative's score + report surfaces**; its
+    scoring-path guidance inherits this initiative's determinism/offline/no-LLM invariant.
+- **Sequence:** [[RIT-A-0002]] (decided) → **RIT-I-0017** → [[RIT-I-0016]] → [[RIT-I-0018]]. No
+  ProjectConfig interaction: this initiative is additive scoring only; the `base`/`standard` version
+  pointers are owned by RIT-I-0016.
 
 ## Goals & Non-Goals **[REQUIRED]**
 
