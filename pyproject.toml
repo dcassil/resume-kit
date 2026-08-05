@@ -72,6 +72,7 @@ bypass-selection = true
 "packages/job-parser/src/resume_kit_job_parser" = "resume_kit_job_parser"
 "packages/ats/src/resume_kit_ats" = "resume_kit_ats"
 "packages/matching/src/resume_kit_matching" = "resume_kit_matching"
+"packages/scoring/src/resume_kit_scoring" = "resume_kit_scoring"
 "packages/terms/src/resume_kit_terms" = "resume_kit_terms"
 "packages/feedback/src/resume_kit_feedback" = "resume_kit_feedback"
 "packages/policy/src/resume_kit_policy" = "resume_kit_policy"

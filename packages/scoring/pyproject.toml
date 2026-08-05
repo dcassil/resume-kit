@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-scoring"
+version = "0.0.0"
+description = "Deterministic BuildDoc -> ScoreDoc projection (RIT-I-0017)."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-schemas",
+    "resume-kit-terms",
+]
+
+[tool.uv.sources]
+resume-kit-schemas = { workspace = true }
+resume-kit-terms = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_scoring"]
