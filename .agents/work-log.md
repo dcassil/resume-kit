@@ -419,3 +419,23 @@ Gate after Wave 1: ruff+mypy clean (80 src), plugin validate OK, 2714 passed; on
 
 Wave 2 DONE. 0078 check-ats-structure + check-keyword-match + gated identify-resume-gaps. 0079 inject-keywords (NEW, truth-gated no-fabrication) + update-terminology (rename). Wave 3 (0081, orchestrator): removed 6 deprecated dirs, reconciled slug test + EXPECTED_CLI_OR_MCP + _shared discovery, README rewrite + Workflow section, cross-link cleanup (subagent), plugin 0.2.0→0.3.0.
 **RIT-I-0011 COMPLETE.** Final gate: ruff+mypy clean (80 src), plugin validate OK, 2715 passed/1 skipped. 15 skills → 13 single-responsibility skills + resume-workflow guide; every skill self-gates.
+
+---
+
+## RIT-I-0012 — Second-agent review step + dev debug/refine loop
+
+Decomposed into 3 file-disjoint tasks; single wave.
+- RIT-T-0082 (opus+medium) review-tailored-resume skill (subagent critique of new+original+JD → structured resume-kit/review/<session>.md, advice-only, gated) + slug test/README/plugin version 0.3.0→0.4.0.
+- RIT-T-0083 (opus+medium) resume-workflow optional advice-only step + once-per-session offer (SessionStart hook detects initialized dir + session marker).
+- RIT-T-0084 (sonnet+medium) docs/dev/debug-refine.md runbook reusing the review step (codex-exec option) + findings→Metis backlog + trial log + .gitignore for trial inputs.
+Plugin-only (no engine/PyPI change).
+
+### Wave 1
+| Task | Files | Agent |
+| ---- | ----- | ----- |
+| RIT-T-0082 | skills/review-tailored-resume + README + tests + plugin.json | opus+medium |
+| RIT-T-0083 | skills/resume-workflow + bin/check-resume-kit.sh | opus+medium |
+| RIT-T-0084 | docs/dev/debug-refine.md + .gitignore + .agents | sonnet+medium |
+
+Wave 1 DONE (all 3). 0082 review-tailored-resume skill (advice-only subagent critique → structured review/<session>.md). 0083 resume-workflow optional step 5 + SessionStart once-per-session offer (marker .cache/review-offered). 0084 docs/dev/debug-refine.md runbook + .gitignore + refine-log.
+**RIT-I-0012 COMPLETE.** Gate: plugin validate OK, hook bash -n OK, ruff+mypy clean (80 src), 2715 passed/1 skipped. Plugin 0.4.0. Plugin-only (no PyPI). RIT-I-0013 remains in discovery.

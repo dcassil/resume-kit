@@ -91,7 +91,12 @@ facts, bypass evidence, or create business rules in prompt text.
    missing-but-true keywords), `update-terminology` (mirror the employer's exact
    wording for a synonym the resume already satisfies).
 4. **Verify** — `validate-resume-truth`; then re-run the checks to see the delta.
-5. **Export** — `export-resume` (PDF/DOCX).
+5. **Review** (optional, no LLM provider) — `review-tailored-resume` dispatches a
+   subagent to critique the tailored resume against the original + job and writes
+   parseable, advice-only findings to `resume-kit/review/<session>.md` (it never
+   edits the resume; act on findings via `inject-keywords` /
+   `update-terminology` / `validate-resume-truth`).
+6. **Export** — `export-resume` (PDF/DOCX).
 
 Supporting: `build-candidate-evidence`, `compare-resume-versions`,
 `select-best-resume`, and `manage-synonyms` (grows the project alias index used
@@ -114,6 +119,7 @@ by keyword matching + terminology).
 | `select-best-resume` | `resume-tool select` | `resume_select_best` | No (deterministic) |
 | `export-resume` | `resume-tool export` | `resume_export` | No (deterministic) |
 | `manage-synonyms` | (agent-driven) | — | No (grows alias index) |
+| `review-tailored-resume` | (agent-driven, advice-only) | — | No (subagent) |
 | `resume-workflow` | (guide) | — | No (orchestration) |
 
 **Disabled / not surfaced as skills:** LLM auto-rewrite (`align-resume`) is

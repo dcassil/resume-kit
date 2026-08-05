@@ -48,12 +48,15 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "export-resume",
         "manage-synonyms",
         "resume-workflow",
+        # Review (agent-driven, advice-only)
+        "review-tailored-resume",
     ]
 )
 
 # CLI commands and MCP tool names that must appear (one per slug). Workflow /
 # agent-driven skills (resume-to-json, job-to-json, inject-keywords,
-# update-terminology, manage-synonyms, resume-workflow) are intentionally exempt
+# update-terminology, manage-synonyms, resume-workflow, review-tailored-resume)
+# are intentionally exempt
 # — they orchestrate other skills/tools rather than wrapping a single capability.
 EXPECTED_CLI_OR_MCP: dict[str, list[str]] = {
     "check-ats-structure": ["resume-tool", "resume_check_ats_structure"],

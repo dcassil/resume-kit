@@ -6,8 +6,13 @@
 # commands are missing, so warn the user (never block, never auto-install).
 set -euo pipefail
 
-# Installed already? Say nothing and continue.
+# Installed already? Then only speak up inside an initialized resume-kit/ working
+# dir, to offer the optional advice-only second-agent review ONCE this session.
 if command -v resume-kit-mcp >/dev/null 2>&1; then
+  # Initialized working dir? config.json under resume-kit/ marks it.
+  if [ -f resume-kit/config.json ]; then
+    printf '%s' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"resume-kit working dir detected. An OPTIONAL, advice-only second-agent review is available via the review-tailored-resume skill: it dispatches a subagent to critique the tailored resume against the original resume and the job, and writes ADVICE-ONLY findings to resume-kit/review/<session>.md (it never edits the resume and never auto-runs). Its gate is that a NEW tailored resume, the ORIGINAL resume, and the JOB JSON all exist. OFFER this review to the user AT MOST ONCE this session, and only after a tailored resume exists. Guard the offer with the presence marker resume-kit/.cache/review-offered: if that file exists, do NOT offer again; after you offer (whether the user accepts or declines), create that marker. Always opt-in; never auto-run."}}'
+  fi
   exit 0
 fi
 

@@ -32,3 +32,10 @@ htmlcov/
 # Metis runtime
 .metis/metis-mcp-server.log
 .metis/.index-dirty
+
+# Dev trial inputs (personal data — never commit real resumes or JDs)
+.agents/trials/
+resume-kit/working/
+resume-kit/review/
+resume-kit/resumes/
+resume-kit/jobs/

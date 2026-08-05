@@ -3,7 +3,8 @@ name: resume-workflow
 description: >
   The end-to-end runbook for tailoring a resume to a job with resume-intelligence.
   Sequences the single-purpose skills in the one obvious order — ingest → check →
-  (optionally) improve → validate truth → re-check for deltas → export — and names
+  (optionally) improve → (optionally) second-agent review → validate truth →
+  re-check for deltas → export — and names
   the gate (what must exist) for each step. This is a GUIDE: it points at the other
   skills, it does not call tools itself.
 ---
@@ -20,6 +21,15 @@ skills fit together.
 All state lives under `resume-kit/` — `config.json` tracks `active_resume` and
 `active_job`; `learning/` accumulates per-skill hints. Run the ingest conversions
 in **subagents** so large document text stays out of the main context.
+
+**Once-per-session review offer.** When a session starts in an initialized
+`resume-kit/` working dir, the SessionStart hook reminds the agent that the
+optional, advice-only **review-tailored-resume** step (step 5 below) is available.
+**Offer it at most once per session** — and only after a tailored resume exists.
+The guard is a presence marker at `resume-kit/.cache/review-offered`: once you have
+offered the review (whether the user accepts or declines), write that marker; before
+offering again, check for it and stay silent if it exists. The review is always
+opt-in and never auto-runs.
 
 ## Steps
 
@@ -47,17 +57,27 @@ in **subagents** so large document text stays out of the main context.
    `-original.json` pristine. **LLM auto-rewrite is disabled — there is no
    `align-resume`.** All edits are targeted, agent-made, and truthful.
 
-5. **Validate truth** — run **validate-resume-truth**.
+5. **Second-agent review** *(optional — advice-only)* — run
+   **review-tailored-resume**.
+   gate: the **new** tailored resume JSON + the **original** resume JSON + the
+   **job** JSON (all three must exist; this step only makes sense after tailoring).
+   Dispatches a subagent to critique the tailored-vs-original-vs-job triple and
+   writes **advice-only** findings to `resume-kit/review/<session>.md`. It never
+   edits the resume and never auto-runs — the user opts in. This step is **offered
+   at most once per session**, guarded by the `resume-kit/.cache/review-offered`
+   marker (see above); skipping it does not affect the rest of the flow.
+
+6. **Validate truth** — run **validate-resume-truth**.
    gate: the (improved) resume JSON + `CandidateEvidence` (build it with
    **build-candidate-evidence**, gate: resume JSON). Any unsupported or
    contradicted claim must be fixed before proceeding — never ship fabrications.
 
-6. **Re-check for deltas** — re-run **check-ats-structure**,
+7. **Re-check for deltas** — re-run **check-ats-structure**,
    **check-keyword-match**, and **identify-resume-gaps** on the improved resume.
    gate: the improved resume JSON + `active_job`. Compare against the step-3
    baseline to confirm the changes actually helped.
 
-7. **Export** — run **export-resume**.
+8. **Export** — run **export-resume**.
    gate: the final resume JSON. Produces the PDF/DOCX artifact to submit.
 
 ## Supporting / maintenance
