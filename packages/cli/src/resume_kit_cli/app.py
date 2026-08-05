@@ -41,7 +41,9 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
@@ -398,6 +400,55 @@ def export(
     else:
         typer.echo(base64.b64encode(data).decode("ascii"))
     raise typer.Exit(code=code)
+
+
+# ---------------------------------------------------------------------------
+# Working-directory state commands (RIT-T-0091)
+# ---------------------------------------------------------------------------
+
+_Root = typer.Option(".", "--root", help="Project root containing resume-kit/.")
+
+
+@app.command()
+def init(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Idempotently scaffold the resume-kit/ working directory + config.json."""
+    request = InitProjectRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.init_project_capability(request, options), output)
+
+
+@app.command(name="set-active")
+def set_active(
+    resume: str | None = typer.Option(
+        None, "--resume", help="Active resume JSON path (relative to resume-kit/)."
+    ),
+    resume_source: str | None = typer.Option(
+        None, "--source", help="Original source file the active resume came from."
+    ),
+    job: str | None = typer.Option(
+        None, "--job", help="Active job JSON path (relative to resume-kit/)."
+    ),
+    job_source: str | None = typer.Option(
+        None, "--job-source", help="Original source file the active job came from."
+    ),
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Record active resume/job pointers plus source paths through the schema."""
+    request = SetActiveRequest(
+        resume=resume,
+        resume_source=resume_source,
+        job=job,
+        job_source=job_source,
+        root=root,
+    )
+    options = _options(False, strict, False)
+    _run(caps.set_active_capability(request, options), output)
 
 
 def main() -> None:

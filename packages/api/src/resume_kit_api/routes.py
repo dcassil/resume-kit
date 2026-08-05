@@ -56,7 +56,9 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
@@ -74,7 +76,9 @@ from resume_kit_api.models import (
     ExtractResumeBody,
     ExtractResumeTextBody,
     IdentifyResumeGapsBody,
+    InitProjectBody,
     SelectBestResumeBody,
+    SetActiveBody,
     SuggestTerminologyBody,
     ValidateResumeTruthBody,
     _Options,
@@ -284,6 +288,22 @@ def register_routes(app: FastAPI) -> None:
         return _render(
             await REGISTRY["build-candidate-evidence"](request, _options(body))
         )
+
+    @app.post("/init")
+    async def init(body: InitProjectBody) -> Response:
+        request = InitProjectRequest(root=body.root)
+        return _render(await REGISTRY["init-project"](request, _options(body)))
+
+    @app.post("/set-active")
+    async def set_active(body: SetActiveBody) -> Response:
+        request = SetActiveRequest(
+            resume=body.resume,
+            resume_source=body.resume_source,
+            job=body.job,
+            job_source=body.job_source,
+            root=body.root,
+        )
+        return _render(await REGISTRY["set-active"](request, _options(body)))
 
     @app.post("/export")
     async def export(body: ExportResumeBody) -> Response:

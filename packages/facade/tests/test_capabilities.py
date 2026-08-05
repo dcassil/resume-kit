@@ -87,6 +87,8 @@ def test_registry_contains_all_capabilities() -> None:
         "export-resume",
         "suggest-terminology",
         "align-terminology",
+        "init-project",
+        "set-active",
     }
 
 

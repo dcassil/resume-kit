@@ -23,7 +23,9 @@ from resume_kit_facade.capabilities import (
     extract_resume,
     extract_resume_text_capability,
     identify_resume_gaps,
+    init_project_capability,
     select_best_resume,
+    set_active_capability,
     suggest_terminology,
     validate_resume_truth_capability,
 )
@@ -42,10 +44,19 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
     ValidateResumeTruthRequest,
+)
+from resume_kit_facade.project_config import (
+    ProjectConfig,
+    init_project,
+    load_config,
+    save_config,
+    set_active,
 )
 
 __all__ = [
@@ -64,13 +75,21 @@ __all__ = [
     "extract_resume",
     "extract_resume_text_capability",
     "identify_resume_gaps",
+    "init_project_capability",
     "select_best_resume",
+    "set_active_capability",
     "suggest_terminology",
     "validate_resume_truth_capability",
     # options
     "CapabilityOptions",
     # alias scoping helper
     "use_alias_file",
+    # working-directory config contract
+    "ProjectConfig",
+    "init_project",
+    "load_config",
+    "save_config",
+    "set_active",
     # request models
     "AlignResumeRequest",
     "AlignTerminologyRequest",
@@ -84,7 +103,9 @@ __all__ = [
     "ExtractResumeRequest",
     "ExtractResumeTextRequest",
     "IdentifyResumeGapsRequest",
+    "InitProjectRequest",
     "SelectBestResumeRequest",
+    "SetActiveRequest",
     "SuggestTerminologyRequest",
     "ValidateResumeTruthRequest",
     # response models

@@ -31,7 +31,9 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
@@ -57,6 +59,8 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_export",
     "resume_suggest_terminology",
     "resume_align_terminology",
+    "project_init",
+    "project_set_active",
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
@@ -588,6 +592,43 @@ async def resume_align_terminology(arguments: ToolArguments) -> ToolResult:
     return await _call("align-terminology", request, arguments)
 
 
+def _optional_str(arguments: ToolArguments, field: str) -> str | None:
+    value = arguments.get(field)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise _ValidationFailure(f"Field '{field}' must be a string.", field=field)
+
+
+async def project_init(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            InitProjectRequest,
+            {"root": _optional_string(arguments, "root", ".")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("init-project", request, arguments)
+
+
+async def project_set_active(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            SetActiveRequest,
+            {
+                "resume": _optional_str(arguments, "resume"),
+                "resume_source": _optional_str(arguments, "resume_source"),
+                "job": _optional_str(arguments, "job"),
+                "job_source": _optional_str(arguments, "job_source"),
+                "root": _optional_string(arguments, "root", "."),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("set-active", request, arguments)
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
     "resume_extract_text": resume_extract_text,
@@ -604,4 +645,6 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_export": resume_export,
     "resume_suggest_terminology": resume_suggest_terminology,
     "resume_align_terminology": resume_align_terminology,
+    "project_init": project_init,
+    "project_set_active": project_set_active,
 }

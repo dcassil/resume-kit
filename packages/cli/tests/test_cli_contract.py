@@ -50,6 +50,8 @@ def test_help_lists_all_commands() -> None:
         "validate-truth",
         "build-evidence",
         "export",
+        "init",
+        "set-active",
     ]
     for name in expected:
         assert name in result.stdout
@@ -143,3 +145,38 @@ def test_align_no_llm_succeeds(tmp_path: Path) -> None:
         app, ["align", "--resume", resume, "--job", job, "--no-llm"]
     )
     assert result.exit_code == 0, result.stdout
+
+
+def test_init_then_set_active_records_source(tmp_path: Path) -> None:
+    init_res = runner.invoke(app, ["init", "--root", str(tmp_path)])
+    assert init_res.exit_code == 0, init_res.stdout
+    assert (tmp_path / "resume-kit" / "config.json").is_file()
+
+    set_res = runner.invoke(
+        app,
+        [
+            "set-active",
+            "--root",
+            str(tmp_path),
+            "--resume",
+            "resumes/x-original.json",
+            "--source",
+            "/path/x.docx",
+        ],
+    )
+    assert set_res.exit_code == 0, set_res.stdout
+    on_disk = json.loads(
+        (tmp_path / "resume-kit" / "config.json").read_text(encoding="utf-8")
+    )
+    assert on_disk["active_resume"] == "resumes/x-original.json"
+    assert on_disk["active_resume_source"] == "/path/x.docx"
+
+
+def test_init_is_idempotent_via_cli(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    config = tmp_path / "resume-kit" / "config.json"
+    config.write_text(json.dumps({"active_job": "jobs/j.json"}), encoding="utf-8")
+    second = runner.invoke(app, ["init", "--root", str(tmp_path)])
+    assert second.exit_code == 0, second.stdout
+    on_disk = json.loads(config.read_text(encoding="utf-8"))
+    assert on_disk["active_job"] == "jobs/j.json"

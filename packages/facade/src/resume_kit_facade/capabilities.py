@@ -99,11 +99,14 @@ from resume_kit_facade.models import (
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.project_config import init_project, set_active
 
 # A capability takes a request object plus options and yields an
 # InterfaceResponse.  Registry values narrow their request via ``isinstance``.
@@ -658,6 +661,61 @@ async def align_terminology(
 
 
 # ---------------------------------------------------------------------------
+# Working-directory state capabilities (RIT-T-0091, filesystem-local)
+# ---------------------------------------------------------------------------
+
+
+async def init_project_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Idempotently scaffold the ``resume-kit/`` working-directory tree.
+
+    Deterministic and filesystem-local (RIT-T-0091): never requires a provider
+    and ignores ``no_llm``. Creates the folder tree + ``config.json`` and
+    returns the resulting :class:`ProjectConfig` as data. Re-running preserves
+    existing pointers and any unknown (preference) keys — no content is deleted.
+    """
+    if not isinstance(request, InitProjectRequest):
+        return from_resume_kit_error(_bad_request(request, "InitProjectRequest"))
+    try:
+        config = init_project(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem failure
+        return from_exception(exc)
+    return build_success(config, strict=options.strict)
+
+
+async def set_active_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Record active resume/job pointers plus source paths through the schema.
+
+    Deterministic and filesystem-local (RIT-T-0091): loads the existing config
+    (preserving unknown keys and any pointer not being changed), updates the
+    supplied pointer(s) and their source path(s), saves atomically, and returns
+    the updated :class:`ProjectConfig`.
+    """
+    if not isinstance(request, SetActiveRequest):
+        return from_resume_kit_error(_bad_request(request, "SetActiveRequest"))
+    try:
+        config = set_active(
+            request.root,
+            resume=request.resume,
+            resume_source=request.resume_source,
+            job=request.job,
+            job_source=request.job_source,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem/validation failure
+        return from_exception(exc)
+    return build_success(config, strict=options.strict)
+
+
+# ---------------------------------------------------------------------------
 # Capability registry
 # ---------------------------------------------------------------------------
 
@@ -677,4 +735,6 @@ REGISTRY: dict[str, Capability] = {
     "export-resume": export_resume,
     "suggest-terminology": suggest_terminology,
     "align-terminology": align_terminology,
+    "init-project": init_project_capability,
+    "set-active": set_active_capability,
 }

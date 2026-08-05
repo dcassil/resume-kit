@@ -176,6 +176,39 @@ class BuildCandidateEvidenceBody(_Options):
     approved_claims: list[CandidateEvidence] | None = None
 
 
+class InitProjectBody(_Options):
+    """Body for ``POST /init`` — scaffold the resume-kit/ working directory.
+
+    Filesystem-local (RIT-T-0091): idempotently creates the tree + config.json
+    under ``root`` (default: the server's current directory) and returns the
+    resulting ``ProjectConfig``.
+    """
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+
+
+class SetActiveBody(_Options):
+    """Body for ``POST /set-active`` — record active pointers + source paths.
+
+    At least one of ``resume`` / ``job`` must be set; a ``*_source`` without its
+    matching document is rejected by the capability.
+    """
+
+    resume: str | None = Field(
+        default=None, description="Active resume JSON path (relative to resume-kit/)."
+    )
+    resume_source: str | None = Field(
+        default=None, description="Original source file the active resume came from."
+    )
+    job: str | None = Field(
+        default=None, description="Active job JSON path (relative to resume-kit/)."
+    )
+    job_source: str | None = Field(
+        default=None, description="Original source file the active job came from."
+    )
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+
+
 class ExportResumeBody(_Options):
     """Body for ``POST /export`` — render a resume to ``pdf`` or ``docx``.
 

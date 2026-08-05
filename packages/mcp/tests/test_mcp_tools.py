@@ -98,6 +98,8 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_export",
         "resume_suggest_terminology",
         "resume_align_terminology",
+        "project_init",
+        "project_set_active",
     }
     assert set(TOOL_NAMES) == expected
     assert set(HANDLERS) == expected

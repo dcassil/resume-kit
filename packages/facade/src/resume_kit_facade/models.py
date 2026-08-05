@@ -80,6 +80,38 @@ class ExtractResumeTextRequest:
 
 
 @dataclass(frozen=True)
+class InitProjectRequest:
+    """Inputs for the init-project capability (RIT-T-0091).
+
+    Deterministic, filesystem-local: idempotently scaffolds the ``resume-kit/``
+    working-directory tree (``config.json`` + ``resumes/``, ``jobs/``,
+    ``working/``, ``learning/``) under ``root`` and returns the resulting
+    :class:`~resume_kit_facade.project_config.ProjectConfig`.  ``root`` defaults
+    to the current directory.
+    """
+
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class SetActiveRequest:
+    """Inputs for the set-active capability (RIT-T-0091).
+
+    Records the ``active_resume`` / ``active_job`` pointer(s) plus the
+    originating source file path(s) through the code-owned config schema. At
+    least one of ``resume`` / ``job`` must be set; a ``*_source`` without its
+    matching document is rejected by the capability. ``root`` defaults to the
+    current directory.
+    """
+
+    resume: str | None = None
+    resume_source: str | None = None
+    job: str | None = None
+    job_source: str | None = None
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
 class ExtractJobDescriptionRequest:
     """Inputs for the extract-job-description capability."""
 

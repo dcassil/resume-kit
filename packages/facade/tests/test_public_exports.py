@@ -20,7 +20,10 @@ def test_all_public_exports_importable() -> None:
         ExtractResumeRequest,
         ExtractResumeTextRequest,
         IdentifyResumeGapsRequest,
+        InitProjectRequest,
+        ProjectConfig,
         SelectBestResumeRequest,
+        SetActiveRequest,
         SuggestTerminologyRequest,
         TerminologyAlignmentDelta,
         ValidateResumeTruthRequest,
@@ -36,18 +39,36 @@ def test_all_public_exports_importable() -> None:
         extract_resume,
         extract_resume_text_capability,
         identify_resume_gaps,
+        init_project,
+        init_project_capability,
+        load_config,
+        save_config,
         select_best_resume,
+        set_active,
+        set_active_capability,
         suggest_terminology,
         validate_resume_truth_capability,
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 15
+    assert len(REGISTRY) == 17
     assert "extract-resume-text" in REGISTRY
     assert "export-resume" in REGISTRY
     assert "check-ats-structure" in REGISTRY
     assert "suggest-terminology" in REGISTRY
     assert "align-terminology" in REGISTRY
+    assert "init-project" in REGISTRY
+    assert "set-active" in REGISTRY
+
+    assert callable(init_project_capability)
+    assert callable(set_active_capability)
+    assert callable(init_project)
+    assert callable(load_config)
+    assert callable(save_config)
+    assert callable(set_active)
+    assert ProjectConfig is not None
+    assert InitProjectRequest is not None
+    assert SetActiveRequest is not None
 
     assert callable(suggest_terminology)
     assert callable(align_terminology)
