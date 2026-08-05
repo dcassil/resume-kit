@@ -26,6 +26,15 @@ from .analysis import (
     ScoreDelta,
     TerminologyAlignment,
 )
+from .best_practices import (
+    BEST_PRACTICES_SCHEMA_VERSION,
+    BestPracticesFinding,
+    BestPracticesReport,
+    FindingLocation,
+    FindingSeverity,
+    ProvenanceKind,
+    ResolutionKind,
+)
 from .change import (
     ChangeAction,
     ChangeProposal,
@@ -86,6 +95,14 @@ from .resume import (
 __version__ = "0.0.0"
 
 __all__ = [
+    # best-practices (RIT-I-0016)
+    "BEST_PRACTICES_SCHEMA_VERSION",
+    "BestPracticesFinding",
+    "BestPracticesReport",
+    "FindingLocation",
+    "FindingSeverity",
+    "ProvenanceKind",
+    "ResolutionKind",
     # resume
     "ResumeDocument",
     "ResumeData",
