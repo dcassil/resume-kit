@@ -84,3 +84,66 @@ def test_clean_resume_base_equals_original_content(tmp_path: Path) -> None:
     assert result.applied == []
     base = json.loads((working_dir(tmp_path) / "resumes" / "jane-base.json").read_text())
     assert ResumeDocument.model_validate(base) == ResumeDocument.model_validate(clean)
+
+
+# --- base -> standard walkthrough write path (RIT-T-0118) ---
+
+
+def _resume_for_standard() -> dict:
+    return {
+        "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "5"},
+        "summary": "A results-driven team player who ships.",
+        "workExperience": [
+            {"id": 1, "title": "Eng", "company": "Acme", "years": "2020-2022",
+             "description": ["Responsible for maintaining the billing service."]}
+        ],
+        "additional": {"technicalSkills": ["Python"]},
+    }
+
+
+def test_build_standard_writes_standard_and_sets_pointer(tmp_path: Path) -> None:
+    from resume_kit_facade.baseline import build_standard
+
+    _setup(tmp_path, _resume_for_standard())
+    # base first (auto), then standard from base
+    build_base(tmp_path, mode="auto")
+    result = build_standard(tmp_path)
+
+    assert result.standard_path == "resumes/jane-standard.json"
+    std_file = working_dir(tmp_path) / "resumes" / "jane-standard.json"
+    assert std_file.exists()
+    std = ResumeDocument.model_validate(json.loads(std_file.read_text(encoding="utf-8")))
+    # buzzwords removed, weak opener fixed; claims preserved
+    assert "results-driven" not in std.summary.lower()
+    assert not std.workExperience[0].description[0].lower().startswith("responsible for")
+    assert std.workExperience[0].company == "Acme"
+
+    config = load_config(tmp_path)
+    assert config.standard_resume == "resumes/jane-standard.json"
+    assert config.standard_derived_from == "resumes/jane-base.json"
+    assert resolve_active_resume(config) == "resumes/jane-standard.json"
+
+
+def test_build_standard_applies_user_answer(tmp_path: Path) -> None:
+    from resume_kit_facade.baseline import build_standard
+    from resume_kit_scoring import (
+        analyze_best_practices,
+        finding_key,
+        project_scoredoc,
+    )
+    from datetime import date
+
+    _setup(tmp_path, _resume_for_standard())
+    base = build_base(tmp_path, mode="auto")
+    base_doc = ResumeDocument.model_validate(
+        json.loads((working_dir(tmp_path) / base.base_path).read_text())
+    )
+    report = analyze_best_practices(base_doc, project_scoredoc(base_doc, reference_date=date(2025, 1, 1)))
+    mq = next(f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION")
+    answers = {finding_key(mq): "Cut billing incidents 40% over two quarters."}
+
+    result = build_standard(tmp_path, answers=answers)
+    std = ResumeDocument.model_validate(
+        json.loads((working_dir(tmp_path) / result.standard_path).read_text())
+    )
+    assert any("40%" in b for b in std.workExperience[0].description)

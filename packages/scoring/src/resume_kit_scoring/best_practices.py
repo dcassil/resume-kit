@@ -76,6 +76,16 @@ def _strip_prefix(text: str, prefix: str) -> str:
     return rest[:1].upper() + rest[1:] if rest else text
 
 
+def _strip_words(text: str, words: list[str]) -> str:
+    """Remove each of ``words`` (case-insensitive) from ``text`` and tidy spacing."""
+    cleaned = text
+    for word in words:
+        cleaned = re.sub(re.escape(word), "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,.;")
+    # Fall back to the original if stripping emptied the text (validator needs a value).
+    return cleaned or text
+
+
 def _weak_opener(text: str) -> str | None:
     low = text.lower()
     for opener in _WEAK_OPENERS:
@@ -128,18 +138,22 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
                 )
             )
 
-        for word in _BUZZWORDS:
-            if word in bullet.lower():
-                findings.append(
-                    BestPracticesFinding(
-                        rule_code="BUZZWORD",
-                        message=f"Buzzword '{word}' adds no evidence; remove or replace with a concrete result.",
-                        location=loc,
-                        severity=FindingSeverity.WARNING,
-                        resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
-                        suggested_change=re.sub(re.escape(word), "", bullet, flags=re.IGNORECASE).strip(),
-                    )
+        matched_bw = [w for w in _BUZZWORDS if w in bullet.lower()]
+        if matched_bw:
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="BUZZWORD",
+                    message=(
+                        "Buzzword(s) "
+                        + ", ".join(f"'{w}'" for w in matched_bw)
+                        + " add no evidence; remove or replace with a concrete result."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=_strip_words(bullet, matched_bw),
                 )
+            )
 
         if not _NUMBER_RE.search(bullet):
             findings.append(
@@ -159,20 +173,22 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
     # Summary in the buzzword scan + length.
     if resume.summary.strip():
         loc = FindingLocation(section="summary", zone="summary")
-        for word in _BUZZWORDS:
-            if word in resume.summary.lower():
-                findings.append(
-                    BestPracticesFinding(
-                        rule_code="BUZZWORD",
-                        message=f"Summary contains the buzzword '{word}'; replace with concrete positioning.",
-                        location=loc,
-                        severity=FindingSeverity.WARNING,
-                        resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
-                        suggested_change=re.sub(
-                            re.escape(word), "", resume.summary, flags=re.IGNORECASE
-                        ).strip(),
-                    )
+        matched_bw = [w for w in _BUZZWORDS if w in resume.summary.lower()]
+        if matched_bw:
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="BUZZWORD",
+                    message=(
+                        "Summary contains buzzword(s) "
+                        + ", ".join(f"'{w}'" for w in matched_bw)
+                        + "; replace with concrete positioning."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=_strip_words(resume.summary, matched_bw),
                 )
+            )
         if len(resume.summary.split()) > _SUMMARY_WORD_LIMIT:
             findings.append(
                 BestPracticesFinding(
