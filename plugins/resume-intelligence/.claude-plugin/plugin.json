@@ -1,6 +1,6 @@
 {
   "name": "resume-intelligence",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Resume Intelligence Toolkit skills: single-responsibility, self-gating flow (resume-workflow guide) — resume/job → JSON, ATS-structure check, keyword match, gap analysis, truth-gated keyword injection + terminology mirroring, truth validation, candidate evidence, version compare/select, and PDF/DOCX export — over the resume-kit MCP server and resume-tool CLI.",
   "author": {
     "name": "Daniel Cassil"

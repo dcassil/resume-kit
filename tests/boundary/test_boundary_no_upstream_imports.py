@@ -186,6 +186,7 @@ def test_known_packages_present() -> None:
         "core",
         "schemas",
         "terms",
+        "feedback",
         "document-parser",
         "matching",
         "ats",

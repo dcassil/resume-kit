@@ -1,7 +1,7 @@
 """Structural tests for the resume-intelligence plugin skill markdown files.
 
 Validates:
-- All 10 expected skill directories exist under plugins/resume-intelligence/skills/.
+- All expected skill directories exist under plugins/resume-intelligence/skills/.
 - Each directory contains a SKILL.md file that is valid UTF-8.
 - Each SKILL.md has a non-empty YAML front matter block with non-empty
   ``name`` and ``description`` fields.
@@ -50,14 +50,18 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "resume-workflow",
         # Review (agent-driven, advice-only)
         "review-tailored-resume",
+        # Preference learning (agent-driven, no CLI/MCP surface)
+        "rank-edits",
+        "log-edit-feedback",
     ]
 )
 
 # CLI commands and MCP tool names that must appear (one per slug). Workflow /
 # agent-driven skills (resume-to-json, job-to-json, inject-keywords,
-# update-terminology, manage-synonyms, resume-workflow, review-tailored-resume)
-# are intentionally exempt
-# — they orchestrate other skills/tools rather than wrapping a single capability.
+# update-terminology, manage-synonyms, resume-workflow, review-tailored-resume,
+# rank-edits, log-edit-feedback) are intentionally exempt — they orchestrate
+# other skills/tools (or drive the resume_kit_feedback package, which has no
+# CLI/MCP surface) rather than wrapping a single capability.
 EXPECTED_CLI_OR_MCP: dict[str, list[str]] = {
     "check-ats-structure": ["resume-tool", "resume_check_ats_structure"],
     "check-keyword-match": ["resume-tool", "resume_check_job_match"],
@@ -121,7 +125,7 @@ def test_skills_directory_exists() -> None:
 
 
 def test_skill_slug_set_is_complete() -> None:
-    """The set of skill directories matches exactly the 10 expected slugs."""
+    """The set of skill directories matches exactly the expected slugs."""
     actual = {
         d.name
         for d in SKILLS_DIR.iterdir()

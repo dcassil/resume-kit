@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resume-kit-feedback"
+version = "0.0.0"
+description = "Deterministic, offline preference-learning substrate: append-only edit-feedback log I/O."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "resume-kit-schemas",
+    "resume-kit-ats",
+    "resume-kit-matching",
+    "resume-kit-evidence",
+    "resume-kit-core",
+    "resume-kit-terms",
+]
+
+[tool.uv.sources]
+resume-kit-schemas = { workspace = true }
+resume-kit-ats = { workspace = true }
+resume-kit-matching = { workspace = true }
+resume-kit-evidence = { workspace = true }
+resume-kit-core = { workspace = true }
+resume-kit-terms = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resume_kit_feedback"]

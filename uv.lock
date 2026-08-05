@@ -24,6 +24,7 @@ members = [
     "resume-kit-evidence",
     "resume-kit-export",
     "resume-kit-facade",
+    "resume-kit-feedback",
     "resume-kit-job-hunter-bridge",
     "resume-kit-job-parser",
     "resume-kit-matching",
@@ -1329,7 +1330,7 @@ wheels = [
 
 [[package]]
 name = "resume-kit"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "markitdown", extra = ["docx"] },
@@ -1582,6 +1583,31 @@ requires-dist = [
     { name = "resume-kit-job-parser", editable = "packages/job-parser" },
     { name = "resume-kit-matching", editable = "packages/matching" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
+]
+
+[[package]]
+name = "resume-kit-feedback"
+version = "0.0.0"
+source = { editable = "packages/feedback" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-ats" },
+    { name = "resume-kit-core" },
+    { name = "resume-kit-evidence" },
+    { name = "resume-kit-matching" },
+    { name = "resume-kit-schemas" },
+    { name = "resume-kit-terms" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-ats", editable = "packages/ats" },
+    { name = "resume-kit-core", editable = "packages/core" },
+    { name = "resume-kit-evidence", editable = "packages/evidence" },
+    { name = "resume-kit-matching", editable = "packages/matching" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+    { name = "resume-kit-terms", editable = "packages/terms" },
 ]
 
 [[package]]
