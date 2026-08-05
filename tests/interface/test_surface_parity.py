@@ -29,22 +29,30 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    OpenEditSessionRequest,
     RankEditCandidatesRequest,
+    ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.project_config import init_project, set_active, working_dir
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.tools import HANDLERS
 from resume_kit_schemas import (
     AdditionalInfo,
     CandidateEvidence,
+    ChangeProposal,
     EditFeedback,
     EditFeedbackReasonCode,
     EvidenceKind,
@@ -54,6 +62,7 @@ from resume_kit_schemas import (
     Requirement,
     RequirementKind,
     ResumeDocument,
+    ReviewAction,
     TerminologyAlignment,
 )
 from typer import Typer
@@ -988,6 +997,199 @@ def test_align_human_in_loop_surfaces_questions_across_surfaces(
     surfaces = {"direct": direct, "cli": cli, "mcp": mcp, "api": api}
     assert all(payload["requires_human_input"] is True for payload in surfaces.values())
     assert all(payload["questions"] for payload in surfaces.values())
+
+
+def _session_change() -> ChangeProposal:
+    return ChangeProposal(
+        path="summary",
+        action="replace",
+        original="Backend engineer delivering Python APIs.",
+        value="Backend engineer delivering Python and FastAPI APIs.",
+        reason="Surface a truthful framework already present in the resume.",
+    )
+
+
+def _session_root(tmp_path: Path, name: str) -> Path:
+    root = tmp_path / name
+    init_project(root)
+    base = working_dir(root)
+    resume = ResumeDocument(
+        summary="Backend engineer delivering Python APIs.",
+        additional=AdditionalInfo(technicalSkills=["Python", "FastAPI"]),
+    )
+    job = JobDescription(title="Backend Engineer", keywords=["FastAPI"])
+    (base / "resumes" / "jordan-original.json").write_text(
+        resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    (base / "jobs" / "job.json").write_text(job.model_dump_json(), encoding="utf-8")
+    set_active(root, resume="resumes/jordan-original.json", job="jobs/job.json")
+    _write_json(
+        root / "changes.json",
+        [_session_change().model_dump(mode="json")],
+    )
+    return root
+
+
+def _scrub_session_payload(payload: JsonDict) -> JsonDict:
+    scrubbed = json.loads(json.dumps(payload))
+
+    def scrub(value: object) -> None:
+        if isinstance(value, dict):
+            if "session_id" in value:
+                value["session_id"] = "<session>"
+            for nested in value.values():
+                scrub(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                scrub(nested)
+
+    scrub(scrubbed)
+    return cast(JsonDict, scrubbed)
+
+
+def _direct_session_lifecycle(root: Path) -> list[JsonDict]:
+    change = _session_change()
+    responses = [
+        _direct_json(
+            "open-edit-session",
+            OpenEditSessionRequest(root=root, mode="interactive", changes=[change]),
+        ),
+        _direct_json("session-prompt", SessionPromptRequest(root=root)),
+        _direct_json(
+            "decide-change",
+            DecideChangeRequest(root=root, path="summary", action=ReviewAction.APPROVE),
+        ),
+        _direct_json("commit-session", CommitSessionRequest(root=root)),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _direct_json("reconcile-session", ReconcileSessionRequest(root=root)),
+            _direct_json("session-status", SessionStatusRequest(root=root)),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def _cli_session_lifecycle(root: Path) -> list[JsonDict]:
+    responses = [
+        _cli_json(
+            [
+                "review-edits",
+                "open",
+                "--mode",
+                "interactive",
+                "--changes",
+                str(root / "changes.json"),
+                "--root",
+                str(root),
+            ]
+        ),
+        _cli_json(
+            ["review-edits", "prompt", "--root", str(root)],
+            expected_exit=int(ExitCode.HUMAN_INPUT_REQUIRED),
+        ),
+        _cli_json(
+            [
+                "review-edits",
+                "decide",
+                "--path",
+                "summary",
+                "--action",
+                "approve",
+                "--root",
+                str(root),
+            ]
+        ),
+        _cli_json(["review-edits", "commit", "--root", str(root)]),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _cli_json(["review-edits", "reconcile", "--root", str(root)]),
+            _cli_json(["review-edits", "status", "--root", str(root)]),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def _mcp_session_lifecycle(root: Path) -> list[JsonDict]:
+    change = _session_change().model_dump(mode="json")
+    responses = [
+        _mcp_json(
+            "edit_session_open",
+            {"root": str(root), "mode": "interactive", "changes": [change]},
+        ),
+        _mcp_json("edit_session_prompt", {"root": str(root)}),
+        _mcp_json(
+            "edit_session_decide",
+            {"root": str(root), "path": "summary", "action": "approve"},
+        ),
+        _mcp_json("edit_session_commit", {"root": str(root)}),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _mcp_json("edit_session_reconcile", {"root": str(root)}),
+            _mcp_json("edit_session_status", {"root": str(root)}),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def _api_session_lifecycle(root: Path) -> list[JsonDict]:
+    change = _session_change().model_dump(mode="json")
+    responses = [
+        _api_json(
+            "/review-edits/open",
+            {"root": str(root), "mode": "interactive", "changes": [change]},
+        ),
+        _api_json("/review-edits/prompt", {"root": str(root)}),
+        _api_json(
+            "/review-edits/decide",
+            {"root": str(root), "path": "summary", "action": "approve"},
+        ),
+        _api_json("/review-edits/commit", {"root": str(root)}),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _api_json("/review-edits/reconcile", {"root": str(root)}),
+            _api_json("/review-edits/status", {"root": str(root)}),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def test_review_edits_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _session_root(tmp_path, "direct"),
+        "cli": _session_root(tmp_path, "cli"),
+        "mcp": _session_root(tmp_path, "mcp"),
+        "api": _session_root(tmp_path, "api"),
+    }
+
+    direct = _direct_session_lifecycle(roots["direct"])
+    cli = _cli_session_lifecycle(roots["cli"])
+    mcp = _mcp_session_lifecycle(roots["mcp"])
+    api = _api_session_lifecycle(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
 
 
 # ---------------------------------------------------------------------------

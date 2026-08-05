@@ -157,7 +157,7 @@ This initiative is sequenced **after** [[RIT-I-0017]] and [[RIT-I-0016]] (see `b
 
 - **LLM-shaped guidance routing:** guidance items that are inherently judgment-based (relevance framing, coherent voice, natural repetition) must be routed to reviewer-prompt / review-note lanes in 0018's severity model, **never into the deterministic scoring path**, preserving RIT-A-0002's invariant.
 
-**Recommended follow-up:** 0018 likely warrants its own ADR (0016 has RIT-A-0003, 0017 has RIT-A-0002) for at least the severity-taxonomy adoption and the check-vs-prompt-vs-doc classification decision. Flag for human decision before 0018 exits discovery.
+**Framework ADR:** [[RIT-A-0004]] (draft) records this initiative's two load-bearing framework decisions — the fixed **six-lane guidance-to-capability classification** (deterministic check / LLM-reviewer prompt / skill-workflow copy / documentation / human-judgment / out-of-scope-future) and the **adoption of RIT-I-0016's severity taxonomy** as the single shared finding vocabulary. Both await human review before this initiative exits discovery; the per-item classifications themselves are produced by the audit, not by the ADR.
 
 ## Implementation Plan **[REQUIRED]**
 

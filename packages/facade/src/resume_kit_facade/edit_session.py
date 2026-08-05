@@ -709,6 +709,12 @@ def _feedback_for_decision(
     kept_text = (
         final_text if final_text is not None else proposed if outcome == "accepted" else None
     )
+    removed_terms, added_terms, preserved_terms = _feedback_diff_terms(
+        action=action,
+        original=original,
+        proposed=proposed,
+        final=kept_text,
+    )
     return EditFeedback(
         edit_id=_edit_id(state, change, action),
         resume_id=state.active_resume,
@@ -725,8 +731,51 @@ def _feedback_for_decision(
         outcome=outcome,
         reason_code=reason_code,
         reason_note=note,
+        removed_terms=removed_terms,
+        added_terms=added_terms,
+        preserved_terms=preserved_terms,
         timestamp=datetime.now(UTC).isoformat(),
     )
+
+
+def _feedback_diff_terms(
+    *,
+    action: ReviewAction,
+    original: str,
+    proposed: str,
+    final: str | None,
+) -> tuple[list[str], list[str], list[str]]:
+    if action == ReviewAction.EDIT and final is not None:
+        return _term_delta(proposed, final)
+    if action == ReviewAction.APPROVE:
+        return _term_delta(original, proposed)
+    if action in {ReviewAction.REJECT, ReviewAction.SKIP}:
+        removed, added, preserved = _term_delta(original, proposed)
+        return removed, added or preserved, []
+    return [], [], []
+
+
+def _term_delta(before: str, after: str) -> tuple[list[str], list[str], list[str]]:
+    before_terms = _ordered_terms(before)
+    after_terms = _ordered_terms(after)
+    before_set = set(before_terms)
+    after_set = set(after_terms)
+    removed = [term for term in before_terms if term not in after_set]
+    added = [term for term in after_terms if term not in before_set]
+    preserved = [term for term in after_terms if term in before_set]
+    return removed, added, preserved
+
+
+def _ordered_terms(text: str) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for token in _TOKEN_RE.findall(text):
+        term = surface_form(token)
+        if not term or term in seen:
+            continue
+        seen.add(term)
+        terms.append(term)
+    return terms
 
 
 def _edit_id(

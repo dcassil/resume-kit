@@ -63,15 +63,14 @@ Alongside `active_resume` and `active_job`, `config.json` may carry an optional
 `learning/synonyms.json` and is resolved against the `resume-kit/` working dir
 (not the shell CWD), matching the `active_resume`/`active_job` convention.
 
-This is purely a plugin/agent convention: **no Python package opens
-`config.json`.** The skill reads the pointer and passes the resolved path to the
-keyword-scoring surfaces through their `alias_file` parameter — `resume-tool
-match --alias-file <path>` / `identify-gaps --alias-file <path>` on the CLI, an
-`alias_file` field on the `resume_check_job_match` / `resume_identify_gaps` MCP
-tools, and an `alias_file` body field on the corresponding API routes. (Keyword
-matching uses the alias index; `check-ats-structure` is structure-only and takes
-no alias file.) When the pointer is absent the surfaces run seed-only, identical
-to prior behaviour.
+`config.json` is code-owned by `resume-tool init` / `resume-tool set-active`;
+skills must not hand-edit it. Keyword-scoring surfaces also accept an explicit
+`alias_file` override — `resume-tool match --alias-file <path>` /
+`identify-gaps --alias-file <path>` on the CLI, an `alias_file` field on the
+`resume_check_job_match` / `resume_identify_gaps` MCP tools, and an `alias_file`
+body field on the corresponding API routes. Keyword matching uses the alias
+index; `check-ats-structure` is structure-only and takes no alias file. When the
+pointer is absent the surfaces run seed-only, identical to prior behaviour.
 
 These skills describe how an agent drives the `resume-tool` CLI or the MCP
 server. Each skill does ONE thing and self-gates on its prerequisites (it stops
@@ -98,7 +97,13 @@ facts, bypass evidence, or create business rules in prompt text.
    `validate-resume-truth`. When several truthful candidates exist,
    `rank-edits` calls `resume-tool rank-edit-candidates` first; after a
    decision, `log-edit-feedback` calls `resume-tool record-edit-feedback` and
-   refreshes preferences.
+   refreshes preferences with `resume-tool refresh-preferences --now <iso>`.
+   Confirmed user evidence is persisted with
+   `resume-tool add-evidence --confirmed --content ...`; `validate-resume-truth`
+   reports near-match confirmed claims as `USER_CONFIRMED`, reserves
+   `CONTRADICTED` for structural conflicts or active refutations, and uses
+   `UNSUPPORTED` for missing evidence. Every claim includes a stable
+   `reason_code`.
 4. **Verify** — `validate-resume-truth`; then re-run the checks to see the delta.
 5. **Review** (optional, no LLM provider) — `review-tailored-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes

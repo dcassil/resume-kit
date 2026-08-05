@@ -29,11 +29,15 @@ A single structured resume model — `ResumeDocument` (`packages/schemas/src/res
 **score** (ATS structure + keyword/job-match analysis), and **learn** (feedback/preference derivation).
 These pull in different directions and the conflation now produces measurable defects.
 
-- **Scoring reads build-shaped fields directly.** `matching/keywords.py:197-213` and `ats/engine.py:215`
-  read `additional.technicalSkills` and walk the raw resume dict. When a resume legitimately carries
-  skills inside a *categorized* section rather than that one hardcoded field, the keywords are
-  under-counted — the observed **85.8 -> 75.8** score drop, where tokens an ATS would have read fine were
-  sitting in a section the scorer never looked at.
+- **Scoring reads build-shaped fields directly.** `matching/keywords.py:197` and `ats/engine.py:213`
+  read `additional.technicalSkills` and walk the raw resume dict. The defect is **not** that categorized
+  skills are invisible — `keywords.py:213` already harvests `customSections` for flat coverage — it is
+  that categorized skills are **not treated as canonical, high-value skills**: high-value/zone placement
+  (`matching/match.py:82` `_high_value_text`) draws only from `additional.technicalSkills` +
+  `workExperience`, so skills sitting in a categorized section are counted as ordinary body text rather
+  than as skills in a weighted zone. That flat, un-zoned treatment is the **85.8 -> 75.8** class of drop,
+  where tokens an ATS would read as skills are under-weighted because scoring couples to specific BuildDoc
+  field names instead of a canonical, zoned view.
 - **The score does not reflect what a machine reads.** A real ATS never sees our JSON; it reads the
   rendered artifact, extracts text, and re-segments it into canonical sections and entities (name,
   contact, per-role title/company/dates -> computed years-of-experience). Scoring build-shaped fields
@@ -82,8 +86,9 @@ build schema, renderer, and export are untouched.
   extraction, no new dependency, identical output for identical input.
 - **Repoint every scoring path to read only ScoreDoc**, never BuildDoc field names. Keyword/match scoring
   harvests from all zones with weights (**experience > skills-list > summary**) plus recency.
-- Structurally fix the **85.8 -> 75.8** class of bug: categorized skills score correctly because the
-  projection harvests every zone.
+- Structurally fix the **85.8 -> 75.8** class of bug: categorized skills are treated as canonical,
+  high-value skills because the projection assigns them to a weighted skills zone — rather than being
+  down-weighted as ordinary body text as they are today.
 - Surface a read-only **"what the ATS sees"** report (detected sections + entities + computed YoE + zoned
   keyword breakdown) across facade + CLI + MCP + API + a plugin skill, per the existing parity norm.
 
