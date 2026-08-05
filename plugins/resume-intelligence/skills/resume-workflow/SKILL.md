@@ -61,25 +61,33 @@ opt-in and never auto-runs.
    - **identify-resume-gaps** — gate: `active_resume` + `active_job` JSON.
    Record the baseline scores so step 6 can show deltas.
 
-4. **Improve** *(optional — only what steps 3 surfaced)*:
-   - **inject-keywords** *(optional)* — gate: `active_resume` + `active_job` +
-     the keyword-match/gap findings. Add missing, truthful keywords.
-   - **update-terminology** *(optional)* — gate: `active_resume` + the synonym
-     alias index (`alias_file`). Align variant terms to the job's phrasing.
-   Work on a mutable copy in `resume-kit/working/<session>/resume.json`; leave the
-   `-original.json` pristine. **LLM auto-rewrite is disabled — there is no
-   `align-resume`.** All edits are targeted, agent-made, and truthful.
+4. **Improve** *(only what steps 3 surfaced)*:
+   - **inject-keywords** — gate: `active_resume` + `active_job` + the
+     keyword-match/gap findings. Produces `ChangeProposal` records for
+     missing-but-true keywords.
+   - **update-terminology** — gate: `active_resume` + `active_job` + the synonym
+     alias index (`alias_file`). Produces `ChangeProposal` records for wording
+     swaps the resume already satisfies.
 
-   *Preference-learning loop (optional — no LLM):* when several truthful
-   candidate edits are available for a pending improvement, you may
-   (a) run **rank-edits** to rank the candidates against past outcomes + learned
-   preferences and present the best one(s) with an explanation (it never
-   auto-applies; the truth hard-block excludes any fabricated candidate),
-   (b) apply the chosen candidate via the truth-gated improve skills above
-   (`inject-keywords` / `update-terminology`), then
-   (c) run **log-edit-feedback** to record the outcome so future rankings
-   improve. This loop is entirely optional — skip it and the Improve phase still
-   works exactly as described above.
+   The sanctioned write path is the edit-session loop, not direct JSON edits:
+   ask the mode prompt (`interactive`, `review_at_end`, or `auto`) →
+   `resume-tool review-edits open` / `open-edit-session` →
+   `resume-tool review-edits prompt` / `session-prompt` →
+   `resume-tool review-edits decide` / `decide-change` for every change,
+   offering the `EditFeedbackReasonCode` enum on `reject` or `edit` →
+   `resume-tool review-edits commit` / `commit-session` as the hard write gate →
+   **validate-resume-truth**. Direct hand-editing of the working resume is
+   unsupported unless followed by `resume-tool review-edits reconcile` /
+   `reconcile-session`.
+
+   When several truthful candidates are available, run **rank-edits** first via
+   `rank-edit-candidates` / `edit_candidates_rank` (passing `alias_file`) and
+   present the ranked reasons before opening the session. Once the user decides
+   or edits a proposal, record the outcome through **log-edit-feedback** via
+   `record-edit-feedback` / `edit_feedback_record`; this is part of the
+   orchestrated loop's learning path, not a prose-only afterthought. **LLM
+   auto-rewrite is disabled — there is no skill path that bulk-runs
+   `align-resume`.**
 
 5. **Second-agent review** *(optional — advice-only)* — run
    **review-tailored-resume**.

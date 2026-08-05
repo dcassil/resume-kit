@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from resume_kit_schemas import (
     CandidateFeatures,
     EditFeedback,
+    EditFeedbackReasonCode,
     PreferencePair,
     UserPreferenceProfile,
 )
@@ -61,13 +62,64 @@ def test_edit_feedback_defaults() -> None:
     assert record.final_text is None
     assert record.target_terms == []
     assert record.rejection_reason is None
+    assert record.reason_code is None
+    assert record.reason_note is None
     assert record.edit_distance is None
+
+
+def test_edit_feedback_reason_code_values() -> None:
+    assert {code.value for code in EditFeedbackReasonCode} >= {
+        "fabrication",
+        "overclaim",
+        "unsupported",
+        "grammar",
+        "formatting",
+        "not_my_voice",
+        "too_verbose",
+        "too_vague",
+        "wrong_emphasis",
+        "duplicate",
+        "other",
+    }
+
+
+def test_edit_feedback_reason_code_round_trips() -> None:
+    record = _make_edit_feedback(
+        outcome="rejected",
+        final_text=None,
+        reason_code=EditFeedbackReasonCode.OVERCLAIM,
+        reason_note="true but too inflated",
+    )
+    again = EditFeedback.model_validate_json(record.model_dump_json())
+    assert again.reason_code is EditFeedbackReasonCode.OVERCLAIM
+    assert again.reason_note == "true but too inflated"
+
+
+def test_legacy_rejection_reason_loads_as_reason_note() -> None:
+    payload = _make_edit_feedback(
+        outcome="rejected",
+        final_text=None,
+        rejection_reason="not my wording",
+    ).model_dump(mode="json")
+    payload.pop("reason_code")
+    payload.pop("reason_note")
+
+    record = EditFeedback.model_validate(payload)
+
+    assert record.reason_code is None
+    assert record.reason_note == "not my wording"
+    assert record.rejection_reason == "not my wording"
+
+
+def test_edit_feedback_rejects_bad_reason_code() -> None:
+    with pytest.raises(ValidationError):
+        _make_edit_feedback(reason_code="too_sparkly")
 
 
 def test_edit_feedback_is_frozen() -> None:
     record = _make_edit_feedback()
     with pytest.raises(ValidationError):
-        record.section = "skills"  # type: ignore[misc]
+        record.section = "skills"
 
 
 def test_edit_feedback_rejects_bad_outcome() -> None:
@@ -84,7 +136,7 @@ def test_user_preference_profile_construction_and_frozen() -> None:
     assert profile.preferred_tone == "concise"
     assert profile.rejected_phrases == []
     with pytest.raises(ValidationError):
-        profile.confidence = 5.0  # type: ignore[misc]
+        profile.confidence = 5.0
 
 
 def test_candidate_features_construction_and_frozen() -> None:
@@ -101,7 +153,7 @@ def test_candidate_features_construction_and_frozen() -> None:
     )
     assert features.voice_match == 0.9
     with pytest.raises(ValidationError):
-        features.ats_gain = 0.5  # type: ignore[misc]
+        features.ats_gain = 0.5
 
 
 def test_preference_pair_construction_and_frozen() -> None:
@@ -112,4 +164,4 @@ def test_preference_pair_construction_and_frozen() -> None:
     )
     assert pair.preferred_candidate == "cand-a"
     with pytest.raises(ValidationError):
-        pair.strength = 3.0  # type: ignore[misc]
+        pair.strength = 3.0

@@ -1,11 +1,11 @@
 """Import-boundary test for the feedback package.
 
 Asserts ``resume_kit_feedback`` depends only on stdlib, ``pydantic``, the
-``resume_kit_schemas`` domain package, and the deterministic scoring engines it
+``resume_kit_schemas`` domain package, the deterministic scoring engines it
 REUSES for candidate-feature extraction (``resume_kit_ats``,
-``resume_kit_matching``, ``resume_kit_evidence`` — RIT-T-0087) — never on a
-transport/LLM package or a forbidden concrete dependency. Reads source as text
-so nothing is executed.
+``resume_kit_matching``, ``resume_kit_evidence`` — RIT-T-0087), and the shared
+term lexicon (``resume_kit_terms``) — never on a transport/LLM package or a
+forbidden concrete dependency. Reads source as text so nothing is executed.
 """
 
 from __future__ import annotations
@@ -15,19 +15,18 @@ from pathlib import Path
 
 SRC_ROOT = Path(__file__).parents[1] / "src" / "resume_kit_feedback"
 
-# resume_kit_schemas plus the deterministic scoring engines the ranker reuses
-# are allowed; any OTHER resume-kit workspace package is disallowed.
+# resume_kit_schemas plus deterministic scoring/term engines are allowed; any
+# OTHER resume-kit workspace package is disallowed.
 _ALLOWED_RESUME_KIT = frozenset(
     {
         "resume_kit_schemas",
         "resume_kit_ats",
         "resume_kit_matching",
         "resume_kit_evidence",
+        "resume_kit_terms",
     }
 )
-_RESUME_KIT_IMPORT = re.compile(
-    r"^\s*(?:from|import)\s+(resume_kit_\w+)", re.MULTILINE
-)
+_RESUME_KIT_IMPORT = re.compile(r"^\s*(?:from|import)\s+(resume_kit_\w+)", re.MULTILINE)
 
 # Concrete deps that must never appear (LLM SDKs, ORM, transport frameworks).
 _FORBIDDEN_DEPS = re.compile(
@@ -47,7 +46,7 @@ def test_source_files_present() -> None:
 
 
 def test_no_sibling_package_imports() -> None:
-    """Only schemas + the reused scoring engines may be imported from the workspace."""
+    """Only schemas + reused deterministic engines may be imported."""
     offenders: list[str] = []
     for path in _source_files():
         for match in _RESUME_KIT_IMPORT.findall(path.read_text(encoding="utf-8")):

@@ -101,6 +101,10 @@ class FeatureContext(BaseModel):
     evidence: list[CandidateEvidence] = Field(
         default_factory=list, description="Ground-truth evidence for truth validation."
     )
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for truth validation.",
+    )
     history: list[EditFeedback] = Field(
         default_factory=list, description="Prior edit-feedback records for the log signal."
     )
@@ -189,7 +193,12 @@ def _keyword_gain(context: FeatureContext, applied: ResumeDocument) -> float:
     return after - base
 
 
-def _unsupported_claim_risk(candidate: Candidate, evidence: list[CandidateEvidence]) -> float:
+def _unsupported_claim_risk(
+    candidate: Candidate,
+    evidence: list[CandidateEvidence],
+    *,
+    alias_file: str | None,
+) -> float:
     """Risk in ``[0, 1]`` that the candidate introduces an unsupported claim.
 
     Runs :func:`validate_resume_truth` over a candidate-only resume. Returns
@@ -200,7 +209,7 @@ def _unsupported_claim_risk(candidate: Candidate, evidence: list[CandidateEviden
     inherently claims about the candidate, so an empty evidence set yields 1.0.
     """
     resume = _candidate_only_resume(candidate)
-    report = validate_resume_truth(resume, evidence)
+    report = validate_resume_truth(resume, evidence, alias_file=alias_file)
     if report.has_unsupported_or_contradicted:
         return 1.0
     total = len(report.claims)
@@ -210,8 +219,7 @@ def _unsupported_claim_risk(candidate: Candidate, evidence: list[CandidateEviden
     uncertain = sum(
         1
         for claim in report.claims
-        if claim.status
-        in (ProvenanceStatus.AMBIGUOUS, ProvenanceStatus.PARTIALLY_SUPPORTED)
+        if claim.status in (ProvenanceStatus.AMBIGUOUS, ProvenanceStatus.PARTIALLY_SUPPORTED)
     )
     return uncertain / total
 
@@ -348,7 +356,11 @@ def extract_features(
     return CandidateFeatures(
         ats_gain=_ats_gain(context, applied),
         keyword_gain=_keyword_gain(context, applied),
-        unsupported_claim_risk=_unsupported_claim_risk(candidate, context.evidence),
+        unsupported_claim_risk=_unsupported_claim_risk(
+            candidate,
+            context.evidence,
+            alias_file=context.alias_file,
+        ),
         voice_match=_voice_match(candidate, profile),
         length_delta=_length_delta(candidate),
         specificity=_specificity(candidate),

@@ -28,7 +28,9 @@ schemas, and the engine packages only.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from resume_kit_alignment import accept_terminology_alignment
 from resume_kit_alignment import align_resume as _align_resume
@@ -58,6 +60,13 @@ from resume_kit_document_parser import (
 from resume_kit_evidence import build_candidate_evidence, validate_resume_truth
 from resume_kit_export import render
 from resume_kit_export.models import mime_type
+from resume_kit_feedback import (
+    HeuristicRanker,
+    append_edit_feedback,
+    append_preference_pair,
+    derive_preferences,
+    read_edit_feedback,
+)
 from resume_kit_job_parser import (
     parse_job_description,
     parse_job_description_text_only,
@@ -74,6 +83,7 @@ from resume_kit_schemas import (
     ATSScore,
     AtsStructureReport,
     CandidateEvidence,
+    EvidenceKind,
     FaithfulnessReport,
     JobDescription,
     JobMatchReport,
@@ -85,8 +95,11 @@ from resume_kit_schemas import (
     TruthReport,
 )
 
+from resume_kit_facade import edit_session as _edit_session
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
+    AddEvidenceResult,
     AlignResumeRequest,
     AlignTerminologyRequest,
     AlignTerminologyResult,
@@ -95,21 +108,40 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
     CompareResumeVersionsRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    OpenEditSessionRequest,
+    RankEditCandidatesRequest,
+    RankEditCandidatesResult,
+    ReconcileSessionRequest,
+    RecordEditFeedbackRequest,
+    RecordEditFeedbackResult,
+    RefreshPreferencesRequest,
     SelectBestResumeRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
-from resume_kit_facade.project_config import init_project, set_active
+from resume_kit_facade.project_config import (
+    init_project,
+    load_config,
+    load_evidence_file,
+    save_config,
+    save_evidence_file,
+    set_active,
+    working_dir,
+)
 
 # A capability takes a request object plus options and yields an
 # InterfaceResponse.  Registry values narrow their request via ``isinstance``.
@@ -190,23 +222,25 @@ async def extract_resume(
             return from_exception(exc)
         document = result.document
         return build_success(
-            document, warnings=result.warnings, provenance=result.provenance,
+            document,
+            warnings=result.warnings,
+            provenance=result.provenance,
             strict=options.strict,
         )
 
     if options.provider is None:
         return build_provider_not_configured(details={"capability": "extract-resume"})
     try:
-        result = await parse_resume_structured(
-            request.content, request.filename, options.provider
-        )
+        result = await parse_resume_structured(request.content, request.filename, options.provider)
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
     document = result.document
     return build_success(
-        document, warnings=result.warnings, provenance=result.provenance,
+        document,
+        warnings=result.warnings,
+        provenance=result.provenance,
         strict=options.strict,
     )
 
@@ -217,9 +251,7 @@ async def extract_job_description(
 ) -> InterfaceResponse[object]:
     """Extract a structured job description from raw text (LLM or deterministic)."""
     if not isinstance(request, ExtractJobDescriptionRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "ExtractJobDescriptionRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "ExtractJobDescriptionRequest"))
     job: JobDescription
     if options.no_llm:
         try:
@@ -256,13 +288,9 @@ async def extract_resume_text_capability(
     operation is deterministic by construction.
     """
     if not isinstance(request, ExtractResumeTextRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "ExtractResumeTextRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "ExtractResumeTextRequest"))
     try:
-        result: TextExtractionResult = extract_resume_text(
-            request.content, request.filename
-        )
+        result: TextExtractionResult = extract_resume_text(request.content, request.filename)
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
@@ -303,9 +331,7 @@ async def align_resume(
     return _align_success(result, strict=options.strict)
 
 
-def _align_success(
-    result: AlignmentResult, *, strict: bool
-) -> InterfaceResponse[object]:
+def _align_success(result: AlignmentResult, *, strict: bool) -> InterfaceResponse[object]:
     """Shape the alignment result into the canonical envelope.
 
     When the human-in-loop review left unresolved questions, surface them as
@@ -324,9 +350,7 @@ def _align_success(
         )
         for index, text in enumerate(result.unresolved_questions)
     ]
-    return response.model_copy(
-        update={"requires_human_input": True, "questions": questions}
-    )
+    return response.model_copy(update={"requires_human_input": True, "questions": questions})
 
 
 # ---------------------------------------------------------------------------
@@ -371,9 +395,7 @@ async def check_ats_structure(
     structural signal on its own.
     """
     if not isinstance(request, CheckAtsStructureRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "CheckAtsStructureRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "CheckAtsStructureRequest"))
     try:
         report: AtsStructureReport = _check_ats_structure(request.resume)
     except ResumeKitError as exc:
@@ -389,9 +411,7 @@ async def check_resume_job_match(
 ) -> InterfaceResponse[object]:
     """Compute the deterministic resume/job match report."""
     if not isinstance(request, CheckResumeJobMatchRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "CheckResumeJobMatchRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "CheckResumeJobMatchRequest"))
     try:
         with use_alias_file(request.alias_file):
             report: JobMatchReport = check_job_match(request.resume, request.job)
@@ -410,9 +430,7 @@ async def select_best_resume(
     if not isinstance(request, SelectBestResumeRequest):
         return from_resume_kit_error(_bad_request(request, "SelectBestResumeRequest"))
     try:
-        result: ResumeSelectionResult = select_best(
-            request.resumes, request.job, request.labels
-        )
+        result: ResumeSelectionResult = select_best(request.resumes, request.job, request.labels)
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
@@ -426,9 +444,7 @@ async def compare_resume_versions(
 ) -> InterfaceResponse[object]:
     """Compare two resume versions against a job description."""
     if not isinstance(request, CompareResumeVersionsRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "CompareResumeVersionsRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "CompareResumeVersionsRequest"))
     try:
         result: ResumeComparisonResult = compare_versions(
             request.base,
@@ -450,9 +466,7 @@ async def identify_resume_gaps(
 ) -> InterfaceResponse[object]:
     """Analyse keyword gaps between a tailored resume, master, and job."""
     if not isinstance(request, IdentifyResumeGapsRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "IdentifyResumeGapsRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "IdentifyResumeGapsRequest"))
     try:
         with use_alias_file(request.alias_file):
             gap: KeywordGapAnalysis = analyze_keyword_gaps(
@@ -471,11 +485,14 @@ async def validate_resume_truth_capability(
 ) -> InterfaceResponse[object]:
     """Validate a resume against candidate evidence for truthfulness."""
     if not isinstance(request, ValidateResumeTruthRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "ValidateResumeTruthRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "ValidateResumeTruthRequest"))
     try:
-        report: TruthReport = validate_resume_truth(request.resume, request.evidence)
+        with use_alias_file(request.alias_file):
+            report: TruthReport = validate_resume_truth(
+                request.resume,
+                request.evidence,
+                alias_file=str(request.alias_file) if request.alias_file else None,
+            )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
@@ -498,9 +515,7 @@ async def validate_faithfulness_capability(
     the ``passed`` contract itself is driven only by error-severity findings.
     """
     if not isinstance(request, ValidateFaithfulnessRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "ValidateFaithfulnessRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "ValidateFaithfulnessRequest"))
     try:
         source_text = _resolve_source_text(request)
         report: FaithfulnessReport = _check_faithfulness(source_text, request.resume)
@@ -523,9 +538,7 @@ def _resolve_source_text(request: ValidateFaithfulnessRequest) -> str:
         return request.source_text
     if request.source_content is not None:
         filename = request.source_filename or "source.txt"
-        result: TextExtractionResult = extract_resume_text(
-            request.source_content, filename
-        )
+        result: TextExtractionResult = extract_resume_text(request.source_content, filename)
         return result.text
     from resume_kit_core.errors import CoreError, ErrorCode
 
@@ -543,9 +556,7 @@ async def build_candidate_evidence_capability(
 ) -> InterfaceResponse[object]:
     """Build candidate evidence records from a resume."""
     if not isinstance(request, BuildCandidateEvidenceRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "BuildCandidateEvidenceRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "BuildCandidateEvidenceRequest"))
     try:
         evidence: list[CandidateEvidence] = build_candidate_evidence(
             request.resume, approved_claims=request.approved_claims
@@ -555,6 +566,285 @@ async def build_candidate_evidence_capability(
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
     return build_success(evidence, strict=options.strict)
+
+
+async def record_edit_feedback_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Append edit feedback and an optional preference-pair record."""
+    if not isinstance(request, RecordEditFeedbackRequest):
+        return from_resume_kit_error(_bad_request(request, "RecordEditFeedbackRequest"))
+    try:
+        base_path = _optional_path(request.base_path)
+        append_edit_feedback(request.feedback, base_path=base_path)
+        if request.preference_pair is not None:
+            append_preference_pair(request.preference_pair, base_path=base_path)
+        result = RecordEditFeedbackResult(
+            feedback=request.feedback,
+            preference_pair=request.preference_pair,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def rank_edit_candidates_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Rank edit candidates through the deterministic feedback ranker."""
+    if not isinstance(request, RankEditCandidatesRequest):
+        return from_resume_kit_error(_bad_request(request, "RankEditCandidatesRequest"))
+    try:
+        alias_file = (
+            str(request.alias_file)
+            if request.alias_file is not None
+            else request.context.alias_file
+        )
+        context = request.context.model_copy(update={"alias_file": alias_file})
+        with use_alias_file(alias_file):
+            ranked = HeuristicRanker().rank(
+                request.candidates,
+                context,
+                profile=request.profile,
+            )
+        result = RankEditCandidatesResult(ranked=ranked)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def refresh_preferences_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Derive and persist the user preference profile."""
+    if not isinstance(request, RefreshPreferencesRequest):
+        return from_resume_kit_error(_bad_request(request, "RefreshPreferencesRequest"))
+    try:
+        base_path = _optional_path(request.base_path)
+        records = (
+            read_edit_feedback(base_path=base_path) if request.records is None else request.records
+        )
+        profile = derive_preferences(records, now=request.now, base_path=base_path)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(profile, strict=options.strict)
+
+
+async def add_evidence_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Persist one deterministic user-confirmed evidence record."""
+    if not isinstance(request, AddEvidenceRequest):
+        return from_resume_kit_error(_bad_request(request, "AddEvidenceRequest"))
+    try:
+        evidence_file = _normalize_evidence_file(request.evidence_file)
+        path = working_dir(request.root) / evidence_file
+        record = _confirmed_evidence(
+            content=request.content,
+            kind=request.kind,
+            tags=request.tags,
+        )
+        evidence = load_evidence_file(path)
+        evidence_by_id = {item.id: item for item in evidence}
+        evidence_by_id[record.id] = record
+        merged = sorted(evidence_by_id.values(), key=lambda item: item.id)
+        save_evidence_file(path, merged)
+
+        config = load_config(request.root)
+        config.evidence_file = evidence_file
+        if request.update_active:
+            config.active_evidence = evidence_file
+        save_config(request.root, config)
+
+        result = AddEvidenceResult(
+            evidence=record,
+            evidence_file=evidence_file,
+            active_evidence=config.active_evidence,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def open_edit_session_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Open and persist the single active edit session."""
+    if not isinstance(request, OpenEditSessionRequest):
+        return from_resume_kit_error(_bad_request(request, "OpenEditSessionRequest"))
+    try:
+        state, feedback = _edit_session.open_session(
+            root=request.root,
+            mode=request.mode,
+            changes=request.changes,
+            evidence=request.evidence,
+            claim_provenance=request.claim_provenance,
+            expected_score_deltas=request.expected_score_deltas,
+        )
+        for record in feedback:
+            response = await record_edit_feedback_capability(
+                RecordEditFeedbackRequest(
+                    feedback=record,
+                    base_path=working_dir(request.root),
+                ),
+                options,
+            )
+            if response.errors:
+                return response
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(state, strict=options.strict)
+
+
+async def session_prompt_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Load the active session and delegate prompt rendering to ReviewController."""
+    if not isinstance(request, SessionPromptRequest):
+        return from_resume_kit_error(_bad_request(request, "SessionPromptRequest"))
+    try:
+        response = _edit_session.prompt_session(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    if isinstance(response, InterfaceResponse):
+        return response
+    return build_success(response, strict=options.strict)
+
+
+async def decide_change_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Record one review decision and append the corresponding feedback log."""
+    if not isinstance(request, DecideChangeRequest):
+        return from_resume_kit_error(_bad_request(request, "DecideChangeRequest"))
+    try:
+        state, feedback = _edit_session.decide_change(
+            root=request.root,
+            path=request.path,
+            action=request.action,
+            reason_code=request.reason_code,
+            note=request.note,
+            edited_content=request.edited_content,
+        )
+        response = await record_edit_feedback_capability(
+            RecordEditFeedbackRequest(
+                feedback=feedback,
+                base_path=working_dir(request.root),
+            ),
+            options,
+        )
+        if response.errors:
+            return response
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(state, strict=options.strict)
+
+
+async def commit_session_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Commit approved changes through the hard write gate."""
+    if not isinstance(request, CommitSessionRequest):
+        return from_resume_kit_error(_bad_request(request, "CommitSessionRequest"))
+    try:
+        result = _edit_session.commit_session(
+            root=request.root,
+            freedom=request.freedom,
+            alias_timestamp=request.alias_timestamp,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence/apply failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def session_status_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Return progress for the active edit session."""
+    if not isinstance(request, SessionStatusRequest):
+        return from_resume_kit_error(_bad_request(request, "SessionStatusRequest"))
+    try:
+        result = _edit_session.session_status(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def reconcile_session_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Re-hash the working resume after an intentional manual edit."""
+    if not isinstance(request, ReconcileSessionRequest):
+        return from_resume_kit_error(_bad_request(request, "ReconcileSessionRequest"))
+    try:
+        result = _edit_session.reconcile_session(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+def _optional_path(value: str | Path | None) -> Path | None:
+    """Return ``value`` as a Path when supplied."""
+    if value is None:
+        return None
+    return Path(value)
+
+
+def _normalize_evidence_file(value: str) -> str:
+    """Return a relative evidence path safe to join under ``resume-kit/``."""
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError("evidence_file must be relative to resume-kit/.")
+    return path.as_posix()
+
+
+def _confirmed_evidence(
+    *,
+    content: str,
+    kind: EvidenceKind,
+    tags: list[str],
+) -> CandidateEvidence:
+    """Construct a deterministic user-confirmed evidence record."""
+    normalized = " ".join(content.split())
+    digest = hashlib.sha256(f"{kind.value}\n{normalized}".encode()).hexdigest()[:16]
+    return CandidateEvidence(
+        id=f"ev-confirmed-{digest}",
+        kind=kind,
+        content=content,
+        source="user_confirmed",
+        tags=sorted(dict.fromkeys(tags)),
+        user_confirmed=True,
+    )
 
 
 class _InMemoryArtifactStore:
@@ -648,9 +938,7 @@ async def suggest_terminology(
     ``alias_file`` so grown project synonyms feed the suggestions.
     """
     if not isinstance(request, SuggestTerminologyRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "SuggestTerminologyRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "SuggestTerminologyRequest"))
     try:
         with use_alias_file(request.alias_file):
             suggestions: list[TerminologyAlignment] = analyze_terminology_alignment(
@@ -677,9 +965,7 @@ async def align_terminology(
     ``alias_file`` so scoring reflects grown project synonyms.
     """
     if not isinstance(request, AlignTerminologyRequest):
-        return from_resume_kit_error(
-            _bad_request(request, "AlignTerminologyRequest")
-        )
+        return from_resume_kit_error(_bad_request(request, "AlignTerminologyRequest"))
     try:
         with use_alias_file(request.alias_file):
             accepted = accept_terminology_alignment(
@@ -790,6 +1076,16 @@ REGISTRY: dict[str, Capability] = {
     "validate-resume-truth": validate_resume_truth_capability,
     "validate-faithfulness": validate_faithfulness_capability,
     "build-candidate-evidence": build_candidate_evidence_capability,
+    "record-edit-feedback": record_edit_feedback_capability,
+    "rank-edit-candidates": rank_edit_candidates_capability,
+    "refresh-preferences": refresh_preferences_capability,
+    "add-evidence": add_evidence_capability,
+    "open-edit-session": open_edit_session_capability,
+    "session-prompt": session_prompt_capability,
+    "decide-change": decide_change_capability,
+    "commit-session": commit_session_capability,
+    "session-status": session_status_capability,
+    "reconcile-session": reconcile_session_capability,
     "export-resume": export_resume,
     "suggest-terminology": suggest_terminology,
     "align-terminology": align_terminology,

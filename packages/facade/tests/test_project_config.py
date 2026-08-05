@@ -20,9 +20,12 @@ from resume_kit_facade.project_config import (
     config_path,
     init_project,
     load_config,
+    load_evidence_file,
     save_config,
+    save_evidence_file,
     set_active,
 )
+from resume_kit_schemas import CandidateEvidence, EvidenceKind
 
 _OPTIONS = caps.CapabilityOptions()
 
@@ -98,9 +101,7 @@ def test_preference_key_survives_set_active_round_trip(tmp_path: Path) -> None:
 def test_load_preserves_unknown_keys_on_model(tmp_path: Path) -> None:
     directory = tmp_path / "resume-kit"
     directory.mkdir()
-    (directory / "config.json").write_text(
-        json.dumps({"future_key": 42}), encoding="utf-8"
-    )
+    (directory / "config.json").write_text(json.dumps({"future_key": 42}), encoding="utf-8")
     config = load_config(tmp_path)
     dumped = config.model_dump(mode="json")
     assert dumped["future_key"] == 42
@@ -121,11 +122,30 @@ def test_project_config_is_extra_allow() -> None:
     assert config.model_dump(mode="json")["extra"] == "x"
 
 
+def test_project_config_tracks_evidence_pointers() -> None:
+    config = ProjectConfig(
+        evidence_file="working/user-confirmed-evidence.json",
+        active_evidence="working/user-confirmed-evidence.json",
+    )
+    assert config.evidence_file == "working/user-confirmed-evidence.json"
+    assert config.active_evidence == "working/user-confirmed-evidence.json"
+
+
+def test_evidence_file_round_trips_atomically(tmp_path: Path) -> None:
+    path = tmp_path / "resume-kit" / "working" / "evidence.json"
+    record = CandidateEvidence(
+        id="ev1",
+        kind=EvidenceKind.USER_STATEMENT,
+        content="Confirmed Docker work",
+        user_confirmed=True,
+    )
+    save_evidence_file(path, [record])
+    assert load_evidence_file(path) == [record]
+
+
 @pytest.mark.asyncio
 async def test_init_capability_returns_config(tmp_path: Path) -> None:
-    response = await caps.init_project_capability(
-        InitProjectRequest(root=str(tmp_path)), _OPTIONS
-    )
+    response = await caps.init_project_capability(InitProjectRequest(root=str(tmp_path)), _OPTIONS)
     assert response.errors == []
     assert isinstance(response.data, ProjectConfig)
     assert (tmp_path / "resume-kit" / "config.json").is_file()
@@ -133,9 +153,7 @@ async def test_init_capability_returns_config(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_set_active_capability_records_source(tmp_path: Path) -> None:
-    await caps.init_project_capability(
-        InitProjectRequest(root=str(tmp_path)), _OPTIONS
-    )
+    await caps.init_project_capability(InitProjectRequest(root=str(tmp_path)), _OPTIONS)
     response = await caps.set_active_capability(
         SetActiveRequest(
             resume="resumes/x-original.json",

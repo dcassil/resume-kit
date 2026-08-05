@@ -32,6 +32,21 @@ at runtime.**
 Define the workflow ONCE (here) so the three scoring skills link to it rather
 than copy-pasting divergent copies.
 
+## Automatic accepted-edit growth
+
+The edit-session commit path also self-heals the same project alias file for a
+narrow, already-confirmed case: when the user accepts or edits a terminology
+proposal that mirrors the employer's wording, commit-session derives the token
+swap and appends the project alias automatically with `source:
+"accepted_edit"` provenance and the caller-supplied timestamp. Rejected,
+skipped, undone, auto-mode, non-terminology, malformed, and empty mappings do
+not grow aliases.
+
+That automatic path complements this skill; it does not replace it. Use this
+manual workflow when a scoring run reports a missing keyword and no accepted
+terminology edit exists yet. The manual path still requires truth-gating and
+explicit user confirmation before writing.
+
 ## Run me in a subagent
 
 This is a self-contained, file-mutating task. The main agent should **dispatch it
@@ -68,13 +83,23 @@ it.
     },
     "justifications": {
       "<canonical>": "one-line why these are the same underlying skill/fact"
-    }
+    },
+    "provenance": [
+      {
+        "source": "accepted_edit",
+        "timestamp": "2026-08-05T12:00:00+00:00",
+        "canonical": "<canonical>",
+        "alias": "<alias>"
+      }
+    ]
   }
   ```
 
 - `justifications` is OPTIONAL metadata (canonical → one-line why). It NEVER
   affects matching; it exists so a human can audit and prune the file. Every
   entry this workflow records MUST carry one anyway (see append rule).
+- `provenance` is OPTIONAL metadata. The automatic edit-session path writes it
+  for accepted terminology edits. It NEVER affects matching.
 - **Project aliases UNION with the seed** — you only ever ADD; you never need to
   restate seed pairs. Keep the file small, human-readable, and prunable.
 - **Create the file if absent** with a valid empty shell:

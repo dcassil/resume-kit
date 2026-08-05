@@ -44,9 +44,14 @@ import math
 import re
 from collections import defaultdict
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
-from resume_kit_schemas import EditFeedback, UserPreferenceProfile
+from resume_kit_schemas import EditFeedback, PreferencePair, UserPreferenceProfile
+from resume_kit_terms import load_alias_lexicon, surface_form
+
+from .log import read_preference_pairs
 
 # Working-dir DATA convention (mirrors log.py); tests pass an explicit base_path.
 _DEFAULT_BASE_PATH = Path("resume-kit")
@@ -70,6 +75,70 @@ _SECONDS_PER_DAY = 86400.0
 
 # A "phrase" candidate is a maximal run of word characters (matches log.py).
 _TERM_RE = re.compile(r"\w+")
+_ACRONYM_RE = re.compile(r"^[A-Z0-9][A-Z0-9.+#/-]{1,9}$")
+
+_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "is",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
+    }
+)
+
+_GENERIC_ABSTRACT_NOUNS = frozenset(
+    {
+        "area",
+        "change",
+        "enhancement",
+        "fix",
+        "fixes",
+        "improvement",
+        "improvements",
+        "issue",
+        "issues",
+        "quality",
+        "solution",
+        "solutions",
+        "stuff",
+        "thing",
+        "things",
+        "work",
+    }
+)
+
+_BUILT_IN_TOOL_TERMS = frozenset(
+    {
+        "chrome",
+        "compatibility",
+        "edge",
+        "firefox",
+        "lighthouse",
+        "react",
+        "ssr",
+    }
+)
+
+
+class _DiffTerms(NamedTuple):
+    removed: list[str]
+    added: list[str]
+    preserved: list[str]
 
 
 def _parse_iso(value: str) -> datetime | None:
@@ -114,6 +183,39 @@ def _terms(text: str | None) -> set[str]:
     if not text:
         return set()
     return {match.lower() for match in _TERM_RE.findall(text)}
+
+
+def _clean_phrase(value: str) -> str | None:
+    """Normalize one learned phrase and drop stopword-only candidates."""
+    phrase = surface_form(value)
+    if not phrase:
+        return None
+    tokens = [token for token in phrase.split() if token not in _STOPWORDS]
+    if not tokens:
+        return None
+    return " ".join(tokens)
+
+
+def _clean_terms(values: list[str]) -> list[str]:
+    """Return sorted, unique, normalized terms with stopwords removed."""
+    cleaned = {_clean_phrase(value) for value in values}
+    return sorted(term for term in cleaned if term is not None)
+
+
+def _record_diff_terms(record: EditFeedback) -> _DiffTerms:
+    """Return explicit diff terms, with target-term fallback for old records."""
+    removed = _clean_terms(record.removed_terms)
+    added = _clean_terms(record.added_terms)
+    preserved = _clean_terms(record.preserved_terms)
+    if removed or added or preserved:
+        return _DiffTerms(removed=removed, added=added, preserved=preserved)
+
+    fallback = _clean_terms(record.target_terms)
+    if record.outcome in ("accepted", "accepted_modified"):
+        return _DiffTerms(removed=[], added=[], preserved=fallback)
+    if record.outcome in ("rejected", "undone"):
+        return _DiffTerms(removed=fallback, added=[], preserved=[])
+    return _DiffTerms(removed=[], added=[], preserved=[])
 
 
 def _tier_selected(weight: float) -> bool:
@@ -171,23 +273,28 @@ def derive_preferences(
     tone_w: dict[str, float] = defaultdict(float)
     length_w: dict[str, float] = defaultdict(float)
     strength_w: dict[str, float] = defaultdict(float)
+    pair_signal_w: dict[str, float] = defaultdict(float)
+    specific_over_vague_w: dict[str, float] = defaultdict(float)
+    vague_term_w: dict[str, float] = defaultdict(float)
+    specific_term_w: dict[str, float] = defaultdict(float)
 
     # Length-growth samples: (decayed weight, growth ratio) for kept edits.
     growth_samples: list[tuple[float, float]] = []
 
     for record in records:
         base = _decay_weight(record.timestamp, now)
+        diff = _record_diff_terms(record)
         is_negative = record.outcome in ("rejected", "undone")
-        neg_weight = base * (
-            UNDONE_WEIGHT_MULTIPLIER if record.outcome == "undone" else 1.0
-        )
+        neg_weight = base * (UNDONE_WEIGHT_MULTIPLIER if record.outcome == "undone" else 1.0)
 
         if record.outcome in ("accepted", "accepted_modified"):
-            # Preserved terms are corroborated acceptances of those phrases:
-            # what the user actually kept (final text, or proposed if unmodified).
-            kept = _terms(record.final_text) or _terms(record.proposed_text)
-            for term in kept:
+            for term in diff.added:
                 accepted_phrase_w[term] += base
+            for term in diff.preserved:
+                accepted_phrase_w[term] += base
+            if record.outcome == "accepted_modified":
+                for term in diff.removed:
+                    rejected_phrase_w[term] += base
             # Edit-strength vote: accepting an aggressive edit votes 'aggressive'.
             strength_w[_edit_strength_vote(record)] += base
             # Tone vote keyed by edit_type family (transparent, no LLM).
@@ -196,30 +303,56 @@ def derive_preferences(
             if bucket is not None:
                 length_w[bucket] += base
             # Length-growth ceiling sample.
-            kept_text = (
-                record.final_text if record.final_text is not None else record.proposed_text
-            )
+            kept_text = record.final_text if record.final_text is not None else record.proposed_text
             if kept_text is not None and record.original_text:
-                ratio = (len(kept_text) - len(record.original_text)) / len(
-                    record.original_text
-                )
+                ratio = (len(kept_text) - len(record.original_text)) / len(record.original_text)
                 if ratio > 0:
                     growth_samples.append((base, ratio))
+            _add_specificity_signals(
+                removed=diff.removed,
+                added=diff.added,
+                weight=base,
+                specific_over_vague_w=specific_over_vague_w,
+                vague_term_w=vague_term_w,
+                specific_term_w=specific_term_w,
+            )
 
         if is_negative:
-            # Rejected/undone: the removed or wholly-proposed phrases are disliked.
-            removed = record.removed_terms or sorted(
-                _terms(record.proposed_text) - _terms(record.final_text)
-            )
-            source = {term.lower() for term in removed} or _terms(record.proposed_text)
+            # Rejected/undone outcomes dislike the explicit diff terms, never
+            # every token in the proposed text.
+            source = diff.added or diff.preserved or diff.removed
             for term in source:
                 rejected_phrase_w[term] += neg_weight
             # The edit_type itself becomes a disliked pattern signal.
             disliked_pattern_w[record.edit_type] += neg_weight
 
+    for pair in _read_persisted_preference_pairs(base_path):
+        signal = _preference_pair_signal(pair, now)
+        if signal is not None:
+            key, weight = signal
+            pair_signal_w[key] += weight
+            terms = _preference_pair_terms(pair)
+            if terms is not None:
+                preferred, rejected = terms
+                _add_specificity_signals(
+                    removed=[rejected],
+                    added=[preferred],
+                    weight=weight,
+                    specific_over_vague_w=specific_over_vague_w,
+                    vague_term_w=vague_term_w,
+                    specific_term_w=specific_term_w,
+                )
+
     accepted_phrases = _sorted_by_weight(accepted_phrase_w)
     rejected_phrases = _sorted_by_weight(rejected_phrase_w)
     disliked_patterns = _sorted_by_weight(disliked_pattern_w)
+    _extend_with_specificity_patterns(
+        accepted_phrases=accepted_phrases,
+        disliked_patterns=disliked_patterns,
+        specific_over_vague_w=specific_over_vague_w,
+        vague_term_w=vague_term_w,
+        specific_term_w=specific_term_w,
+    )
 
     preferred_tone = _top_emitted(tone_w)
     preferred_length = _top_emitted(length_w)
@@ -231,9 +364,11 @@ def derive_preferences(
             accepted_phrase_w,
             rejected_phrase_w,
             disliked_pattern_w,
+            specific_over_vague_w,
             tone_w,
             length_w,
             strength_w,
+            pair_signal_w,
         ]
     )
 
@@ -251,6 +386,156 @@ def derive_preferences(
     return profile
 
 
+def _read_persisted_preference_pairs(base_path: Path | None) -> list[PreferencePair]:
+    """Read persisted comparison records for preference-memory confidence."""
+    return read_preference_pairs(base_path=base_path)
+
+
+@lru_cache(maxsize=1)
+def _known_tool_terms() -> frozenset[str]:
+    """Return normalized known tool/technology terms from the shared lexicon."""
+    terms = set(_BUILT_IN_TOOL_TERMS)
+    for canonical, aliases in load_alias_lexicon().items():
+        values = [canonical, *aliases]
+        for value in values:
+            phrase = _clean_phrase(value)
+            if phrase is not None:
+                terms.add(phrase)
+    return frozenset(terms)
+
+
+def _specificity_score(term: str) -> int:
+    """Score deterministic specificity for a single term, higher is clearer."""
+    cleaned = _clean_phrase(term)
+    if cleaned is None:
+        return 0
+    if cleaned in _GENERIC_ABSTRACT_NOUNS:
+        return 0
+    tokens = cleaned.split()
+    if any(char.isdigit() for char in term):
+        return 3
+    if term in _known_tool_terms() or cleaned in _known_tool_terms():
+        return 3
+    if _ACRONYM_RE.fullmatch(term.strip()):
+        return 3
+    if any(token[:1].isupper() for token in term.split()):
+        return 2
+    if len(tokens) > 1:
+        return 2
+    return 1
+
+
+def _is_specificity_upgrade(removed: str, added: str) -> bool:
+    """Return whether ``added`` is more specific than ``removed``.
+
+    The heuristic is intentionally explainable and offline: named tools or
+    technologies from ``resume-kit-terms`` and a small web-platform seed list,
+    proper names/acronyms, digit-bearing metrics, and concrete non-generic nouns
+    outrank generic abstract nouns such as "fixes", "improvements", or "quality".
+    """
+    removed_score = _specificity_score(removed)
+    added_score = _specificity_score(added)
+    if removed_score <= 0 < added_score:
+        return True
+    return removed_score < added_score and added_score >= 2
+
+
+def _add_specificity_signals(
+    *,
+    removed: list[str],
+    added: list[str],
+    weight: float,
+    specific_over_vague_w: dict[str, float],
+    vague_term_w: dict[str, float],
+    specific_term_w: dict[str, float],
+) -> None:
+    """Accumulate specificity-upgrade signal from removed -> added term pairs."""
+    matched = False
+    for old_term in removed:
+        for new_term in added:
+            if not _is_specificity_upgrade(old_term, new_term):
+                continue
+            matched = True
+            vague_term_w[old_term] += weight
+            specific_term_w[new_term] += weight
+    if matched:
+        specific_over_vague_w["prefers specific over vague"] += weight
+
+
+def _extend_with_specificity_patterns(
+    *,
+    accepted_phrases: list[str],
+    disliked_patterns: list[str],
+    specific_over_vague_w: dict[str, float],
+    vague_term_w: dict[str, float],
+    specific_term_w: dict[str, float],
+) -> None:
+    """Append aggregate specificity patterns once corroboration is sufficient."""
+    if not _tier_selected(specific_over_vague_w["prefers specific over vague"]):
+        return
+
+    specific_terms = _sorted_by_weight(specific_term_w)
+    vague_terms = _sorted_by_weight(vague_term_w)
+    if not specific_terms:
+        specific_terms = _top_terms(specific_term_w)
+    if not vague_terms:
+        vague_terms = _top_terms(vague_term_w)
+
+    accepted_pattern = "specific replacements"
+    if specific_terms:
+        accepted_pattern = f"{accepted_pattern}: {', '.join(specific_terms)}"
+    disliked_pattern = "prefers specific over vague"
+    if vague_terms:
+        disliked_pattern = f"{disliked_pattern}: {', '.join(vague_terms)}"
+
+    if accepted_pattern not in accepted_phrases:
+        accepted_phrases.append(accepted_pattern)
+    if disliked_pattern not in disliked_patterns:
+        disliked_patterns.append(disliked_pattern)
+
+
+def _top_terms(weights: dict[str, float], *, limit: int = 6) -> list[str]:
+    """Return highest-weight nonzero keys for a supported aggregate pattern."""
+    selected = [(key, w) for key, w in weights.items() if w > 0.0]
+    selected.sort(key=lambda item: (-item[1], item[0]))
+    return [key for key, _ in selected[:limit]]
+
+
+def _preference_pair_signal(pair: PreferencePair, now: str) -> tuple[str, float] | None:
+    """Convert a persisted pair into a decayed aggregate confidence signal."""
+    weight = max(0.0, pair.strength)
+    if weight <= 0.0:
+        return None
+    if pair.timestamp is not None:
+        weight *= _decay_weight(pair.timestamp, now)
+    key = f"{pair.preferred_candidate}>{pair.rejected_candidate}"
+    return key, weight
+
+
+def _preference_pair_terms(pair: PreferencePair) -> tuple[str, str] | None:
+    """Return term-like preferred/rejected labels, ignoring opaque candidate IDs."""
+    preferred = _clean_phrase(pair.preferred_candidate)
+    rejected = _clean_phrase(pair.rejected_candidate)
+    if preferred is None or rejected is None:
+        return None
+    opaque_labels = {"no edit", "no change"}
+    if preferred in opaque_labels or rejected in opaque_labels:
+        return None
+    if _looks_like_candidate_id(preferred) or _looks_like_candidate_id(rejected):
+        return None
+    return preferred, rejected
+
+
+def _looks_like_candidate_id(value: str) -> bool:
+    """Return whether a pair label is an implementation ID, not a phrase."""
+    tokens = value.split()
+    if not tokens:
+        return True
+    if tokens[0] in {"cand", "candidate"}:
+        return True
+    return len(tokens) == 1 and bool(re.fullmatch(r"[a-z]+[0-9]+", tokens[0]))
+
+
 def _edit_strength_vote(record: EditFeedback) -> str:
     """Map an accepted edit to a strength vote from its edit_distance/size.
 
@@ -262,9 +547,7 @@ def _edit_strength_vote(record: EditFeedback) -> str:
         return "aggressive" if record.edit_distance >= 0.5 else "minimal"
     if not record.original_text:
         return "aggressive"
-    change = abs(len(record.proposed_text) - len(record.original_text)) / len(
-        record.original_text
-    )
+    change = abs(len(record.proposed_text) - len(record.original_text)) / len(record.original_text)
     return "aggressive" if change >= 0.5 else "minimal"
 
 

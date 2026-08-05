@@ -19,11 +19,25 @@ from pydantic import BaseModel, Field
 from resume_kit_core import StructuredCompletionProvider
 from resume_kit_core.storage import ArtifactStore
 from resume_kit_export import ExportFormat, ExportOptions
+from resume_kit_feedback.features import Candidate, FeatureContext
+from resume_kit_feedback.ranker import RankedCandidate
 from resume_kit_schemas import (
+    ATSScore,
     CandidateEvidence,
+    ClaimProvenance,
+    EditFeedback,
+    EditFeedbackReasonCode,
+    EvidenceKind,
     JobDescription,
+    JobMatchReport,
+    PreferencePair,
+    ProvenanceStatus,
     ResumeDocument,
+    ReviewAction,
+    ReviewSession,
+    ScoreDelta,
     TerminologyAlignment,
+    UserPreferenceProfile,
 )
 from resume_kit_schemas.change import ChangeProposal
 from resume_kit_schemas.results import PolicyRejection
@@ -230,6 +244,7 @@ class ValidateResumeTruthRequest:
 
     resume: ResumeDocument
     evidence: list[CandidateEvidence] = field(default_factory=list)
+    alias_file: str | Path | None = None
 
 
 @dataclass(frozen=True)
@@ -241,12 +256,214 @@ class BuildCandidateEvidenceRequest:
 
 
 @dataclass(frozen=True)
+class RecordEditFeedbackRequest:
+    """Inputs for the record-edit-feedback capability.
+
+    ``base_path`` points at the ``resume-kit/`` working directory whose
+    ``learning/`` logs should receive the records. When omitted, the feedback
+    engine's default ``resume-kit/`` path is used.
+    """
+
+    feedback: EditFeedback
+    preference_pair: PreferencePair | None = None
+    base_path: str | Path | None = None
+
+
+@dataclass(frozen=True)
+class RankEditCandidatesRequest:
+    """Inputs for the rank-edit-candidates capability."""
+
+    candidates: list[Candidate]
+    context: FeatureContext
+    profile: UserPreferenceProfile = field(default_factory=UserPreferenceProfile)
+    alias_file: str | Path | None = None
+
+
+@dataclass(frozen=True)
+class RefreshPreferencesRequest:
+    """Inputs for the refresh-preferences capability.
+
+    When ``records`` is ``None``, persisted records are loaded from
+    ``base_path`` before deriving the profile. ``now`` is caller-supplied data
+    for deterministic time-decay.
+    """
+
+    now: str
+    records: list[EditFeedback] | None = None
+    base_path: str | Path | None = None
+
+
+EditSessionMode = str
+
+
+@dataclass(frozen=True)
+class OpenEditSessionRequest:
+    """Inputs for opening the single active edit session."""
+
+    mode: EditSessionMode
+    changes: list[ChangeProposal]
+    root: str | Path = "."
+    evidence: list[CandidateEvidence] = field(default_factory=list)
+    claim_provenance: list[ClaimProvenance] = field(default_factory=list)
+    expected_score_deltas: list[ScoreDelta] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SessionPromptRequest:
+    """Inputs for loading and prompting the active edit session."""
+
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class DecideChangeRequest:
+    """Inputs for recording one terminal or reopen decision."""
+
+    path: str
+    action: ReviewAction
+    reason_code: EditFeedbackReasonCode | None = None
+    note: str | None = None
+    root: str | Path = "."
+    edited_content: str | None = None
+
+
+@dataclass(frozen=True)
+class CommitSessionRequest:
+    """Inputs for committing gated, reviewed changes to the working resume."""
+
+    root: str | Path = "."
+    freedom: int = 10
+    alias_timestamp: str | None = None
+
+
+@dataclass(frozen=True)
+class SessionStatusRequest:
+    """Inputs for reading edit-session progress."""
+
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class ReconcileSessionRequest:
+    """Inputs for accepting an intentional out-of-band working-file edit."""
+
+    root: str | Path = "."
+
+
+class EditSessionState(BaseModel):
+    """Persisted edit-session envelope wrapping ``ReviewSession``."""
+
+    session_id: str
+    mode: str
+    active_resume: str
+    active_job: str
+    working_path: str
+    review_session: ReviewSession
+    original_hash: str
+    committed_hash: str | None = None
+
+
+class EditSessionStatus(BaseModel):
+    """Serializable progress report for the active edit session."""
+
+    session_id: str
+    mode: str
+    active_resume: str
+    active_job: str
+    working_path: str
+    progress: dict[str, int]
+    decided: list[str] = Field(default_factory=list)
+    pending: list[str] = Field(default_factory=list)
+    deferred: list[str] = Field(default_factory=list)
+    truth_summary: dict[ProvenanceStatus, int] = Field(default_factory=dict)
+    committed_hash: str | None = None
+
+
+class AliasGrowthEntry(BaseModel):
+    """Project alias learned from an accepted terminology edit."""
+
+    canonical: str
+    alias: str
+    original_term: str
+    accepted_term: str
+    source: str = "accepted_edit"
+    timestamp: str
+    alias_file: str
+
+
+class CommitSessionResult(BaseModel):
+    """Result of a gated edit-session commit."""
+
+    state: EditSessionState
+    applied: list[ChangeProposal] = Field(default_factory=list)
+    rejected: list[PolicyRejection] = Field(default_factory=list)
+    grown_aliases: list[AliasGrowthEntry] = Field(default_factory=list)
+    before_match_report: JobMatchReport | None = None
+    after_match_report: JobMatchReport | None = None
+    before_ats_score: ATSScore | None = None
+    after_ats_score: ATSScore | None = None
+
+
+class ReconcileSessionResult(BaseModel):
+    """Result of re-hashing a manually edited working resume."""
+
+    state: EditSessionState
+    previous_hash: str | None = None
+    reconciled_hash: str | None = None
+
+
+@dataclass(frozen=True)
+class AddEvidenceRequest:
+    """Inputs for adding one deterministic user-confirmed evidence record."""
+
+    content: str
+    kind: EvidenceKind
+    tags: list[str] = field(default_factory=list)
+    root: str | Path = "."
+    evidence_file: str = "working/user-confirmed-evidence.json"
+    update_active: bool = False
+
+
+class AddEvidenceResult(BaseModel):
+    """Serializable result for a persisted user-confirmed evidence record."""
+
+    model_config = {"frozen": True}
+
+    evidence: CandidateEvidence = Field(description="The confirmed evidence record.")
+    evidence_file: str = Field(
+        description="Evidence file path relative to the resume-kit working dir."
+    )
+    active_evidence: str | None = Field(
+        default=None, description="Updated active evidence pointer, if requested."
+    )
+
+
+class RecordEditFeedbackResult(BaseModel):
+    """Serializable result after persisting feedback records."""
+
+    model_config = {"frozen": True}
+
+    feedback: EditFeedback = Field(description="The persisted feedback record.")
+    preference_pair: PreferencePair | None = Field(
+        default=None, description="Optional persisted preference-pair record."
+    )
+
+
+class RankEditCandidatesResult(BaseModel):
+    """Serializable ranked candidate list."""
+
+    model_config = {"frozen": True}
+
+    ranked: list[RankedCandidate] = Field(description="Truth-passing ranked candidates.")
+
+
+@dataclass(frozen=True)
 class ExportResumeRequest:
     """Inputs for the export-resume capability.
 
     The exported artifact id is deterministic: a caller may supply an explicit
-    ``artifact_id``; otherwise :meth:`resolved_artifact_id` derives a stable id
-    from a SHA-256 hash of the format plus the rendered content — no UUIDs,
+    ``artifact_id``; otherwise :meth:`resolved_artifact_id` derives a stable
+    SHA-256-based id over the format plus rendered content — no UUIDs,
     timestamps, or random values.
     """
 

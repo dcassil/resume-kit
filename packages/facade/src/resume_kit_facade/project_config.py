@@ -40,6 +40,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from pydantic import BaseModel, ConfigDict
+from resume_kit_schemas import CandidateEvidence
 
 #: The working-directory folder name, relative to a project root.
 WORKING_DIR_NAME = "resume-kit"
@@ -69,6 +70,10 @@ class ProjectConfig(BaseModel):
             is the record the faithfulness gate consumes.
         active_job_source: The original source file the active job was converted
             from, or ``None``.
+        evidence_file: Path of the default confirmed-evidence JSON file,
+            relative to ``resume-kit/`` by convention.
+        active_evidence: Path of the active evidence JSON file, relative to
+            ``resume-kit/`` by convention.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -78,6 +83,8 @@ class ProjectConfig(BaseModel):
     alias_file: str | None = None
     active_resume_source: str | None = None
     active_job_source: str | None = None
+    evidence_file: str | None = None
+    active_evidence: str | None = None
 
 
 def working_dir(root: str | Path) -> Path:
@@ -103,9 +110,7 @@ def load_config(root: str | Path) -> ProjectConfig:
         return ProjectConfig()
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"{path} must contain a JSON object, got {type(raw).__name__}."
-        )
+        raise ValueError(f"{path} must contain a JSON object, got {type(raw).__name__}.")
     return ProjectConfig.model_validate(raw)
 
 
@@ -135,6 +140,45 @@ def save_config(root: str | Path, config: ProjectConfig) -> Path:
         temp_name = handle.name
     os.replace(temp_name, path)
     return path
+
+
+def atomic_write_json(path: Path, value: object) -> None:
+    """Atomically write JSON ``value`` to ``path``.
+
+    Creates the parent directory when needed. The temp file is written beside
+    the destination and then moved into place with :func:`os.replace`, matching
+    the config save contract.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, indent=2, sort_keys=True)
+    with NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}-",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(payload)
+        handle.write("\n")
+        temp_name = handle.name
+    os.replace(temp_name, path)
+
+
+def load_evidence_file(path: Path) -> list[CandidateEvidence]:
+    """Load a JSON evidence file, accepting bare arrays or envelopes."""
+    if not path.exists():
+        return []
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    payload = raw.get("data") if isinstance(raw, dict) else raw
+    if not isinstance(payload, list):
+        raise ValueError(f"{path} must contain an evidence array or an envelope with data array.")
+    return [CandidateEvidence.model_validate(item) for item in payload]
+
+
+def save_evidence_file(path: Path, evidence: list[CandidateEvidence]) -> None:
+    """Atomically write a bare evidence array to ``path``."""
+    atomic_write_json(path, [item.model_dump(mode="json") for item in evidence])
 
 
 def init_project(root: str | Path) -> ProjectConfig:

@@ -15,12 +15,29 @@ Single-user, per-project scope: there is intentionally no ``user_id`` field.
 
 from __future__ import annotations
 
-from typing import Literal
+from enum import StrEnum
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 EditOutcome = Literal["accepted", "accepted_modified", "rejected", "undone"]
 """How the user responded to a proposed edit."""
+
+
+class EditFeedbackReasonCode(StrEnum):
+    """Structured reason for rejecting or modifying a proposed edit."""
+
+    FABRICATION = "fabrication"
+    OVERCLAIM = "overclaim"
+    UNSUPPORTED = "unsupported"
+    GRAMMAR = "grammar"
+    FORMATTING = "formatting"
+    NOT_MY_VOICE = "not_my_voice"
+    TOO_VERBOSE = "too_verbose"
+    TOO_VAGUE = "too_vague"
+    WRONG_EMPHASIS = "wrong_emphasis"
+    DUPLICATE = "duplicate"
+    OTHER = "other"
 
 
 class EditFeedback(BaseModel):
@@ -55,8 +72,17 @@ class EditFeedback(BaseModel):
     )
     confidence: float = Field(description="System confidence in the proposal, 0..1.")
     outcome: EditOutcome = Field(description="How the user responded to the proposal.")
+    reason_code: EditFeedbackReasonCode | None = Field(
+        default=None,
+        description="Optional structured reason for rejecting or modifying the edit.",
+    )
+    reason_note: str | None = Field(
+        default=None,
+        description="Optional free-text reason supplied by the user.",
+    )
     rejection_reason: str | None = Field(
-        default=None, description="Optional user-provided reason when rejected."
+        default=None,
+        description="Deprecated legacy free-text reason; accepted for old JSONL records.",
     )
     edit_distance: float | None = Field(
         default=None,
@@ -74,6 +100,18 @@ class EditFeedback(BaseModel):
     timestamp: str = Field(
         description="Caller-provided ISO-8601 timestamp of the outcome (never read from a clock)."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_rejection_reason(cls, data: Any) -> Any:
+        """Copy legacy ``rejection_reason`` into ``reason_note`` when needed."""
+        if not isinstance(data, dict):
+            return data
+        if data.get("reason_note") is not None or data.get("rejection_reason") is None:
+            return data
+        migrated = dict(data)
+        migrated["reason_note"] = migrated["rejection_reason"]
+        return migrated
 
 
 class UserPreferenceProfile(BaseModel):
@@ -153,6 +191,8 @@ class PreferencePair(BaseModel):
 
     preferred_candidate: str = Field(description="Identifier of the candidate the user preferred.")
     rejected_candidate: str = Field(description="Identifier of the candidate the user rejected.")
-    strength: float = Field(
-        description="Strength of the observed preference, higher is stronger."
+    strength: float = Field(description="Strength of the observed preference, higher is stronger.")
+    timestamp: str | None = Field(
+        default=None,
+        description="Optional caller-provided ISO-8601 timestamp for persistence.",
     )

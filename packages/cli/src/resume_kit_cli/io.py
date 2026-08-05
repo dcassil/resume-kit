@@ -141,14 +141,15 @@ class InMemoryArtifactStore:
 
 
 def load_evidence(source: str) -> list[CandidateEvidence]:
-    """Load a JSON array of :class:`CandidateEvidence` objects from ``source``."""
+    """Load evidence records from a bare JSON array or response envelope."""
     raw = _load_json_text(source)
     try:
-        payload = json.loads(raw)
+        raw_payload = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise _fail(f"Invalid JSON in {source}: {exc}") from exc
+    payload = raw_payload.get("data") if isinstance(raw_payload, dict) else raw_payload
     if not isinstance(payload, list):
-        raise _fail(f"Expected a JSON array of evidence in {source}.")
+        raise _fail(f"Expected an evidence array or envelope in {source}.")
     evidence: list[CandidateEvidence] = []
     for index, item in enumerate(payload):
         try:
@@ -156,3 +157,12 @@ def load_evidence(source: str) -> list[CandidateEvidence]:
         except ValidationError as exc:
             raise _fail(f"Invalid evidence at index {index} in {source}: {exc}") from exc
     return evidence
+
+
+def load_json_value(source: str) -> object:
+    """Load and return arbitrary JSON from ``source``."""
+    raw = _load_json_text(source)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise _fail(f"Invalid JSON in {source}: {exc}") from exc

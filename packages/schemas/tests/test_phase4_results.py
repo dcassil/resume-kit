@@ -125,6 +125,8 @@ def test_truth_report_detects_unsupported_or_contradicted_claims() -> None:
     assert report.status_counts[ProvenanceStatus.SUPPORTED] == 1
     assert report.status_counts[ProvenanceStatus.UNSUPPORTED] == 1
     assert report.status_counts[ProvenanceStatus.CONTRADICTED] == 1
+    assert report.needs_evidence_count == 1
+    assert report.contradiction_count == 1
     assert report.has_unsupported_or_contradicted is True
     assert report.passed is False
 
@@ -221,9 +223,7 @@ def test_alignment_result_model_dump_roundtrip() -> None:
         after_ats_score=ATSScore(overall_score=70.0),
         before_match_report=JobMatchReport(overall_score=61.0),
         after_match_report=JobMatchReport(overall_score=72.0),
-        score_deltas=[
-            ScoreDelta(metric="match.overall", before=61.0, after=72.0, delta=11.0)
-        ],
+        score_deltas=[ScoreDelta(metric="match.overall", before=61.0, after=72.0, delta=11.0)],
         truth_report=TruthReport(
             claims=[ClaimProvenance(claim="Built search", status=ProvenanceStatus.SUPPORTED)]
         ),

@@ -4,193 +4,192 @@ description: >
   Surface MISSING-BUT-TRUE keywords into the resume, truth-gated, no LLM. When a
   deterministic gap run (identify-resume-gaps) reports a JD keyword as missing
   from THIS resume but the candidate's MASTER resume proves they genuinely have
-  it (an INJECTABLE keyword), this workflow adds that keyword where the candidate
-  actually demonstrates it — the skills list or summary — with per-change human
-  acceptance, then runs validate-resume-truth and reverts any change the truth
-  gate flags, and finally reports exactly what changed and re-scores via
-  check-keyword-match. It NEVER adds a keyword the candidate does not have: a
-  non-injectable JD keyword stays a GAP and is routed to identify-resume-gaps,
-  never fabricated in. Identity, employer, and date fields are never touched.
-  Best run in a subagent.
+  it, this workflow creates targeted ChangeProposal records and drives the
+  code-owned edit-session loop: mode prompt, per-change prompt/decision,
+  commit-session hard gate, then validate-resume-truth. Direct hand-editing the
+  working JSON is unsupported unless followed by reconcile-session. Best run in
+  a subagent.
 ---
 
-# inject-keywords — read injectable gaps → agent edits → truth-gate → revert flagged → report + re-score
+# inject-keywords - injectable gaps -> edit session -> commit gate -> truth
 
 ## Purpose
 
-`identify-resume-gaps` scores a resume against a job **deterministically** — no
-LLM. It splits each missing JD keyword into two buckets:
+`identify-resume-gaps` scores a resume against a job deterministically. It splits
+missing JD keywords into two buckets:
 
-- **Injectable** — missing from THIS resume, but the candidate's **master resume
-  proves they genuinely have it**. Surfacing it into the resume is truthful.
-- **Non-injectable** — absent from both this resume and the master. This is a
-  **real gap**. It is NOT a candidate for injection.
+- **Injectable** - missing from this resume, but proven by the master resume or
+  evidence. Surfacing it into this resume is truthful.
+- **Non-injectable** - absent from both this resume and the master/evidence. This
+  is a real gap, not an edit candidate.
 
-This skill's ONE job is to **surface the injectable keywords into the resume**
-(the skills list or the summary), drawn ONLY from where the master resume /
-evidence shows the candidate genuinely demonstrates them — truth-gated, no LLM,
-per-change human acceptance. It is the safety-critical, provider-free replacement
-for the disabled LLM auto-rewrite.
+This skill's job is to turn injectable keywords into targeted `ChangeProposal`
+records, then drive those records through the edit-session orchestrator. The
+skill does not bulk-edit resume JSON. The orchestrator owns review state,
+decision logging, tamper detection, policy application, preference feedback, and
+the hard write gate.
 
-Distinct from **update-terminology**, which only swaps the WORDING of a keyword
-the resume ALREADY satisfies. Here we ADD a TRUE keyword the resume was MISSING.
-The two never overlap.
+Distinct from **update-terminology**, which only swaps wording for a keyword the
+resume already satisfies under an alias. Here we add a true, missing keyword to
+an appropriate summary, skills, or evidence-backed accomplishment surface.
 
-## Prerequisites gate — run this FIRST
+## Prerequisites Gate
 
-Before doing anything, run the shared prerequisites gate defined in
-[`../_shared/prerequisites.md`](../_shared/prerequisites.md). This skill's
-required inputs are:
+Run the shared prerequisites gate in
+[`../_shared/prerequisites.md`](../_shared/prerequisites.md). Required inputs:
 
-- A `ResumeDocument` JSON — the active resume (`config.json` → `active_resume`,
-  under `resume-kit/resumes/`), or an explicit path the caller passed.
-- A `JobDescription` JSON — the active job (`config.json` → `active_job`, under
-  `resume-kit/jobs/`), or an explicit path.
-- **A gap result** from `identify-resume-gaps` — the injectable vs
-  non-injectable keyword split. This is what tells you which keywords are safe to
-  surface. Backing the injectable list requires the **master resume / evidence**
-  the gap run used; make sure it is available.
+- A `ResumeDocument` JSON: active resume from `resume-kit/config.json`, or an
+  explicit path.
+- A `JobDescription` JSON: active job from `resume-kit/config.json`, or an
+  explicit path.
+- A gap result from **identify-resume-gaps**, including the injectable and
+  non-injectable split.
+- The master resume/evidence used to prove each injectable keyword.
 
-**If the resume JSON, job JSON, or a gap result is missing, wrong type, or
-absent: STOP.** Do not guess, do not fabricate, do not run on partial inputs.
-Name the specific upstream skill:
+If any required input is missing, stop and name the upstream skill:
 
-- Need a `ResumeDocument` JSON but only have a resume file → run **resume-to-json**.
-- Need a `JobDescription` JSON but only have posting text/URL/file → run **job-to-json**.
-- Need the injectable/non-injectable split → run **identify-resume-gaps** first.
+- Need a resume JSON -> run **resume-to-json**.
+- Need a job JSON -> run **job-to-json**.
+- Need the injectable split -> run **identify-resume-gaps**.
+- Need evidence records -> run **build-candidate-evidence** or persist a user
+  confirmed statement with `resume-tool add-evidence --confirmed --content ...`.
 
-Only when the resume, the job, and a gap result all resolve do you proceed.
+## Run Me In A Subagent
 
-## Run me in a subagent
+This is a self-contained improve task over potentially large resume/job/evidence
+data. The main agent should hand the subagent the active resume path, job path,
+master/evidence path, gap result, `resume-kit/config.json`, and this skill. The
+subagent returns only the proposed/applied change summary, skipped gaps, gate
+results, and before/after score deltas.
 
-This is a self-contained, file-mutating task. The main agent should **dispatch it
-to a subagent** (e.g. the Task tool / a general-purpose agent), consistent with
-`resume-to-json`, `job-to-json`, `manage-synonyms`, and `update-terminology`.
-Hand the subagent: the paths to the resume JSON, the job JSON, the master resume
-/ evidence, and the gap result (or the inputs to reproduce it), the path to
-`resume-kit/config.json`, and this skill. The subagent performs the edits, gets
-per-change confirmation, runs the truth gate, and returns only **what it
-changed** (path, added keyword, where the master proves it) plus the re-score
-delta. Do NOT stream the full resume/job/master text back into the main context.
+## Working Directory
 
-## resume-kit working directory (file convention)
-
-All state lives under `resume-kit/` in the current project:
+All project state lives under `resume-kit/`:
 
 ```
 resume-kit/
-├── config.json          # pointers + preferences; holds active_resume, active_job
-├── resumes/<orig-basename>-original.json
-├── jobs/<orig-basename>-original.json
-├── working/<session-id>/resume.json   # a revised resume is written here
+├── config.json
+├── resumes/<name>-original.json
+├── jobs/<name>-original.json
+├── working/edit-session.json
+├── working/<name>.tailored.json
 └── learning/
 ```
 
-If this skill writes a revised resume, save it under
-`resume-kit/working/<session-id>/resume.json` and **update `config.json`'s
-`active_resume`** to point at it — mirroring the `resume-to-json` convention so
-downstream skills pick up the latest version.
+The edit-session orchestrator writes the tailored resume to the `working_path`
+reported by `commit-session` / `resume-tool review-edits commit`. Do not create
+or overwrite that file yourself. After the session is fully committed,
+downstream skills may use the committed `working_path` explicitly, or the caller
+may make it active via `resume-tool set-active --resume <working_path>`.
 
-## The surfaces this skill drives
+Direct hand-editing of the working resume is unsupported because it trips tamper
+detection. If the user intentionally edits the working file outside the session,
+the sanctioned recovery path is `resume-tool review-edits reconcile` /
+`edit_session_reconcile` / `reconcile-session`; then continue through the
+session gate.
 
-- **The gap tool** — CLI `identify-gaps`, MCP `resume_identify_gaps`. Supplies
-  the injectable vs non-injectable keyword split. (Run via **identify-resume-gaps**.)
-- **The truth gate** — CLI `validate-truth`, MCP `resume_validate_truth`
-  (**validate-resume-truth**). Flags any unsupported or contradicted claim. It is
-  the mandatory backstop after every edit.
-- **The re-score tool** — CLI `check-job-match`, MCP `resume_check_job_match`
-  (**check-keyword-match**). Recomputes the keyword match so you can report the
-  before/after delta.
+## Surfaces This Skill Drives
 
-> `resume-tool` is the CLI entrypoint (e.g. `resume-tool validate-truth ...`,
-> `resume-tool check-job-match ...`).
+- Gap analysis: CLI `resume-tool identify-gaps`, MCP `resume_identify_gaps`,
+  facade capability `identify-resume-gaps`.
+- Edit session:
+  - CLI `resume-tool review-edits open --mode <interactive|review_at_end|auto>`
+  - CLI `resume-tool review-edits prompt`
+  - CLI `resume-tool review-edits decide --path <path> --action <approve|reject|edit|skip>`
+  - CLI `resume-tool review-edits commit`
+  - CLI `resume-tool review-edits status`
+  - CLI `resume-tool review-edits reconcile`
+  - MCP `edit_session_open`, `edit_session_prompt`, `edit_session_decide`,
+    `edit_session_commit`, `edit_session_status`, `edit_session_reconcile`
+  - Facade capabilities `open-edit-session`, `session-prompt`, `decide-change`,
+    `commit-session`, `session-status`, `reconcile-session`
+- Truth validation: CLI `resume-tool validate-truth`, MCP
+  `resume_validate_truth`, facade capability `validate-resume-truth`.
+- Re-score: CLI `resume-tool match`, MCP `resume_check_job_match`, facade
+  capability `check-resume-job-match`.
+
+## Mode Prompt
+
+Before opening the session, ask the user which review mode they want:
+
+- `interactive` - prompt and decide each change before moving on.
+- `review_at_end` - collect proposals first, then review them at the end. Use
+  this exact underscore spelling in CLI/MCP/capability payloads.
+- `auto` - let the orchestrator auto-approve only changes its policy can safely
+  apply; unsupported/deferred changes are not silently applied.
+
+Do not choose a mode silently. If the user does not answer, use `interactive`.
+
+## Reason Codes
+
+On every `reject` or `edit` decision, offer the `EditFeedbackReasonCode` enum,
+not open-ended free text:
+
+`fabrication`, `overclaim`, `unsupported`, `grammar`, `formatting`,
+`not_my_voice`, `too_verbose`, `too_vague`, `wrong_emphasis`, `duplicate`,
+`other`.
+
+Use `--reason-code <value>` for CLI decisions or `reason_code` for MCP/facade
+calls. A short optional note is allowed through `--note` / `note`, but it never
+replaces the enum. For `edit`, pass the user's final wording with
+`--edited-content` / `edited_content`.
 
 ## Steps
 
-1. **Read the injectable list.** From the `identify-resume-gaps` result, take
-   ONLY the **injectable** keywords (missing from this resume AND proven by the
-   master resume / evidence). Ignore the non-injectable ones entirely — those are
-   real gaps (see DON'T).
-2. **For each injectable keyword, locate its truthful home in the master.**
-   Confirm where the master resume / evidence genuinely demonstrates the skill.
-   You are only surfacing something the candidate already has; you must be able to
-   point at the master line/evidence that proves it.
-3. **Propose the edit, get per-change acceptance.** For each keyword, propose
-   adding it to the **skills list** or **summary** (the surfaces where a keyword
-   truthfully belongs), citing the master evidence. Ask the user to
-   **accept or skip each change** — never apply without an explicit "accept".
-   Default is skip.
-4. **Apply accepted edits to the resume JSON.** Edit ONLY the skills list /
-   summary to surface the accepted keyword. Never touch identity, employer, title,
-   or date fields (see DON'T).
-5. **Run the truth gate.** After editing, run **validate-resume-truth**
-   (`resume_validate_truth`) on the revised resume. **Revert any change it
-   flags** as unsupported or contradicted — the gate's rejection is final; never
-   override it, never keep a flagged change.
-6. **Persist & report + re-score.** If a revised (and truth-passing) resume was
-   produced, save it under `resume-kit/working/<session-id>/resume.json` and
-   update `config.json`'s `active_resume`. Report a per-change log: for each
-   applied change, the **path**, the **keyword added**, and **where the master
-   proves it**; every change reverted by the truth gate and why; and every
-   keyword skipped. Then re-score via **check-keyword-match**
-   (`resume_check_job_match`) and report the **before/after keyword-match delta**.
+1. **Read injectable gaps.** Use only the `injectable` keywords from
+   **identify-resume-gaps**. Non-injectable keywords are reported as gaps and
+   never become edit proposals.
+2. **Prove each keyword.** For every injectable keyword, identify the master
+   resume line or `CandidateEvidence` record proving the candidate has it. If you
+   cannot point to proof, skip it.
+3. **Build targeted `ChangeProposal` records.** Propose minimal `replace`,
+   `append`, or `add_skill` changes against only truthful, allowed resume paths.
+   Include the current `original` value when replacing text, the proposed
+   `value`, and a `reason` that names the keyword and evidence. Never target
+   identity, employer, title-of-record, or date fields.
+4. **Open the edit session.** After the mode prompt, call `open-edit-session`
+   with the change list, evidence, claim provenance, and expected score deltas
+   where available. CLI example:
 
-## Truth posture — LOAD-BEARING PRODUCT POLICY (do not weaken)
+   ```bash
+   resume-tool review-edits open \
+     --mode interactive \
+     --changes <changes.json> \
+     --evidence <evidence.json>
+   ```
 
-The only thing this skill does is **surface a keyword the candidate GENUINELY
-has** — proven by the master resume / evidence — into a resume that happened to
-omit it. That is truthful. It is NOT a lever to claim skills the candidate lacks.
+5. **Present and decide through the orchestrator.** Repeatedly call
+   `session-prompt` / `resume-tool review-edits prompt`, show the prompt, then
+   record the user's decision with `decide-change` /
+   `resume-tool review-edits decide`. Decisions must be path-correlated. Use
+   `approve`, `reject`, `edit`, or `skip`; offer reason codes for `reject` and
+   `edit`.
+6. **Commit through the hard gate.** Call `commit-session` /
+   `resume-tool review-edits commit`. If it fails because decisions are missing,
+   claims are contradicted, policy rejects paths, or the working file was
+   tampered with, stop and report the gate failure. Do not patch around it. If
+   the user made an intentional out-of-band edit, run `reconcile-session` and
+   then continue.
+7. **Validate truth.** Run **validate-resume-truth** on the committed
+   `working_path` with the evidence list. Any unsupported or contradicted claim
+   must be resolved before export.
+8. **Re-score.** Run **check-keyword-match** via `resume-tool match` /
+   `resume_check_job_match`, honoring `alias_file`, and report before/after
+   keyword and ATS deltas from the commit result or re-score.
 
-### DO — surface a missing-but-true keyword
+## Truth Posture
 
-- The keyword is **injectable**: missing from this resume, but the master resume
-  / evidence proves the candidate demonstrates it. Add it to the skills list or
-  summary, drawn from that master evidence.
-- Point at the exact master line / evidence for every keyword you add — if you
-  cannot, it is not injectable and you must not add it.
-
-### DON'T — these are forbidden
-
-- **Never add a keyword the candidate does not genuinely have.** A
-  **non-injectable** keyword — absent from both this resume and the master — is a
-  real **GAP**. It **stays a GAP**: surface it and route the user to
-  **`identify-resume-gaps`**. **Never fabricate it into the resume** to close the
-  gap. No non-injectable keyword is ever written in, under any circumstances.
-- **Never edit identity, employer, title-of-record, or date fields.** This skill
-  only surfaces a skill keyword into the skills list / summary; it never touches
-  names, companies, titles, or dates.
-- **Never keep a change the truth gate flags.** `validate-resume-truth` is
-  mandatory after every edit; any flagged change is reverted, no exceptions,
-  never overridden.
-- **Never apply without explicit per-change acceptance**, and never auto-apply
-  the whole set. Report every change you make.
-- **When in doubt, skip.** If you are not confident the master genuinely proves
-  the keyword for THIS candidate, do not add it — leave it for the user.
-
-The truth gate (`validate_resume_truth`) is the backstop, not your only line of
-defense: the injectable check and per-change acceptance come first, and the gate
-catches anything that slips through. Honor the gate; never work around it.
-
-## Gaps vs. keyword injection vs. terminology updates
-
-Do not confuse these:
-
-- **Keyword injection** (this skill) — the JD keyword is absent from THIS resume,
-  but the **master resume proves the candidate genuinely has it** (injectable).
-  Surfacing it into the skills list / summary is truthful. ADD a true keyword.
-- **Terminology update** (`update-terminology`) — the resume ALREADY satisfies
-  the JD keyword under a different surface form (alias hit). Mirroring the
-  employer's exact wording is truthful. SWAP wording only.
-- **Gap** (`identify-resume-gaps`) — the JD keyword is absent from both this
-  resume and the master (non-injectable). A real gap: **surfaced, never rewritten
-  in**.
+- Only surface a keyword the candidate genuinely has and can prove.
+- Never turn a non-injectable gap into a resume claim.
+- Never edit identity, employer, title-of-record, or date fields.
+- Never bulk-apply a change list or write the working JSON directly.
+- Never keep a change blocked by `commit-session` or `validate-resume-truth`.
+- When in doubt, skip and explain what evidence is missing.
 
 ## Output
 
-The set of keywords actually injected — each reported as `{path, keyword, master
-evidence}` — every change reverted by the truth gate (and why), every keyword
-skipped, and the **before/after keyword-match delta** from the re-score. If a
-revised resume was written, its path under `resume-kit/working/<session-id>/` and
-the updated `active_resume` pointer. Nothing is added without explicit per-change
-acceptance; no non-injectable keyword is ever written in; nothing flagged by the
-truth gate is kept.
+Return the committed `working_path`, the session id, every approved/edited
+change `{path, keyword, evidence}`, every rejected/skipped keyword with its
+reason code when supplied, every hard-gate rejection, and the before/after match
+delta. State explicitly that non-injectable gaps were not written into the
+resume.

@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from resume_kit_feedback import append_edit_feedback, diff_terms, read_edit_feedback
-from resume_kit_schemas import EditFeedback
+from resume_kit_feedback import (
+    append_edit_feedback,
+    append_preference_pair,
+    diff_terms,
+    read_edit_feedback,
+    read_preference_pairs,
+)
+from resume_kit_schemas import EditFeedback, PreferencePair
 
 
 def _record(edit_id: str, timestamp: str, outcome: str = "accepted") -> EditFeedback:
@@ -62,6 +68,31 @@ def test_append_preserves_prior_lines_and_order(tmp_path: Path) -> None:
     # The first two lines are byte-for-byte unchanged after the third append.
     assert lines_after_three[:2] == lines_after_two
     assert [r.edit_id for r in read_edit_feedback(base_path=tmp_path)] == ["e1", "e2", "e3"]
+
+
+def test_preference_pair_append_read_round_trip(tmp_path: Path) -> None:
+    first = PreferencePair(
+        preferred_candidate="cand-a",
+        rejected_candidate="cand-b",
+        strength=1.0,
+        timestamp="2026-08-04T00:00:00Z",
+    )
+    second = PreferencePair(
+        preferred_candidate="cand-c",
+        rejected_candidate="cand-d",
+        strength=2.0,
+        timestamp="2026-08-04T01:00:00Z",
+    )
+
+    append_preference_pair(first, base_path=tmp_path)
+    log = tmp_path / "learning" / "preference-pairs.jsonl"
+    lines_after_first = log.read_text(encoding="utf-8").splitlines()
+
+    append_preference_pair(second, base_path=tmp_path)
+    lines_after_second = log.read_text(encoding="utf-8").splitlines()
+
+    assert lines_after_second[:1] == lines_after_first
+    assert read_preference_pairs(base_path=tmp_path) == [first, second]
 
 
 def test_one_json_object_per_line(tmp_path: Path) -> None:

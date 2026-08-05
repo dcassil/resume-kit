@@ -29,6 +29,19 @@ class ProvenanceStatus(StrEnum):
     CONTRADICTED = "contradicted"
 
 
+class ProvenanceReasonCode(StrEnum):
+    """Machine-readable explanation for a claim provenance classification."""
+
+    EXACT_EVIDENCE = "exact_evidence"
+    STRONG_EVIDENCE_OVERLAP = "strong_evidence_overlap"
+    PARTIAL_EVIDENCE_OVERLAP = "partial_evidence_overlap"
+    AMBIGUOUS_EVIDENCE_OVERLAP = "ambiguous_evidence_overlap"
+    MISSING_EVIDENCE = "missing_evidence"
+    STRUCTURAL_CONFLICT = "structural_conflict"
+    REFUTED_BY_EVIDENCE = "refuted_by_evidence"
+    UNKNOWN_SKILL = "unknown_skill"
+
+
 class ClaimProvenance(BaseModel):
     """The provenance classification for a single resume claim.
 
@@ -51,6 +64,10 @@ class ClaimProvenance(BaseModel):
     rationale: str | None = Field(
         default=None,
         description="Human-readable explanation for the assigned status.",
+    )
+    reason_code: ProvenanceReasonCode | None = Field(
+        default=None,
+        description="Stable machine-readable reason for the assigned status.",
     )
     confidence: float = Field(
         default=1.0,

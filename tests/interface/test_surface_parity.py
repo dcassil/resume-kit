@@ -21,6 +21,7 @@ from resume_kit_core.testing import FakeStructuredCompletionProvider
 from resume_kit_export.models import ExportFormat, mime_type
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
@@ -28,18 +29,32 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    OpenEditSessionRequest,
+    RankEditCandidatesRequest,
+    ReconcileSessionRequest,
+    RecordEditFeedbackRequest,
+    RefreshPreferencesRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.project_config import init_project, set_active, working_dir
+from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.tools import HANDLERS
 from resume_kit_schemas import (
     AdditionalInfo,
     CandidateEvidence,
+    ChangeProposal,
+    EditFeedback,
+    EditFeedbackReasonCode,
     EvidenceKind,
     Experience,
     JobDescription,
@@ -47,6 +62,7 @@ from resume_kit_schemas import (
     Requirement,
     RequirementKind,
     ResumeDocument,
+    ReviewAction,
     TerminologyAlignment,
 )
 from typer import Typer
@@ -84,6 +100,10 @@ class Fixtures:
     term_job: JobDescription
     term_suggestion: TerminologyAlignment
     term_location: str
+    feedback: EditFeedback
+    preference_records: list[EditFeedback]
+    rank_candidates: list[Candidate]
+    rank_context: FeatureContext
 
 
 @dataclass(frozen=True)
@@ -97,6 +117,11 @@ class FixturePaths:
     term_resume: Path
     term_job: Path
     term_suggestion: Path
+    feedback: Path
+    preference_records: Path
+    rank_candidates: Path
+    rank_context: Path
+    approved_claims: Path
 
 
 @dataclass(frozen=True)
@@ -127,8 +152,7 @@ def _fixtures() -> Fixtures:
             location="Austin, TX",
         ),
         summary=(
-            "Backend engineer delivering Python APIs, Docker services, and "
-            "PostgreSQL analytics."
+            "Backend engineer delivering Python APIs, Docker services, and PostgreSQL analytics."
         ),
         workExperience=[
             Experience(
@@ -264,6 +288,33 @@ def _fixtures() -> Fixtures:
         locations=["workExperience[0].description[0]"],
         canonical="kubernet",
     )
+    feedback = EditFeedback(
+        edit_id="edit-1",
+        resume_id="resume-1",
+        job_id="job-1",
+        section="summary",
+        edit_type="keyword_substitution",
+        original_text="Built APIs.",
+        proposed_text="Built Python APIs.",
+        final_text=None,
+        predicted_ats_gain=2.0,
+        confidence=0.8,
+        outcome="rejected",
+        reason_code=EditFeedbackReasonCode.NOT_MY_VOICE,
+        timestamp="2026-08-05T00:00:00+00:00",
+    )
+    preference_records = [
+        feedback.model_copy(
+            update={
+                "edit_id": f"accepted-{index}",
+                "outcome": "accepted",
+                "final_text": "Built scalable Python APIs.",
+            }
+        )
+        for index in range(3)
+    ]
+    rank_candidates = [Candidate(candidate_id="safe", section="skill", proposed_text="Docker")]
+    rank_context = FeatureContext(resume=resume, job=job, evidence=evidence)
     return Fixtures(
         resume=resume,
         master=master,
@@ -275,6 +326,10 @@ def _fixtures() -> Fixtures:
         term_job=term_job,
         term_suggestion=term_suggestion,
         term_location="workExperience[0].description[0]",
+        feedback=feedback,
+        preference_records=preference_records,
+        rank_candidates=rank_candidates,
+        rank_context=rank_context,
     )
 
 
@@ -302,14 +357,27 @@ def _context(tmp_path: Path) -> FixtureContext:
         evidence=_write_json(tmp_path / "evidence.json", _json_models(fixtures.evidence)),
         resume_text=tmp_path / "resume.txt",
         job_text=tmp_path / "job.txt",
-        term_resume=_write_json(
-            tmp_path / "term_resume.json", _json_model(fixtures.term_resume)
-        ),
-        term_job=_write_json(
-            tmp_path / "term_job.json", _json_model(fixtures.term_job)
-        ),
+        term_resume=_write_json(tmp_path / "term_resume.json", _json_model(fixtures.term_resume)),
+        term_job=_write_json(tmp_path / "term_job.json", _json_model(fixtures.term_job)),
         term_suggestion=_write_json(
             tmp_path / "term_suggestion.json", _json_model(fixtures.term_suggestion)
+        ),
+        feedback=_write_json(tmp_path / "feedback.json", fixtures.feedback.model_dump(mode="json")),
+        preference_records=_write_json(
+            tmp_path / "preference_records.json",
+            [item.model_dump(mode="json") for item in fixtures.preference_records],
+        ),
+        rank_candidates=_write_json(
+            tmp_path / "rank_candidates.json",
+            [item.model_dump(mode="json") for item in fixtures.rank_candidates],
+        ),
+        rank_context=_write_json(
+            tmp_path / "rank_context.json",
+            fixtures.rank_context.model_dump(mode="json"),
+        ),
+        approved_claims=_write_json(
+            tmp_path / "approved_claims.json",
+            ["Confirmed Docker work"],
         ),
     )
     paths.resume_text.write_text(fixtures.resume_text, encoding="utf-8")
@@ -407,9 +475,7 @@ _SURFACE_CASES = (
     SurfaceCase(
         name="check-resume-job-match",
         capability="check-resume-job-match",
-        request=lambda ctx: CheckResumeJobMatchRequest(
-            resume=ctx.data.resume, job=ctx.data.job
-        ),
+        request=lambda ctx: CheckResumeJobMatchRequest(resume=ctx.data.resume, job=ctx.data.job),
         cli_args=lambda ctx: [
             "match",
             "--resume",
@@ -425,9 +491,7 @@ _SURFACE_CASES = (
     SurfaceCase(
         name="check-resume-ats",
         capability="check-resume-ats",
-        request=lambda ctx: CheckResumeAtsRequest(
-            resume=ctx.data.resume, job=ctx.data.job
-        ),
+        request=lambda ctx: CheckResumeAtsRequest(resume=ctx.data.resume, job=ctx.data.job),
         cli_args=lambda ctx: [
             "check-ats",
             "--resume",
@@ -572,6 +636,152 @@ _SURFACE_CASES = (
         api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(
+        name="build-candidate-evidence-approved-claims",
+        capability="build-candidate-evidence",
+        request=lambda ctx: BuildCandidateEvidenceRequest(
+            resume=ctx.data.resume, approved_claims=["Confirmed Docker work"]
+        ),
+        cli_args=lambda ctx: [
+            "build-evidence",
+            "--resume",
+            str(ctx.paths.resume),
+            "--approved-claims",
+            str(ctx.paths.approved_claims),
+        ],
+        mcp_name="candidate_evidence_build",
+        mcp_args=lambda ctx: {
+            "resume": _resume(ctx),
+            "approved_claims": ["Confirmed Docker work"],
+        },
+        api_path="/build-evidence",
+        api_body=lambda ctx: {
+            "resume": _resume(ctx),
+            "approved_claims": ["Confirmed Docker work"],
+        },
+    ),
+    SurfaceCase(
+        name="record-edit-feedback",
+        capability="record-edit-feedback",
+        request=lambda ctx: RecordEditFeedbackRequest(
+            feedback=ctx.data.feedback,
+            base_path=ctx.paths.resume.parent / "resume-kit",
+        ),
+        cli_args=lambda ctx: [
+            "record-edit-feedback",
+            "--feedback",
+            str(ctx.paths.feedback),
+            "--base-path",
+            str(ctx.paths.resume.parent / "resume-kit"),
+        ],
+        mcp_name="edit_feedback_record",
+        mcp_args=lambda ctx: {
+            "feedback": ctx.data.feedback.model_dump(mode="json"),
+            "base_path": str(ctx.paths.resume.parent / "resume-kit"),
+        },
+        api_path="/record-edit-feedback",
+        api_body=lambda ctx: {
+            "feedback": ctx.data.feedback.model_dump(mode="json"),
+            "base_path": str(ctx.paths.resume.parent / "resume-kit"),
+        },
+    ),
+    SurfaceCase(
+        name="rank-edit-candidates",
+        capability="rank-edit-candidates",
+        request=lambda ctx: RankEditCandidatesRequest(
+            candidates=ctx.data.rank_candidates,
+            context=ctx.data.rank_context,
+        ),
+        cli_args=lambda ctx: [
+            "rank-edit-candidates",
+            "--candidates",
+            str(ctx.paths.rank_candidates),
+            "--context",
+            str(ctx.paths.rank_context),
+        ],
+        mcp_name="edit_candidates_rank",
+        mcp_args=lambda ctx: {
+            "candidates": [item.model_dump(mode="json") for item in ctx.data.rank_candidates],
+            "context": ctx.data.rank_context.model_dump(mode="json"),
+        },
+        api_path="/rank-edit-candidates",
+        api_body=lambda ctx: {
+            "candidates": [item.model_dump(mode="json") for item in ctx.data.rank_candidates],
+            "context": ctx.data.rank_context.model_dump(mode="json"),
+        },
+    ),
+    SurfaceCase(
+        name="refresh-preferences",
+        capability="refresh-preferences",
+        request=lambda ctx: RefreshPreferencesRequest(
+            now="2026-08-05T00:00:00+00:00",
+            records=ctx.data.preference_records,
+            base_path=ctx.paths.resume.parent / "resume-kit",
+        ),
+        cli_args=lambda ctx: [
+            "refresh-preferences",
+            "--now",
+            "2026-08-05T00:00:00+00:00",
+            "--records",
+            str(ctx.paths.preference_records),
+            "--base-path",
+            str(ctx.paths.resume.parent / "resume-kit"),
+        ],
+        mcp_name="preferences_refresh",
+        mcp_args=lambda ctx: {
+            "now": "2026-08-05T00:00:00+00:00",
+            "records": [item.model_dump(mode="json") for item in ctx.data.preference_records],
+            "base_path": str(ctx.paths.resume.parent / "resume-kit"),
+        },
+        api_path="/refresh-preferences",
+        api_body=lambda ctx: {
+            "now": "2026-08-05T00:00:00+00:00",
+            "records": [item.model_dump(mode="json") for item in ctx.data.preference_records],
+            "base_path": str(ctx.paths.resume.parent / "resume-kit"),
+        },
+    ),
+    SurfaceCase(
+        name="add-evidence",
+        capability="add-evidence",
+        request=lambda ctx: AddEvidenceRequest(
+            content="Confirmed Docker work",
+            kind=EvidenceKind.USER_STATEMENT,
+            tags=["Docker"],
+            root=ctx.paths.resume.parent,
+            update_active=True,
+        ),
+        cli_args=lambda ctx: [
+            "add-evidence",
+            "--confirmed",
+            "--content",
+            "Confirmed Docker work",
+            "--kind",
+            "user_statement",
+            "--tag",
+            "Docker",
+            "--root",
+            str(ctx.paths.resume.parent),
+            "--update-active",
+        ],
+        mcp_name="candidate_evidence_add",
+        mcp_args=lambda ctx: {
+            "confirmed": True,
+            "content": "Confirmed Docker work",
+            "kind": "user_statement",
+            "tags": ["Docker"],
+            "root": str(ctx.paths.resume.parent),
+            "update_active": True,
+        },
+        api_path="/add-evidence",
+        api_body=lambda ctx: {
+            "confirmed": True,
+            "content": "Confirmed Docker work",
+            "kind": "user_statement",
+            "tags": ["Docker"],
+            "root": str(ctx.paths.resume.parent),
+            "update_active": True,
+        },
+    ),
+    SurfaceCase(
         name="extract-job-description-no-llm",
         capability="extract-job-description",
         request=lambda ctx: ExtractJobDescriptionRequest(raw_text=ctx.data.job_text),
@@ -627,9 +837,7 @@ _SURFACE_CASES = (
 
 
 @pytest.mark.parametrize("case", _SURFACE_CASES, ids=[case.name for case in _SURFACE_CASES])
-def test_core_fields_are_equivalent_across_surfaces(
-    tmp_path: Path, case: SurfaceCase
-) -> None:
+def test_core_fields_are_equivalent_across_surfaces(tmp_path: Path, case: SurfaceCase) -> None:
     ctx = _context(tmp_path)
 
     direct = _direct_json(case.capability, case.request(ctx), no_llm=case.no_llm)
@@ -640,6 +848,51 @@ def test_core_fields_are_equivalent_across_surfaces(
     assert cli == direct
     assert mcp == direct
     assert api == direct
+
+
+def test_build_evidence_output_feeds_validate_truth_without_reshaping(
+    tmp_path: Path,
+) -> None:
+    ctx = _context(tmp_path)
+
+    cli_build = _RUNNER.invoke(
+        _CLI_APP,
+        ["build-evidence", "--resume", str(ctx.paths.resume), "--output", "json"],
+    )
+    assert cli_build.exit_code == 0, cli_build.stdout
+    envelope_path = tmp_path / "built-evidence-envelope.json"
+    envelope_path.write_text(cli_build.stdout, encoding="utf-8")
+    cli_validate = _RUNNER.invoke(
+        _CLI_APP,
+        [
+            "validate-truth",
+            "--resume",
+            str(ctx.paths.resume),
+            "--evidence",
+            str(envelope_path),
+            "--output",
+            "json",
+        ],
+    )
+    assert cli_validate.exit_code == 0, cli_validate.stdout
+
+    mcp_build = asyncio.run(
+        _await_json(HANDLERS["candidate_evidence_build"]({"resume": _resume(ctx)}))
+    )
+    mcp_validate = asyncio.run(
+        _await_json(
+            HANDLERS["resume_validate_truth"]({"resume": _resume(ctx), "evidence": mcp_build})
+        )
+    )
+    assert mcp_validate["errors"] == []
+
+    api_build = _CLIENT.post("/build-evidence", json={"resume": _resume(ctx)})
+    assert api_build.status_code == 200, api_build.text
+    api_validate = _CLIENT.post(
+        "/validate-truth",
+        json={"resume": _resume(ctx), "evidence": api_build.json()},
+    )
+    assert api_validate.status_code == 200, api_validate.text
 
 
 def test_provider_not_configured_error_is_equivalent_across_transports(
@@ -746,6 +999,199 @@ def test_align_human_in_loop_surfaces_questions_across_surfaces(
     assert all(payload["questions"] for payload in surfaces.values())
 
 
+def _session_change() -> ChangeProposal:
+    return ChangeProposal(
+        path="summary",
+        action="replace",
+        original="Backend engineer delivering Python APIs.",
+        value="Backend engineer delivering Python and FastAPI APIs.",
+        reason="Surface a truthful framework already present in the resume.",
+    )
+
+
+def _session_root(tmp_path: Path, name: str) -> Path:
+    root = tmp_path / name
+    init_project(root)
+    base = working_dir(root)
+    resume = ResumeDocument(
+        summary="Backend engineer delivering Python APIs.",
+        additional=AdditionalInfo(technicalSkills=["Python", "FastAPI"]),
+    )
+    job = JobDescription(title="Backend Engineer", keywords=["FastAPI"])
+    (base / "resumes" / "jordan-original.json").write_text(
+        resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    (base / "jobs" / "job.json").write_text(job.model_dump_json(), encoding="utf-8")
+    set_active(root, resume="resumes/jordan-original.json", job="jobs/job.json")
+    _write_json(
+        root / "changes.json",
+        [_session_change().model_dump(mode="json")],
+    )
+    return root
+
+
+def _scrub_session_payload(payload: JsonDict) -> JsonDict:
+    scrubbed = json.loads(json.dumps(payload))
+
+    def scrub(value: object) -> None:
+        if isinstance(value, dict):
+            if "session_id" in value:
+                value["session_id"] = "<session>"
+            for nested in value.values():
+                scrub(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                scrub(nested)
+
+    scrub(scrubbed)
+    return cast(JsonDict, scrubbed)
+
+
+def _direct_session_lifecycle(root: Path) -> list[JsonDict]:
+    change = _session_change()
+    responses = [
+        _direct_json(
+            "open-edit-session",
+            OpenEditSessionRequest(root=root, mode="interactive", changes=[change]),
+        ),
+        _direct_json("session-prompt", SessionPromptRequest(root=root)),
+        _direct_json(
+            "decide-change",
+            DecideChangeRequest(root=root, path="summary", action=ReviewAction.APPROVE),
+        ),
+        _direct_json("commit-session", CommitSessionRequest(root=root)),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _direct_json("reconcile-session", ReconcileSessionRequest(root=root)),
+            _direct_json("session-status", SessionStatusRequest(root=root)),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def _cli_session_lifecycle(root: Path) -> list[JsonDict]:
+    responses = [
+        _cli_json(
+            [
+                "review-edits",
+                "open",
+                "--mode",
+                "interactive",
+                "--changes",
+                str(root / "changes.json"),
+                "--root",
+                str(root),
+            ]
+        ),
+        _cli_json(
+            ["review-edits", "prompt", "--root", str(root)],
+            expected_exit=int(ExitCode.HUMAN_INPUT_REQUIRED),
+        ),
+        _cli_json(
+            [
+                "review-edits",
+                "decide",
+                "--path",
+                "summary",
+                "--action",
+                "approve",
+                "--root",
+                str(root),
+            ]
+        ),
+        _cli_json(["review-edits", "commit", "--root", str(root)]),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _cli_json(["review-edits", "reconcile", "--root", str(root)]),
+            _cli_json(["review-edits", "status", "--root", str(root)]),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def _mcp_session_lifecycle(root: Path) -> list[JsonDict]:
+    change = _session_change().model_dump(mode="json")
+    responses = [
+        _mcp_json(
+            "edit_session_open",
+            {"root": str(root), "mode": "interactive", "changes": [change]},
+        ),
+        _mcp_json("edit_session_prompt", {"root": str(root)}),
+        _mcp_json(
+            "edit_session_decide",
+            {"root": str(root), "path": "summary", "action": "approve"},
+        ),
+        _mcp_json("edit_session_commit", {"root": str(root)}),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _mcp_json("edit_session_reconcile", {"root": str(root)}),
+            _mcp_json("edit_session_status", {"root": str(root)}),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def _api_session_lifecycle(root: Path) -> list[JsonDict]:
+    change = _session_change().model_dump(mode="json")
+    responses = [
+        _api_json(
+            "/review-edits/open",
+            {"root": str(root), "mode": "interactive", "changes": [change]},
+        ),
+        _api_json("/review-edits/prompt", {"root": str(root)}),
+        _api_json(
+            "/review-edits/decide",
+            {"root": str(root), "path": "summary", "action": "approve"},
+        ),
+        _api_json("/review-edits/commit", {"root": str(root)}),
+    ]
+    working = working_dir(root) / "working" / "jordan.tailored.json"
+    payload = json.loads(working.read_text(encoding="utf-8"))
+    payload["summary"] = "Intentional manual reconciliation."
+    working.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    responses.extend(
+        [
+            _api_json("/review-edits/reconcile", {"root": str(root)}),
+            _api_json("/review-edits/status", {"root": str(root)}),
+        ]
+    )
+    return [_scrub_session_payload(response) for response in responses]
+
+
+def test_review_edits_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _session_root(tmp_path, "direct"),
+        "cli": _session_root(tmp_path, "cli"),
+        "mcp": _session_root(tmp_path, "mcp"),
+        "api": _session_root(tmp_path, "api"),
+    }
+
+    direct = _direct_session_lifecycle(roots["direct"])
+    cli = _cli_session_lifecycle(roots["cli"])
+    mcp = _mcp_session_lifecycle(roots["mcp"])
+    api = _api_session_lifecycle(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+
+
 # ---------------------------------------------------------------------------
 # Export parity (REQ-604): facade ≡ CLI ≡ MCP ≡ API on artifact metadata
 # ---------------------------------------------------------------------------
@@ -774,9 +1220,7 @@ def _export_direct(fmt: ExportFormat, resume: ResumeDocument) -> ArtifactResult:
     store = InMemoryArtifactStore()
     request = ExportResumeRequest(resume=resume, format=fmt)
     response = asyncio.run(
-        _await_response(
-            REGISTRY["export-resume"](request, CapabilityOptions(artifact_store=store))
-        )
+        _await_response(REGISTRY["export-resume"](request, CapabilityOptions(artifact_store=store)))
     )
     ref = response.artifacts[0]
     data = asyncio.run(store.get(ref.artifact_id))

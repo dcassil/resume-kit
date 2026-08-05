@@ -65,6 +65,55 @@ not faithful, so an unfaithful conversion never silently reaches disk. The
 their source paths, and `alias_file`) are owned by code via `init` / `set-active`
 — not hand-authored.
 
+### Project aliases and accepted terminology edits
+
+The deterministic matcher loads the packaged seed alias lexicon plus an optional
+project alias file from `resume-kit/config.json`'s `alias_file` pointer. Manual
+synonym growth still goes through the truth-gated `manage-synonyms` workflow.
+In addition, `resume-tool review-edits commit` self-heals that project file for
+accepted terminology edits: when a user accepts or edits a terminology proposal
+that mirrors the employer's wording, the commit records the resume term as an
+alias of the accepted employer term with `source: "accepted_edit"` provenance
+and the caller-supplied timestamp. Rejected, skipped, auto-mode,
+non-terminology, and malformed edits never grow aliases.
+
+### Improve-phase edit sessions
+
+Targeted resume improvements are written through the code-owned edit-session
+orchestrator, not direct JSON edits. The flow is: build truthful
+`ChangeProposal` records, prompt the user for a mode (`interactive`,
+`review_at_end`, or `auto`), run `resume-tool review-edits open`, then loop through
+`resume-tool review-edits prompt` and `resume-tool review-edits decide`.
+Rejections and user-modified edits carry a structured `EditFeedbackReasonCode`
+plus an optional note. Finally `resume-tool review-edits commit` applies the
+hard gate and writes the tailored resume to the reported `working_path`;
+`resume-tool validate-truth` remains the final truth check. Intentional
+out-of-band edits must be accepted with `resume-tool review-edits reconcile`
+before the session continues.
+
+The loop records outcomes as `EditFeedback` via `resume-tool record-edit-feedback`
+and can rebuild the deterministic preference profile with
+`resume-tool refresh-preferences --now <iso>`. Confirmed user evidence is added
+with `resume-tool add-evidence --confirmed --content ...`; `validate-truth`
+classifies those near-match claims as `USER_CONFIRMED`, while actively refuted
+claims remain `CONTRADICTED`. `UNSUPPORTED` means missing evidence, not an
+active refutation; each claim carries a machine-readable `reason_code` such as
+`missing_evidence`, `strong_evidence_overlap`, or `refuted_by_evidence`.
+
+## Release Notes
+
+### Package 0.6.0 / plugin 0.7.0 — enforced edit loop (RIT-I-0015)
+
+- Enforces the human-in-the-loop edit-session write gate across CLI, MCP, API,
+  and facade surfaces; bulk unlogged writes and truth-failing accepted changes
+  fail with machine-readable errors.
+- Fixes truth semantics so `CONTRADICTED` is reserved for structural conflicts
+  or active refutations, `UNSUPPORTED` means missing evidence, and every
+  provenance claim includes a stable `reason_code`.
+- Extends learning with edit feedback, preference refresh, user-confirmed
+  evidence, specific-over-vague preference derivation, and project alias growth
+  from accepted terminology edits.
+
 ## Building & publishing
 
 Build the umbrella wheel and sdist locally with [`uv`](https://docs.astral.sh/uv/):

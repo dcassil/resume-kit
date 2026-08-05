@@ -17,7 +17,13 @@ package never reads the clock, the network, or an LLM.
 """
 
 from .features import Candidate, CandidateSection, FeatureContext, extract_features
-from .log import append_edit_feedback, diff_terms, read_edit_feedback
+from .log import (
+    append_edit_feedback,
+    append_preference_pair,
+    diff_terms,
+    read_edit_feedback,
+    read_preference_pairs,
+)
 from .preferences import derive_preferences
 from .ranker import (
     DEFAULT_WEIGHTS,
@@ -33,8 +39,10 @@ __version__ = "0.0.0"
 __all__ = [
     # log I/O
     "append_edit_feedback",
+    "append_preference_pair",
     "diff_terms",
     "read_edit_feedback",
+    "read_preference_pairs",
     # preference memory
     "derive_preferences",
     # preference-RAG retrieval

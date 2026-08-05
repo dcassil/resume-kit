@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 
 import pytest
 from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.server import TOOLS
 from resume_kit_mcp.tools import HANDLERS, TOOL_NAMES
+from resume_kit_schemas import (
+    CandidateEvidence,
+    EditFeedback,
+    EditFeedbackReasonCode,
+    EvidenceKind,
+    JobDescription,
+    ResumeDocument,
+)
 
 
 def _resume(
@@ -75,9 +85,7 @@ def _assert_export_envelope(payload: dict[str, object]) -> None:
         "artifact_bytes_base64",
     }
     assert isinstance(payload["artifact_bytes_base64"], str)
-    canonical = {
-        key: payload[key] for key in payload if key != "artifact_bytes_base64"
-    }
+    canonical = {key: payload[key] for key in payload if key != "artifact_bytes_base64"}
     _assert_envelope(canonical)
 
 
@@ -96,6 +104,16 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_validate_truth",
         "resume_validate_faithfulness",
         "candidate_evidence_build",
+        "candidate_evidence_add",
+        "edit_feedback_record",
+        "edit_candidates_rank",
+        "preferences_refresh",
+        "edit_session_open",
+        "edit_session_prompt",
+        "edit_session_decide",
+        "edit_session_commit",
+        "edit_session_status",
+        "edit_session_reconcile",
         "resume_export",
         "resume_suggest_terminology",
         "resume_align_terminology",
@@ -164,6 +182,18 @@ async def test_warnings_remain_separate_from_errors() -> None:
     assert payload["errors"] == []
 
 
+async def test_validate_truth_returns_reason_code_fields() -> None:
+    payload = await HANDLERS["resume_validate_truth"](
+        {"resume": _resume(), "evidence": [], "no_llm": True}
+    )
+
+    _assert_envelope(payload)
+    data = payload["data"]
+    assert isinstance(data, dict)
+    assert data["needs_evidence_count"] >= 1
+    assert data["claims"][0]["reason_code"] == "missing_evidence"
+
+
 async def test_resume_align_human_in_loop_surfaces_questions_without_advancing() -> None:
     provider = FakeStructuredCompletionProvider(
         [
@@ -213,9 +243,7 @@ async def test_resume_export_returns_envelope_metadata_and_base64_bytes(
     format_value: str,
     signature: bytes,
 ) -> None:
-    payload = await HANDLERS["resume_export"](
-        {"resume": _resume(), "format": format_value}
-    )
+    payload = await HANDLERS["resume_export"]({"resume": _resume(), "format": format_value})
 
     _assert_export_envelope(payload)
     assert payload["errors"] == []
@@ -244,3 +272,91 @@ async def test_resume_export_rejects_invalid_format() -> None:
     assert isinstance(error, dict)
     assert error["code"] == "invalid_input"
     assert error["details"] == {"field": "format"}
+
+
+def _feedback() -> dict[str, object]:
+    return EditFeedback(
+        edit_id="edit-1",
+        resume_id="resume-1",
+        job_id="job-1",
+        section="summary",
+        edit_type="keyword_substitution",
+        original_text="Built APIs.",
+        proposed_text="Built Python APIs.",
+        final_text=None,
+        predicted_ats_gain=2.0,
+        confidence=0.8,
+        outcome="rejected",
+        reason_code=EditFeedbackReasonCode.NOT_MY_VOICE,
+        timestamp="2026-08-05T00:00:00+00:00",
+    ).model_dump(mode="json")
+
+
+async def test_feedback_and_evidence_tools(tmp_path: Path) -> None:
+    base = tmp_path / "resume-kit"
+    record = await HANDLERS["edit_feedback_record"](
+        {"feedback": _feedback(), "base_path": str(base)}
+    )
+    _assert_envelope(record)
+    assert record["errors"] == []
+    assert (base / "learning" / "edit-feedback.jsonl").is_file()
+
+    refresh = await HANDLERS["preferences_refresh"](
+        {"now": "2026-08-05T00:00:00+00:00", "base_path": str(base)}
+    )
+    _assert_envelope(refresh)
+    assert refresh["errors"] == []
+
+    context = FeatureContext(
+        resume=ResumeDocument(summary="Python engineer."),
+        job=JobDescription(raw_text="Docker"),
+        evidence=[
+            CandidateEvidence(
+                id="ev-docker",
+                kind=EvidenceKind.SKILL,
+                content="Docker",
+                user_confirmed=True,
+            )
+        ],
+    )
+    ranked = await HANDLERS["edit_candidates_rank"](
+        {
+            "candidates": [
+                Candidate(
+                    candidate_id="c1",
+                    section="skill",
+                    proposed_text="Docker",
+                ).model_dump(mode="json")
+            ],
+            "context": context.model_dump(mode="json"),
+        }
+    )
+    _assert_envelope(ranked)
+    assert ranked["errors"] == []
+
+    added = await HANDLERS["candidate_evidence_add"](
+        {
+            "confirmed": True,
+            "root": str(tmp_path),
+            "content": "Confirmed Docker work",
+            "kind": "user_statement",
+            "tags": ["Docker"],
+            "update_active": True,
+        }
+    )
+    _assert_envelope(added)
+    assert added["errors"] == []
+
+
+async def test_build_evidence_approved_claims_and_envelope_truth_input() -> None:
+    built = await HANDLERS["candidate_evidence_build"](
+        {"resume": _resume(), "approved_claims": ["Confirmed Docker work"]}
+    )
+    _assert_envelope(built)
+    assert isinstance(built["data"], list)
+
+    validated = await HANDLERS["resume_validate_truth"](
+        {"resume": _resume(), "evidence": {"data": built["data"]}}
+    )
+    _assert_envelope(validated)
+    assert validated["errors"] == []

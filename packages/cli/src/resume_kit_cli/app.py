@@ -28,6 +28,7 @@ from resume_kit_core.response import InterfaceResponse
 from resume_kit_export.models import ExportFormat
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
@@ -35,20 +36,42 @@ from resume_kit_facade.models import (
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
+    CommitSessionRequest,
     CompareResumeVersionsRequest,
+    DecideChangeRequest,
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    OpenEditSessionRequest,
+    RankEditCandidatesRequest,
+    ReconcileSessionRequest,
+    RecordEditFeedbackRequest,
+    RefreshPreferencesRequest,
     SelectBestResumeRequest,
+    SessionPromptRequest,
+    SessionStatusRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
-from resume_kit_schemas import FaithfulnessReport
+from resume_kit_feedback import Candidate, FeatureContext
+from resume_kit_schemas import (
+    CandidateEvidence,
+    ChangeProposal,
+    ClaimProvenance,
+    EditFeedback,
+    EditFeedbackReasonCode,
+    EvidenceKind,
+    FaithfulnessReport,
+    PreferencePair,
+    ReviewAction,
+    ScoreDelta,
+    UserPreferenceProfile,
+)
 
 from resume_kit_cli import io
 from resume_kit_cli.formatters import OutputFormat, render
@@ -57,6 +80,11 @@ app = typer.Typer(
     help="Resume Kit command-line transport over the capability facade.",
     no_args_is_help=True,
 )
+review_edits_app = typer.Typer(
+    help="Open, review, decide, commit, and reconcile edit sessions.",
+    no_args_is_help=True,
+)
+app.add_typer(review_edits_app, name="review-edits")
 
 # Optional injected provider seam.  In production this stays ``None`` (there is
 # no concrete provider in Phase 5); tests may set it to a fake to exercise the
@@ -85,6 +113,43 @@ _AliasFile = typer.Option(
 _Format = typer.Option(..., "--format", help="Export format: pdf or docx.")
 _Out = typer.Option(None, "--out", help="Write raw bytes to this path.")
 _ResumeOrStdin = typer.Option("-", "--resume", help="Resume JSON path, or '-' for stdin.")
+_BasePath = typer.Option(
+    None,
+    "--base-path",
+    help="Optional resume-kit/ working directory for learning logs.",
+)
+_Root = typer.Option(".", "--root", help="Project root containing resume-kit/.")
+_EvidenceKind = typer.Option(
+    EvidenceKind.USER_STATEMENT,
+    "--kind",
+    help="Evidence kind.",
+)
+_EvidenceTag = typer.Option(
+    None,
+    "--tag",
+    help="Evidence tag; may be supplied multiple times.",
+)
+_Confirmed = typer.Option(
+    False,
+    "--confirmed",
+    help="Required to persist user-confirmed evidence.",
+)
+_EvidenceFile = typer.Option(
+    "working/user-confirmed-evidence.json",
+    "--evidence-file",
+    help="Evidence file path relative to resume-kit/.",
+)
+_UpdateActive = typer.Option(
+    False,
+    "--update-active",
+    help="Update config.active_evidence to this evidence file.",
+)
+_ReviewAction = typer.Option(..., "--action", help="Review action.")
+_FeedbackReasonCode = typer.Option(
+    None,
+    "--reason-code",
+    help="Optional structured feedback reason.",
+)
 
 
 def _options(no_llm: bool, strict: bool, human_in_loop: bool) -> CapabilityOptions:
@@ -128,6 +193,64 @@ def _run_gate(
     raise typer.Exit(code=code)
 
 
+def _load_approved_claims(
+    source: str | None,
+) -> list[CandidateEvidence] | list[str] | None:
+    """Load approved claims from JSON strings or evidence records."""
+    if source is None:
+        return None
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--approved-claims must contain a JSON array.")
+    if all(isinstance(item, str) for item in value):
+        return [item for item in value if isinstance(item, str)]
+    return [CandidateEvidence.model_validate(item) for item in value]
+
+
+def _load_candidates(source: str) -> list[Candidate]:
+    """Load a JSON array of feedback ``Candidate`` records."""
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--candidates must contain a JSON array.")
+    return [Candidate.model_validate(item) for item in value]
+
+
+def _load_feedback_records(source: str) -> list[EditFeedback]:
+    """Load a JSON array of ``EditFeedback`` records."""
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--records must contain a JSON array.")
+    return [EditFeedback.model_validate(item) for item in value]
+
+
+def _load_changes(source: str) -> list[ChangeProposal]:
+    """Load a JSON array of ``ChangeProposal`` records."""
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--changes must contain a JSON array.")
+    return [ChangeProposal.model_validate(item) for item in value]
+
+
+def _load_claim_provenance(source: str | None) -> list[ClaimProvenance]:
+    """Load optional claim-provenance records."""
+    if source is None:
+        return []
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--claim-provenance must contain a JSON array.")
+    return [ClaimProvenance.model_validate(item) for item in value]
+
+
+def _load_score_deltas(source: str | None) -> list[ScoreDelta]:
+    """Load optional expected score deltas."""
+    if source is None:
+        return []
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--expected-score-deltas must contain a JSON array.")
+    return [ScoreDelta.model_validate(item) for item in value]
+
+
 # ---------------------------------------------------------------------------
 # LLM-capable commands
 # ---------------------------------------------------------------------------
@@ -163,9 +286,7 @@ def extract_text(
     used (pass a real path to extract PDF/DOCX).
     """
     filename = file if file != "-" else "resume.txt"
-    request = ExtractResumeTextRequest(
-        content=io.read_bytes(file), filename=filename
-    )
+    request = ExtractResumeTextRequest(content=io.read_bytes(file), filename=filename)
     options = _options(False, strict, False)
     _run(caps.extract_resume_text_capability(request, options), output)
 
@@ -266,9 +387,7 @@ def select(
     config: str | None = _Config,
 ) -> None:
     """Select the best-matching resume from a set for a job."""
-    request = SelectBestResumeRequest(
-        resumes=io.load_resumes(resumes), job=io.load_job(job)
-    )
+    request = SelectBestResumeRequest(resumes=io.load_resumes(resumes), job=io.load_job(job))
     options = _options(False, strict, False)
     _run(caps.select_best_resume(request, options), output)
 
@@ -340,9 +459,7 @@ def align_terminology(
     ),
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
     job: str = typer.Option(..., "--job", help="Job description JSON path."),
-    evidence: str | None = typer.Option(
-        None, "--evidence", help="Evidence JSON path."
-    ),
+    evidence: str | None = typer.Option(None, "--evidence", help="Evidence JSON path."),
     freedom: int | None = typer.Option(
         None, "--freedom", help="Explicit policy-freedom level (default: minimal)."
     ),
@@ -369,6 +486,7 @@ def align_terminology(
 def validate_truth(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
     evidence: str | None = typer.Option(None, "--evidence", help="Evidence JSON path."),
+    alias_file: str | None = _AliasFile,
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
@@ -377,6 +495,7 @@ def validate_truth(
     request = ValidateResumeTruthRequest(
         resume=io.load_resume(resume),
         evidence=io.load_evidence(evidence) if evidence else [],
+        alias_file=alias_file,
     )
     options = _options(False, strict, False)
     _run(caps.validate_resume_truth_capability(request, options), output)
@@ -419,14 +538,123 @@ def validate_faithfulness(
 @app.command(name="build-evidence")
 def build_evidence(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    approved_claims: str | None = typer.Option(
+        None,
+        "--approved-claims",
+        help="JSON path containing approved claim strings or CandidateEvidence records.",
+    ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
 ) -> None:
     """Build candidate evidence records from a resume."""
-    request = BuildCandidateEvidenceRequest(resume=io.load_resume(resume))
+    request = BuildCandidateEvidenceRequest(
+        resume=io.load_resume(resume),
+        approved_claims=_load_approved_claims(approved_claims),
+    )
     options = _options(False, strict, False)
     _run(caps.build_candidate_evidence_capability(request, options), output)
+
+
+@app.command(name="record-edit-feedback")
+def record_edit_feedback(
+    feedback: str = typer.Option(..., "--feedback", help="EditFeedback JSON path."),
+    preference_pair: str | None = typer.Option(
+        None,
+        "--preference-pair",
+        help="Optional PreferencePair JSON path.",
+    ),
+    base_path: str | None = _BasePath,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Append edit feedback and an optional preference-pair record."""
+    request = RecordEditFeedbackRequest(
+        feedback=io.load_model(feedback, EditFeedback),
+        preference_pair=(
+            io.load_model(preference_pair, PreferencePair) if preference_pair is not None else None
+        ),
+        base_path=base_path,
+    )
+    options = _options(False, strict, False)
+    _run(caps.record_edit_feedback_capability(request, options), output)
+
+
+@app.command(name="rank-edit-candidates")
+def rank_edit_candidates(
+    candidates: str = typer.Option(..., "--candidates", help="Candidate array JSON path."),
+    context: str = typer.Option(..., "--context", help="FeatureContext JSON path."),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Optional UserPreferenceProfile JSON path.",
+    ),
+    alias_file: str | None = _AliasFile,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Rank edit candidates with the deterministic heuristic ranker."""
+    request = RankEditCandidatesRequest(
+        candidates=_load_candidates(candidates),
+        context=io.load_model(context, FeatureContext),
+        profile=(
+            io.load_model(profile, UserPreferenceProfile)
+            if profile is not None
+            else UserPreferenceProfile()
+        ),
+        alias_file=alias_file,
+    )
+    options = _options(False, strict, False)
+    _run(caps.rank_edit_candidates_capability(request, options), output)
+
+
+@app.command(name="refresh-preferences")
+def refresh_preferences(
+    now: str = typer.Option(..., "--now", help="Caller-supplied ISO timestamp."),
+    records: str | None = typer.Option(
+        None,
+        "--records",
+        help="Optional EditFeedback array JSON path; otherwise persisted log is read.",
+    ),
+    base_path: str | None = _BasePath,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Derive and persist the user preference profile."""
+    request = RefreshPreferencesRequest(
+        now=now,
+        records=_load_feedback_records(records) if records is not None else None,
+        base_path=base_path,
+    )
+    options = _options(False, strict, False)
+    _run(caps.refresh_preferences_capability(request, options), output)
+
+
+@app.command(name="add-evidence")
+def add_evidence(
+    content: str = typer.Option(..., "--content", help="Confirmed evidence content."),
+    kind: EvidenceKind = _EvidenceKind,
+    tag: list[str] | None = _EvidenceTag,
+    confirmed: bool = _Confirmed,
+    root: str = _Root,
+    evidence_file: str = _EvidenceFile,
+    update_active: bool = _UpdateActive,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Persist one user-confirmed evidence record under resume-kit/."""
+    if not confirmed:
+        raise typer.BadParameter("Pass --confirmed to persist confirmed evidence.")
+    request = AddEvidenceRequest(
+        content=content,
+        kind=kind,
+        tags=tag or [],
+        root=root,
+        evidence_file=evidence_file,
+        update_active=update_active,
+    )
+    options = _options(False, strict, False)
+    _run(caps.add_evidence_capability(request, options), output)
 
 
 @app.command()
@@ -462,8 +690,6 @@ def export(
 # ---------------------------------------------------------------------------
 # Working-directory state commands (RIT-T-0091)
 # ---------------------------------------------------------------------------
-
-_Root = typer.Option(".", "--root", help="Project root containing resume-kit/.")
 
 
 @app.command()
@@ -506,6 +732,124 @@ def set_active(
     )
     options = _options(False, strict, False)
     _run(caps.set_active_capability(request, options), output)
+
+
+@review_edits_app.command(name="open")
+def review_edits_open(
+    mode: str = typer.Option(..., "--mode", help="interactive, review_at_end, or auto."),
+    changes: str = typer.Option(..., "--changes", help="ChangeProposal array JSON path."),
+    root: str = _Root,
+    evidence: str | None = typer.Option(None, "--evidence", help="Evidence array JSON path."),
+    claim_provenance: str | None = typer.Option(
+        None,
+        "--claim-provenance",
+        help="ClaimProvenance array JSON path.",
+    ),
+    expected_score_deltas: str | None = typer.Option(
+        None,
+        "--expected-score-deltas",
+        help="ScoreDelta array JSON path.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Open the single active edit session."""
+    request = OpenEditSessionRequest(
+        mode=mode,
+        changes=_load_changes(changes),
+        root=root,
+        evidence=io.load_evidence(evidence) if evidence is not None else [],
+        claim_provenance=_load_claim_provenance(claim_provenance),
+        expected_score_deltas=_load_score_deltas(expected_score_deltas),
+    )
+    options = _options(False, strict, False)
+    _run(caps.open_edit_session_capability(request, options), output)
+
+
+@review_edits_app.command(name="prompt")
+def review_edits_prompt(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Return the next review prompt for the active session."""
+    request = SessionPromptRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.session_prompt_capability(request, options), output)
+
+
+@review_edits_app.command(name="decide")
+def review_edits_decide(
+    path: str = typer.Option(..., "--path", help="ChangeProposal path to decide."),
+    action: ReviewAction = _ReviewAction,
+    reason_code: EditFeedbackReasonCode | None = _FeedbackReasonCode,
+    note: str | None = typer.Option(None, "--note", help="Optional free-text note."),
+    edited_content: str | None = typer.Option(
+        None,
+        "--edited-content",
+        help="Final text for an edit action.",
+    ),
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Record a decision for one proposed change."""
+    request = DecideChangeRequest(
+        path=path,
+        action=action,
+        reason_code=reason_code,
+        note=note,
+        root=root,
+        edited_content=edited_content,
+    )
+    options = _options(False, strict, False)
+    _run(caps.decide_change_capability(request, options), output)
+
+
+@review_edits_app.command(name="commit")
+def review_edits_commit(
+    root: str = _Root,
+    freedom: int = typer.Option(10, "--freedom", min=0, max=10),
+    alias_timestamp: str | None = typer.Option(
+        None,
+        "--alias-timestamp",
+        help="Optional ISO timestamp for accepted-edit alias provenance.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Commit approved changes through the hard write gate."""
+    request = CommitSessionRequest(
+        root=root,
+        freedom=freedom,
+        alias_timestamp=alias_timestamp,
+    )
+    options = _options(False, strict, False)
+    _run(caps.commit_session_capability(request, options), output)
+
+
+@review_edits_app.command(name="status")
+def review_edits_status(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Return progress for the active edit session."""
+    request = SessionStatusRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.session_status_capability(request, options), output)
+
+
+@review_edits_app.command(name="reconcile")
+def review_edits_reconcile(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Re-hash intentional manual edits to the working resume."""
+    request = ReconcileSessionRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.reconcile_session_capability(request, options), output)
 
 
 def main() -> None:

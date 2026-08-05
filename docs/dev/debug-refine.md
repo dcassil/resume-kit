@@ -61,8 +61,8 @@ Run each skill in order. The working directory for every skill invocation is `re
 | 3 | `check-ats-structure` | structural ATS report (console / session notes) |
 | 4 | `check-keyword-match` | keyword-match report |
 | 5 | `identify-resume-gaps` | gap list |
-| 6 | `inject-keywords` | `working/<session>/resume.json` with injected terms |
-| 7 | `update-terminology` | updates `working/<session>/resume.json` in place |
+| 6 | `inject-keywords` | `ChangeProposal` records reviewed through `resume-tool review-edits`; commit writes `working/<name>.tailored.json` |
+| 7 | `update-terminology` | terminology `ChangeProposal` records reviewed through the same `resume-tool review-edits` gate |
 | 8 | `validate-resume-truth` | truthfulness flags |
 | 9 | `export-resume` | `working/<session>/resume.pdf` (or `.md`) |
 
