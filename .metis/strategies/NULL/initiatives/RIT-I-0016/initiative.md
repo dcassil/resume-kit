@@ -4,14 +4,14 @@ level: initiative
 title: "Resume baselining: original to base to standard onboarding pipeline"
 short_code: "RIT-I-0016"
 created_at: 2026-08-05T16:41:16.870587+00:00
-updated_at: 2026-08-05T16:41:16.870587+00:00
+updated_at: 2026-08-05T18:26:55.510826+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0015, RIT-I-0017]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/active"
 
 
 exit_criteria_met: false
