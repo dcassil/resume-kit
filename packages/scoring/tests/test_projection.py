@@ -107,3 +107,41 @@ def test_deterministic_identical_output() -> None:
     a = project_scoredoc(_resume(), reference_date=_REF)
     b = project_scoredoc(_resume(), reference_date=_REF)
     assert a.model_dump_json() == b.model_dump_json()
+
+
+def test_custom_section_skills_map_to_skills_zone() -> None:
+    """RIT-T-0108: a categorized custom skills section projects into the
+    SKILLS_LIST zone (proves the zoning the matching/ats fixes rely on)."""
+    resume = ResumeDocument.model_validate(
+        {
+            "additional": {"technicalSkills": []},
+            "customSections": {
+                "Cloud Skills": {
+                    "sectionType": "stringList",
+                    "strings": ["Terraform", "Kubernetes"],
+                }
+            },
+        }
+    )
+    doc = project_scoredoc(resume, reference_date=_REF)
+    skills = [s for s in doc.sections if s.zone == KeywordZone.SKILLS_LIST]
+    assert skills and skills[0].name == "Cloud Skills"
+    tokens = doc.zoned_index.zone_tokens[KeywordZone.SKILLS_LIST]
+    assert normalize("Terraform") in tokens
+    assert normalize("Kubernetes") in tokens
+
+
+def test_custom_experience_section_maps_to_experience_zone() -> None:
+    resume = ResumeDocument.model_validate(
+        {
+            "customSections": {
+                "Consulting Experience": {
+                    "sectionType": "itemList",
+                    "items": [{"title": "Advisor", "description": ["Led migration."]}],
+                }
+            }
+        }
+    )
+    doc = project_scoredoc(resume, reference_date=_REF)
+    zones = {s.zone for s in doc.sections}
+    assert KeywordZone.EXPERIENCE in zones
