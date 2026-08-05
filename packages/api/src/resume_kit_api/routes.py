@@ -54,9 +54,13 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -71,9 +75,13 @@ from resume_kit_api.models import (
     ExportResumeBody,
     ExtractJobDescriptionBody,
     ExtractResumeBody,
+    ExtractResumeTextBody,
     IdentifyResumeGapsBody,
+    InitProjectBody,
     SelectBestResumeBody,
+    SetActiveBody,
     SuggestTerminologyBody,
+    ValidateFaithfulnessBody,
     ValidateResumeTruthBody,
     _Options,
 )
@@ -162,6 +170,15 @@ def register_routes(app: FastAPI) -> None:
             content=body.content.encode("utf-8"), filename=body.filename
         )
         return _render(await REGISTRY["extract-resume"](request, _options(body)))
+
+    @app.post("/extract-text")
+    async def extract_text(body: ExtractResumeTextBody) -> Response:
+        request = ExtractResumeTextRequest(
+            content=body.content.encode("utf-8"), filename=body.filename
+        )
+        return _render(
+            await REGISTRY["extract-resume-text"](request, _options(body))
+        )
 
     @app.post("/extract-job")
     async def extract_job(body: ExtractJobDescriptionBody) -> Response:
@@ -265,6 +282,22 @@ def register_routes(app: FastAPI) -> None:
             await REGISTRY["validate-resume-truth"](request, _options(body))
         )
 
+    @app.post("/validate-faithfulness")
+    async def validate_faithfulness(body: ValidateFaithfulnessBody) -> Response:
+        request = ValidateFaithfulnessRequest(
+            resume=body.resume,
+            source_text=body.source_text,
+            source_content=(
+                body.source_content.encode("utf-8")
+                if body.source_content is not None
+                else None
+            ),
+            source_filename=body.source_filename,
+        )
+        return _render(
+            await REGISTRY["validate-faithfulness"](request, _options(body))
+        )
+
     @app.post("/build-evidence")
     async def build_evidence(body: BuildCandidateEvidenceBody) -> Response:
         request = BuildCandidateEvidenceRequest(
@@ -273,6 +306,22 @@ def register_routes(app: FastAPI) -> None:
         return _render(
             await REGISTRY["build-candidate-evidence"](request, _options(body))
         )
+
+    @app.post("/init")
+    async def init(body: InitProjectBody) -> Response:
+        request = InitProjectRequest(root=body.root)
+        return _render(await REGISTRY["init-project"](request, _options(body)))
+
+    @app.post("/set-active")
+    async def set_active(body: SetActiveBody) -> Response:
+        request = SetActiveRequest(
+            resume=body.resume,
+            resume_source=body.resume_source,
+            job=body.job,
+            job_source=body.job_source,
+            root=body.root,
+        )
+        return _render(await REGISTRY["set-active"](request, _options(body)))
 
     @app.post("/export")
     async def export(body: ExportResumeBody) -> Response:

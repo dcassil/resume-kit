@@ -66,6 +66,73 @@ class ExtractResumeRequest:
 
 
 @dataclass(frozen=True)
+class ExtractResumeTextRequest:
+    """Inputs for the extract-resume-text capability (RIT-T-0090).
+
+    Deterministic, no-LLM, no-network primitive: returns the raw extracted
+    text of a resume/job file (docx/pdf/md/txt) as a ``TextExtractionResult``.
+    Mirrors :class:`ExtractResumeRequest` (raw bytes + filename) — the filename
+    extension drives deterministic dispatch in the document-parser engine.
+    """
+
+    content: bytes
+    filename: str
+
+
+@dataclass(frozen=True)
+class InitProjectRequest:
+    """Inputs for the init-project capability (RIT-T-0091).
+
+    Deterministic, filesystem-local: idempotently scaffolds the ``resume-kit/``
+    working-directory tree (``config.json`` + ``resumes/``, ``jobs/``,
+    ``working/``, ``learning/``) under ``root`` and returns the resulting
+    :class:`~resume_kit_facade.project_config.ProjectConfig`.  ``root`` defaults
+    to the current directory.
+    """
+
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class SetActiveRequest:
+    """Inputs for the set-active capability (RIT-T-0091).
+
+    Records the ``active_resume`` / ``active_job`` pointer(s) plus the
+    originating source file path(s) through the code-owned config schema. At
+    least one of ``resume`` / ``job`` must be set; a ``*_source`` without its
+    matching document is rejected by the capability. ``root`` defaults to the
+    current directory.
+    """
+
+    resume: str | None = None
+    resume_source: str | None = None
+    job: str | None = None
+    job_source: str | None = None
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class ValidateFaithfulnessRequest:
+    """Inputs for the validate-faithfulness capability (RIT-T-0092).
+
+    Deterministic HARD GATE: compares ``resume`` (the agent-produced
+    :class:`~resume_kit_schemas.ResumeDocument`) against the ORIGINAL source
+    document and returns a :class:`~resume_kit_schemas.FaithfulnessReport`. Never
+    requires a provider and ignores ``no_llm`` — the check is pure/deterministic.
+
+    Exactly one source input must be given: either pre-extracted ``source_text``
+    OR the raw bytes of a source file (``source_content`` + ``source_filename``),
+    which the capability decodes via the deterministic ``extract_resume_text``
+    engine (docx/pdf/md/txt) before diffing.
+    """
+
+    resume: ResumeDocument
+    source_text: str | None = None
+    source_content: bytes | None = None
+    source_filename: str | None = None
+
+
+@dataclass(frozen=True)
 class ExtractJobDescriptionRequest:
     """Inputs for the extract-job-description capability."""
 

@@ -29,9 +29,13 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
 
@@ -42,6 +46,7 @@ ModelValidator = Callable[[object], object]
 
 TOOL_NAMES: tuple[str, ...] = (
     "resume_extract",
+    "resume_extract_text",
     "job_description_extract",
     "resume_check_ats",
     "resume_check_ats_structure",
@@ -51,10 +56,13 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_identify_gaps",
     "resume_align",
     "resume_validate_truth",
+    "resume_validate_faithfulness",
     "candidate_evidence_build",
     "resume_export",
     "resume_suggest_terminology",
     "resume_align_terminology",
+    "project_init",
+    "project_set_active",
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
@@ -350,6 +358,20 @@ async def resume_extract(arguments: ToolArguments) -> ToolResult:
     return await _call("extract-resume", request, arguments)
 
 
+async def resume_extract_text(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            ExtractResumeTextRequest,
+            {
+                "content": _bytes(arguments, "content"),
+                "filename": _string(arguments, "filename"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("extract-resume-text", request, arguments)
+
+
 async def job_description_extract(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -488,6 +510,25 @@ async def resume_validate_truth(arguments: ToolArguments) -> ToolResult:
     return await _call("validate-resume-truth", request, arguments)
 
 
+async def resume_validate_faithfulness(arguments: ToolArguments) -> ToolResult:
+    try:
+        fields: ToolArguments = {
+            "resume": _resume(_required(arguments, "resume"), "resume"),
+        }
+        source_text = _optional_str(arguments, "source_text")
+        if source_text is not None:
+            fields["source_text"] = source_text
+        else:
+            fields["source_content"] = _bytes(arguments, "source_content")
+            fields["source_filename"] = _optional_string(
+                arguments, "source_filename", "source.txt"
+            )
+        request = _make_request(ValidateFaithfulnessRequest, fields)
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("validate-faithfulness", request, arguments)
+
+
 async def candidate_evidence_build(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -572,8 +613,46 @@ async def resume_align_terminology(arguments: ToolArguments) -> ToolResult:
     return await _call("align-terminology", request, arguments)
 
 
+def _optional_str(arguments: ToolArguments, field: str) -> str | None:
+    value = arguments.get(field)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise _ValidationFailure(f"Field '{field}' must be a string.", field=field)
+
+
+async def project_init(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            InitProjectRequest,
+            {"root": _optional_string(arguments, "root", ".")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("init-project", request, arguments)
+
+
+async def project_set_active(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            SetActiveRequest,
+            {
+                "resume": _optional_str(arguments, "resume"),
+                "resume_source": _optional_str(arguments, "resume_source"),
+                "job": _optional_str(arguments, "job"),
+                "job_source": _optional_str(arguments, "job_source"),
+                "root": _optional_string(arguments, "root", "."),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("set-active", request, arguments)
+
+
 HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
+    "resume_extract_text": resume_extract_text,
     "job_description_extract": job_description_extract,
     "resume_check_ats": resume_check_ats,
     "resume_check_ats_structure": resume_check_ats_structure,
@@ -583,8 +662,11 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_identify_gaps": resume_identify_gaps,
     "resume_align": resume_align,
     "resume_validate_truth": resume_validate_truth,
+    "resume_validate_faithfulness": resume_validate_faithfulness,
     "candidate_evidence_build": candidate_evidence_build,
     "resume_export": resume_export,
     "resume_suggest_terminology": resume_suggest_terminology,
     "resume_align_terminology": resume_align_terminology,
+    "project_init": project_init,
+    "project_set_active": project_set_active,
 }

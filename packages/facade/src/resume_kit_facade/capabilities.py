@@ -33,6 +33,7 @@ from collections.abc import Awaitable, Callable
 from resume_kit_alignment import accept_terminology_alignment
 from resume_kit_alignment import align_resume as _align_resume
 from resume_kit_ats import check_ats_structure as _check_ats_structure
+from resume_kit_ats import check_faithfulness as _check_faithfulness
 from resume_kit_ats import compute_ats_score
 from resume_kit_core import InterfaceResponse, Question, ResumeKitError
 from resume_kit_core.interface import (
@@ -49,6 +50,8 @@ from resume_kit_core.interface import (
 )
 from resume_kit_core.storage import ArtifactRef, ArtifactStore
 from resume_kit_document_parser import (
+    TextExtractionResult,
+    extract_resume_text,
     extract_resume_text_only,
     parse_resume_structured,
 )
@@ -71,6 +74,7 @@ from resume_kit_schemas import (
     ATSScore,
     AtsStructureReport,
     CandidateEvidence,
+    FaithfulnessReport,
     JobDescription,
     JobMatchReport,
     KeywordGapAnalysis,
@@ -95,12 +99,17 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.project_config import init_project, set_active
 
 # A capability takes a request object plus options and yields an
 # InterfaceResponse.  Registry values narrow their request via ``isinstance``.
@@ -232,6 +241,33 @@ async def extract_job_description(
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
     return build_success(job, strict=options.strict)
+
+
+async def extract_resume_text_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Extract raw text from a resume/job file — deterministic, no LLM, no network.
+
+    First-class EXTRACTION primitive (RIT-T-0090): delegates to the
+    document-parser :func:`extract_resume_text` engine function and returns its
+    :class:`TextExtractionResult` (text + warnings + method). Never contacts a
+    provider and never requires one; ``no_llm`` is irrelevant here because the
+    operation is deterministic by construction.
+    """
+    if not isinstance(request, ExtractResumeTextRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ExtractResumeTextRequest")
+        )
+    try:
+        result: TextExtractionResult = extract_resume_text(
+            request.content, request.filename
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(result, warnings=result.warnings, strict=options.strict)
 
 
 async def align_resume(
@@ -447,6 +483,60 @@ async def validate_resume_truth_capability(
     return build_success(report, strict=options.strict)
 
 
+async def validate_faithfulness_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Deterministic faithfulness HARD GATE: source vs. ResumeDocument (RIT-T-0092).
+
+    Pure and deterministic: never requires a provider and ignores ``no_llm``.
+    Resolves the source text (either supplied directly, or decoded from source
+    file bytes via the deterministic ``extract_resume_text`` engine) and returns
+    a :class:`~resume_kit_schemas.FaithfulnessReport`. The report's ``passed`` is
+    ``False`` iff a hard-fail finding exists; transports map that to a non-zero
+    exit. Setting ``strict`` escalates the report's advisory warnings too, but
+    the ``passed`` contract itself is driven only by error-severity findings.
+    """
+    if not isinstance(request, ValidateFaithfulnessRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ValidateFaithfulnessRequest")
+        )
+    try:
+        source_text = _resolve_source_text(request)
+        report: FaithfulnessReport = _check_faithfulness(source_text, request.resume)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
+def _resolve_source_text(request: ValidateFaithfulnessRequest) -> str:
+    """Return the source text: given directly, or decoded from file bytes.
+
+    Exactly one source input is expected. ``source_text`` wins when present;
+    otherwise the raw ``source_content`` bytes are decoded through the
+    deterministic ``extract_resume_text`` engine using ``source_filename`` (its
+    extension drives docx/pdf/md/txt dispatch). A missing source is rejected.
+    """
+    if request.source_text is not None:
+        return request.source_text
+    if request.source_content is not None:
+        filename = request.source_filename or "source.txt"
+        result: TextExtractionResult = extract_resume_text(
+            request.source_content, filename
+        )
+        return result.text
+    from resume_kit_core.errors import CoreError, ErrorCode
+
+    raise ResumeKitError(
+        CoreError(
+            code=ErrorCode.INVALID_INPUT,
+            message="Provide either source_text or source_content for the source.",
+        )
+    )
+
+
 async def build_candidate_evidence_capability(
     request: object,
     options: CapabilityOptions,
@@ -628,11 +718,67 @@ async def align_terminology(
 
 
 # ---------------------------------------------------------------------------
+# Working-directory state capabilities (RIT-T-0091, filesystem-local)
+# ---------------------------------------------------------------------------
+
+
+async def init_project_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Idempotently scaffold the ``resume-kit/`` working-directory tree.
+
+    Deterministic and filesystem-local (RIT-T-0091): never requires a provider
+    and ignores ``no_llm``. Creates the folder tree + ``config.json`` and
+    returns the resulting :class:`ProjectConfig` as data. Re-running preserves
+    existing pointers and any unknown (preference) keys — no content is deleted.
+    """
+    if not isinstance(request, InitProjectRequest):
+        return from_resume_kit_error(_bad_request(request, "InitProjectRequest"))
+    try:
+        config = init_project(request.root)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem failure
+        return from_exception(exc)
+    return build_success(config, strict=options.strict)
+
+
+async def set_active_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Record active resume/job pointers plus source paths through the schema.
+
+    Deterministic and filesystem-local (RIT-T-0091): loads the existing config
+    (preserving unknown keys and any pointer not being changed), updates the
+    supplied pointer(s) and their source path(s), saves atomically, and returns
+    the updated :class:`ProjectConfig`.
+    """
+    if not isinstance(request, SetActiveRequest):
+        return from_resume_kit_error(_bad_request(request, "SetActiveRequest"))
+    try:
+        config = set_active(
+            request.root,
+            resume=request.resume,
+            resume_source=request.resume_source,
+            job=request.job,
+            job_source=request.job_source,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem/validation failure
+        return from_exception(exc)
+    return build_success(config, strict=options.strict)
+
+
+# ---------------------------------------------------------------------------
 # Capability registry
 # ---------------------------------------------------------------------------
 
 REGISTRY: dict[str, Capability] = {
     "extract-resume": extract_resume,
+    "extract-resume-text": extract_resume_text_capability,
     "extract-job-description": extract_job_description,
     "check-resume-ats": check_resume_ats,
     "check-ats-structure": check_ats_structure,
@@ -642,8 +788,11 @@ REGISTRY: dict[str, Capability] = {
     "identify-resume-gaps": identify_resume_gaps,
     "align-resume": align_resume,
     "validate-resume-truth": validate_resume_truth_capability,
+    "validate-faithfulness": validate_faithfulness_capability,
     "build-candidate-evidence": build_candidate_evidence_capability,
     "export-resume": export_resume,
     "suggest-terminology": suggest_terminology,
     "align-terminology": align_terminology,
+    "init-project": init_project_capability,
+    "set-active": set_active_capability,
 }

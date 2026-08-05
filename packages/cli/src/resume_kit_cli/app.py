@@ -23,7 +23,7 @@ from typing import Any
 
 import typer
 from resume_kit_core import StructuredCompletionProvider
-from resume_kit_core.interface import exit_code_for
+from resume_kit_core.interface import ExitCode, exit_code_for
 from resume_kit_core.response import InterfaceResponse
 from resume_kit_export.models import ExportFormat
 from resume_kit_facade import capabilities as caps
@@ -39,11 +39,16 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
+    InitProjectRequest,
     SelectBestResumeRequest,
+    SetActiveRequest,
     SuggestTerminologyRequest,
+    ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_schemas import FaithfulnessReport
 
 from resume_kit_cli import io
 from resume_kit_cli.formatters import OutputFormat, render
@@ -102,6 +107,27 @@ def _run(
     raise typer.Exit(code=exit_code_for(response))
 
 
+def _run_gate(
+    coro: Coroutine[Any, Any, InterfaceResponse[object]],
+    output: OutputFormat,
+) -> None:
+    """Await a gate ``coro``, render it, and exit non-zero when the gate fails.
+
+    A faithfulness report is carried as ``data`` on an otherwise-ok envelope, so
+    ``exit_code_for`` alone would return 0 even when the report failed. This
+    HARD GATE maps ``report.passed is False`` to a non-zero exit (``INVALID_INPUT``)
+    while still printing the full report, so callers can both read the findings
+    and branch on the exit code.
+    """
+    response = asyncio.run(coro)
+    typer.echo(render(response, output))
+    code = exit_code_for(response)
+    data = response.data
+    if isinstance(data, FaithfulnessReport) and not data.passed:
+        code = code or int(ExitCode.INVALID_INPUT)
+    raise typer.Exit(code=code)
+
+
 # ---------------------------------------------------------------------------
 # LLM-capable commands
 # ---------------------------------------------------------------------------
@@ -120,6 +146,28 @@ def extract(
     request = ExtractResumeRequest(content=io.read_bytes(resume), filename=filename)
     options = _options(no_llm, strict, False)
     _run(caps.extract_resume(request, options), output)
+
+
+@app.command(name="extract-text")
+def extract_text(
+    file: str = typer.Argument(..., help="Resume/job file path, or '-' for stdin."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+) -> None:
+    """Extract raw text from a resume/job file (docx/pdf/md/txt) — no LLM, no network.
+
+    Deterministic EXTRACTION primitive: returns the raw ``TextExtractionResult``
+    (text + warnings + method). Accepts ``-`` for stdin bytes like ``extract``;
+    for stdin the filename defaults to ``resume.txt`` so plain-text decode is
+    used (pass a real path to extract PDF/DOCX).
+    """
+    filename = file if file != "-" else "resume.txt"
+    request = ExtractResumeTextRequest(
+        content=io.read_bytes(file), filename=filename
+    )
+    options = _options(False, strict, False)
+    _run(caps.extract_resume_text_capability(request, options), output)
 
 
 @app.command(name="extract-job")
@@ -334,6 +382,40 @@ def validate_truth(
     _run(caps.validate_resume_truth_capability(request, options), output)
 
 
+@app.command(name="validate-faithfulness")
+def validate_faithfulness(
+    source: str = typer.Option(
+        ..., "--source", help="Source file path (docx/pdf/md/txt), or '-' for stdin."
+    ),
+    json_path: str = typer.Option(
+        ..., "--json", help="ResumeDocument JSON path to check against the source."
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+) -> None:
+    """Deterministic faithfulness HARD GATE — exits non-zero on drift.
+
+    Compares the agent-produced ``ResumeDocument`` JSON against the ORIGINAL
+    source document (no LLM, no network). Reports dropped/added/altered content
+    and count mismatches; exits non-zero when the report's ``passed`` is False.
+    ``-`` reads the source text from stdin; a real path decodes docx/pdf/md/txt.
+    """
+    if source == "-":
+        request = ValidateFaithfulnessRequest(
+            resume=io.load_resume(json_path),
+            source_text=io.read_text(source),
+        )
+    else:
+        request = ValidateFaithfulnessRequest(
+            resume=io.load_resume(json_path),
+            source_content=io.read_bytes(source),
+            source_filename=source,
+        )
+    options = _options(False, strict, False)
+    _run_gate(caps.validate_faithfulness_capability(request, options), output)
+
+
 @app.command(name="build-evidence")
 def build_evidence(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
@@ -375,6 +457,55 @@ def export(
     else:
         typer.echo(base64.b64encode(data).decode("ascii"))
     raise typer.Exit(code=code)
+
+
+# ---------------------------------------------------------------------------
+# Working-directory state commands (RIT-T-0091)
+# ---------------------------------------------------------------------------
+
+_Root = typer.Option(".", "--root", help="Project root containing resume-kit/.")
+
+
+@app.command()
+def init(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Idempotently scaffold the resume-kit/ working directory + config.json."""
+    request = InitProjectRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.init_project_capability(request, options), output)
+
+
+@app.command(name="set-active")
+def set_active(
+    resume: str | None = typer.Option(
+        None, "--resume", help="Active resume JSON path (relative to resume-kit/)."
+    ),
+    resume_source: str | None = typer.Option(
+        None, "--source", help="Original source file the active resume came from."
+    ),
+    job: str | None = typer.Option(
+        None, "--job", help="Active job JSON path (relative to resume-kit/)."
+    ),
+    job_source: str | None = typer.Option(
+        None, "--job-source", help="Original source file the active job came from."
+    ),
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Record active resume/job pointers plus source paths through the schema."""
+    request = SetActiveRequest(
+        resume=resume,
+        resume_source=resume_source,
+        job=job,
+        job_source=job_source,
+        root=root,
+    )
+    options = _options(False, strict, False)
+    _run(caps.set_active_capability(request, options), output)
 
 
 def main() -> None:

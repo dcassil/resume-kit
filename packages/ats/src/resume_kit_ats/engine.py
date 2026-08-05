@@ -331,9 +331,13 @@ _DATE_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+# Single source of truth for the non-ASCII scan, reused by the faithfulness
+# gate (RIT-T-0092) so the two never diverge on what counts as non-ASCII.
+_NON_ASCII_PATTERN: re.Pattern[str] = re.compile(r"[^\x00-\x7F]")
+
 _FORMATTING_RISK_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"[^\x00-\x7F]"),
+        _NON_ASCII_PATTERN,
         "Non-ASCII characters detected — some ATS systems may mis-parse them.",
     ),
     (

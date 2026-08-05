@@ -31,6 +31,7 @@ from resume_kit_facade.models import (
     ExportResumeRequest,
     ExtractJobDescriptionRequest,
     ExtractResumeRequest,
+    ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
@@ -580,6 +581,25 @@ _SURFACE_CASES = (
         api_path="/extract-job",
         api_body=lambda ctx: {"raw_text": ctx.data.job_text, "no_llm": True},
         no_llm=True,
+    ),
+    SurfaceCase(
+        name="extract-resume-text",
+        capability="extract-resume-text",
+        request=lambda ctx: ExtractResumeTextRequest(
+            content=ctx.paths.resume_text.read_bytes(),
+            filename=str(ctx.paths.resume_text),
+        ),
+        cli_args=lambda ctx: ["extract-text", str(ctx.paths.resume_text)],
+        mcp_name="resume_extract_text",
+        mcp_args=lambda ctx: {
+            "content": ctx.paths.resume_text.read_bytes(),
+            "filename": str(ctx.paths.resume_text),
+        },
+        api_path="/extract-text",
+        api_body=lambda ctx: {
+            "content": ctx.data.resume_text,
+            "filename": str(ctx.paths.resume_text),
+        },
     ),
     SurfaceCase(
         name="extract-resume-no-llm",
