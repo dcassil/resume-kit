@@ -46,7 +46,9 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from resume_kit_schemas import EditFeedback, UserPreferenceProfile
+from resume_kit_schemas import EditFeedback, PreferencePair, UserPreferenceProfile
+
+from .log import read_preference_pairs
 
 # Working-dir DATA convention (mirrors log.py); tests pass an explicit base_path.
 _DEFAULT_BASE_PATH = Path("resume-kit")
@@ -171,6 +173,7 @@ def derive_preferences(
     tone_w: dict[str, float] = defaultdict(float)
     length_w: dict[str, float] = defaultdict(float)
     strength_w: dict[str, float] = defaultdict(float)
+    pair_signal_w: dict[str, float] = defaultdict(float)
 
     # Length-growth samples: (decayed weight, growth ratio) for kept edits.
     growth_samples: list[tuple[float, float]] = []
@@ -178,9 +181,7 @@ def derive_preferences(
     for record in records:
         base = _decay_weight(record.timestamp, now)
         is_negative = record.outcome in ("rejected", "undone")
-        neg_weight = base * (
-            UNDONE_WEIGHT_MULTIPLIER if record.outcome == "undone" else 1.0
-        )
+        neg_weight = base * (UNDONE_WEIGHT_MULTIPLIER if record.outcome == "undone" else 1.0)
 
         if record.outcome in ("accepted", "accepted_modified"):
             # Preserved terms are corroborated acceptances of those phrases:
@@ -196,13 +197,9 @@ def derive_preferences(
             if bucket is not None:
                 length_w[bucket] += base
             # Length-growth ceiling sample.
-            kept_text = (
-                record.final_text if record.final_text is not None else record.proposed_text
-            )
+            kept_text = record.final_text if record.final_text is not None else record.proposed_text
             if kept_text is not None and record.original_text:
-                ratio = (len(kept_text) - len(record.original_text)) / len(
-                    record.original_text
-                )
+                ratio = (len(kept_text) - len(record.original_text)) / len(record.original_text)
                 if ratio > 0:
                     growth_samples.append((base, ratio))
 
@@ -216,6 +213,12 @@ def derive_preferences(
                 rejected_phrase_w[term] += neg_weight
             # The edit_type itself becomes a disliked pattern signal.
             disliked_pattern_w[record.edit_type] += neg_weight
+
+    for pair in _read_persisted_preference_pairs(base_path):
+        signal = _preference_pair_signal(pair, now)
+        if signal is not None:
+            key, weight = signal
+            pair_signal_w[key] += weight
 
     accepted_phrases = _sorted_by_weight(accepted_phrase_w)
     rejected_phrases = _sorted_by_weight(rejected_phrase_w)
@@ -234,6 +237,7 @@ def derive_preferences(
             tone_w,
             length_w,
             strength_w,
+            pair_signal_w,
         ]
     )
 
@@ -251,6 +255,22 @@ def derive_preferences(
     return profile
 
 
+def _read_persisted_preference_pairs(base_path: Path | None) -> list[PreferencePair]:
+    """Read persisted comparison records for preference-memory confidence."""
+    return read_preference_pairs(base_path=base_path)
+
+
+def _preference_pair_signal(pair: PreferencePair, now: str) -> tuple[str, float] | None:
+    """Convert a persisted pair into a decayed aggregate confidence signal."""
+    weight = max(0.0, pair.strength)
+    if weight <= 0.0:
+        return None
+    if pair.timestamp is not None:
+        weight *= _decay_weight(pair.timestamp, now)
+    key = f"{pair.preferred_candidate}>{pair.rejected_candidate}"
+    return key, weight
+
+
 def _edit_strength_vote(record: EditFeedback) -> str:
     """Map an accepted edit to a strength vote from its edit_distance/size.
 
@@ -262,9 +282,7 @@ def _edit_strength_vote(record: EditFeedback) -> str:
         return "aggressive" if record.edit_distance >= 0.5 else "minimal"
     if not record.original_text:
         return "aggressive"
-    change = abs(len(record.proposed_text) - len(record.original_text)) / len(
-        record.original_text
-    )
+    change = abs(len(record.proposed_text) - len(record.original_text)) / len(record.original_text)
     return "aggressive" if change >= 0.5 else "minimal"
 
 

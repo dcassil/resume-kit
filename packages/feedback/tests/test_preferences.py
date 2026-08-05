@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from resume_kit_feedback import append_preference_pair
 from resume_kit_feedback.preferences import (
     MODERATE_THRESHOLD,
     derive_preferences,
 )
-from resume_kit_schemas import EditFeedback
+from resume_kit_schemas import EditFeedback, PreferencePair
 
 NOW = "2026-08-04T00:00:00Z"
 
@@ -52,6 +53,23 @@ def test_empty_log_returns_empty_profile(tmp_path: Path) -> None:
     assert profile.max_length_growth is None
 
 
+def test_persisted_preference_pairs_contribute_confidence(tmp_path: Path) -> None:
+    append_preference_pair(
+        PreferencePair(
+            preferred_candidate="no-edit",
+            rejected_candidate="cand-a",
+            strength=MODERATE_THRESHOLD,
+            timestamp=NOW,
+        ),
+        base_path=tmp_path,
+    )
+
+    profile = derive_preferences([], now=NOW, base_path=tmp_path)
+
+    assert profile.confidence > 0.0
+    assert profile.accepted_phrases == []
+
+
 def test_single_action_never_sets_preference(tmp_path: Path) -> None:
     profile = derive_preferences([_rec("e1")], now=NOW, base_path=tmp_path)
     # One fresh accepted record => weight 1.0 < MODERATE => nothing emitted.
@@ -78,13 +96,9 @@ def test_decay_reduces_weight_below_threshold(tmp_path: Path) -> None:
 def test_undone_weighs_stronger_than_rejected(tmp_path: Path) -> None:
     # Two rejected of type A, two undone of type B; undone reaches MODERATE first.
     rejected = [
-        _rec(f"r{i}", outcome="rejected", edit_type="pattern_a", final=None)
-        for i in range(2)
+        _rec(f"r{i}", outcome="rejected", edit_type="pattern_a", final=None) for i in range(2)
     ]
-    undone = [
-        _rec(f"u{i}", outcome="undone", edit_type="pattern_b", final=None)
-        for i in range(2)
-    ]
+    undone = [_rec(f"u{i}", outcome="undone", edit_type="pattern_b", final=None) for i in range(2)]
     profile = derive_preferences(rejected + undone, now=NOW, base_path=tmp_path)
     # rejected weight = 2*1.0 = 2.0 < 3.0 (not emitted).
     # undone weight = 2*1.0*2.0 = 4.0 >= 3.0 (emitted).
@@ -94,10 +108,7 @@ def test_undone_weighs_stronger_than_rejected(tmp_path: Path) -> None:
 
 def test_decay_ordering_recent_outranks_old(tmp_path: Path) -> None:
     # Recent term "alpha" strongly corroborated; old term "omega" less so.
-    recent = [
-        _rec(f"a{i}", proposed="alpha", final="alpha", original="")
-        for i in range(4)
-    ]
+    recent = [_rec(f"a{i}", proposed="alpha", final="alpha", original="") for i in range(4)]
     old = [
         _rec(
             f"o{i}",
@@ -141,7 +152,5 @@ def test_malformed_timestamp_tolerated(tmp_path: Path) -> None:
 def test_moderate_threshold_constant_boundary(tmp_path: Path) -> None:
     # Exactly MODERATE_THRESHOLD corroborating fresh records emits.
     n = int(MODERATE_THRESHOLD)
-    profile = derive_preferences(
-        [_rec(f"e{i}") for i in range(n)], now=NOW, base_path=tmp_path
-    )
+    profile = derive_preferences([_rec(f"e{i}") for i in range(n)], now=NOW, base_path=tmp_path)
     assert "scalable" in profile.accepted_phrases

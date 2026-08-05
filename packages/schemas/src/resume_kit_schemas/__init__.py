@@ -42,6 +42,7 @@ from .evidence import CandidateEvidence, EvidenceKind
 from .feedback import (
     CandidateFeatures,
     EditFeedback,
+    EditFeedbackReasonCode,
     EditOutcome,
     PreferencePair,
     UserPreferenceProfile,
@@ -109,6 +110,7 @@ __all__ = [
     "EvidenceKind",
     # feedback (preference learning)
     "EditFeedback",
+    "EditFeedbackReasonCode",
     "EditOutcome",
     "UserPreferenceProfile",
     "CandidateFeatures",
