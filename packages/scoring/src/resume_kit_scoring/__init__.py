@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
+from resume_kit_scoring.base_fix import BaseFixResult, apply_auto_fixes
 from resume_kit_scoring.best_practices import analyze_best_practices
 from resume_kit_scoring.projection import project_scoredoc
 
-__all__ = ["analyze_best_practices", "project_scoredoc"]
+__all__ = ["BaseFixResult", "analyze_best_practices", "apply_auto_fixes", "project_scoredoc"]
