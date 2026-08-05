@@ -10,11 +10,11 @@ imported here and no business logic runs; the facade owns all dispatch.
 
 HTTP status policy
 ------------------
-The structured envelope is authoritative: success, warnings (kept separate
-from errors), ``requires_human_input`` + ``questions``, provenance, and
-artifacts always travel in the body, and the body is returned intact no matter
-what status is chosen.  We select the status from the envelope so HTTP callers
-get a coarse, deterministic signal without having to parse the body:
+The structured envelope is authoritative: success, warnings (kept separate from
+errors), ``requires_human_input`` + ``questions``, provenance, and artifacts
+always travel in the body, and the body is returned intact no matter what status
+is chosen.  We select the status from the envelope so HTTP callers get a coarse,
+deterministic signal without having to parse the body:
 
 * no errors (ok or needs-input) -> ``200 OK``
 * ``invalid_input`` / ``validation_failed`` / ``schema_mismatch`` /
@@ -38,11 +38,12 @@ from typing import Any
 
 from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
-from resume_kit_core.errors import ErrorCode
+from resume_kit_core.errors import CoreError, ErrorCode
 from resume_kit_core.response import InterfaceResponse
 from resume_kit_core.storage import ArtifactRef
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
@@ -57,6 +58,9 @@ from resume_kit_facade.models import (
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    RankEditCandidatesRequest,
+    RecordEditFeedbackRequest,
+    RefreshPreferencesRequest,
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
@@ -65,6 +69,7 @@ from resume_kit_facade.models import (
 )
 
 from resume_kit_api.models import (
+    AddEvidenceBody,
     AlignResumeBody,
     AlignTerminologyBody,
     BuildCandidateEvidenceBody,
@@ -72,12 +77,16 @@ from resume_kit_api.models import (
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
     CompareResumeVersionsBody,
+    EvidenceEnvelope,
     ExportResumeBody,
     ExtractJobDescriptionBody,
     ExtractResumeBody,
     ExtractResumeTextBody,
     IdentifyResumeGapsBody,
     InitProjectBody,
+    RankEditCandidatesBody,
+    RecordEditFeedbackBody,
+    RefreshPreferencesBody,
     SelectBestResumeBody,
     SetActiveBody,
     SuggestTerminologyBody,
@@ -123,6 +132,7 @@ class _InMemoryArtifactStore:
         """Return ``True`` if ``artifact_id`` is present."""
         return artifact_id in self._data
 
+
 _STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.INVALID_INPUT: 422,
     ErrorCode.MISSING_REQUIRED_FIELD: 422,
@@ -152,6 +162,20 @@ def _render(response: InterfaceResponse[object]) -> Response:
     )
 
 
+def _invalid_input(message: str, *, field: str) -> Response:
+    """Return a canonical invalid-input envelope from route-level validation."""
+    response: InterfaceResponse[object] = InterfaceResponse(
+        errors=[
+            CoreError(
+                code=ErrorCode.INVALID_INPUT,
+                message=message,
+                details={"field": field},
+            )
+        ]
+    )
+    return _render(response)
+
+
 def _options(body: _Options) -> CapabilityOptions:
     """Build shared execution options from any request body's flags."""
     return CapabilityOptions(
@@ -166,9 +190,7 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/extract")
     async def extract(body: ExtractResumeBody) -> Response:
-        request = ExtractResumeRequest(
-            content=body.content.encode("utf-8"), filename=body.filename
-        )
+        request = ExtractResumeRequest(content=body.content.encode("utf-8"), filename=body.filename)
         return _render(await REGISTRY["extract-resume"](request, _options(body)))
 
     @app.post("/extract-text")
@@ -176,16 +198,12 @@ def register_routes(app: FastAPI) -> None:
         request = ExtractResumeTextRequest(
             content=body.content.encode("utf-8"), filename=body.filename
         )
-        return _render(
-            await REGISTRY["extract-resume-text"](request, _options(body))
-        )
+        return _render(await REGISTRY["extract-resume-text"](request, _options(body)))
 
     @app.post("/extract-job")
     async def extract_job(body: ExtractJobDescriptionBody) -> Response:
         request = ExtractJobDescriptionRequest(raw_text=body.raw_text)
-        return _render(
-            await REGISTRY["extract-job-description"](request, _options(body))
-        )
+        return _render(await REGISTRY["extract-job-description"](request, _options(body)))
 
     @app.post("/check-ats")
     async def check_ats(body: CheckResumeAtsBody) -> Response:
@@ -197,24 +215,18 @@ def register_routes(app: FastAPI) -> None:
     @app.post("/check-ats-structure")
     async def check_ats_structure(body: CheckAtsStructureBody) -> Response:
         request = CheckAtsStructureRequest(resume=body.resume)
-        return _render(
-            await REGISTRY["check-ats-structure"](request, _options(body))
-        )
+        return _render(await REGISTRY["check-ats-structure"](request, _options(body)))
 
     @app.post("/match")
     async def match(body: CheckResumeJobMatchBody) -> Response:
         request = CheckResumeJobMatchRequest(
             resume=body.resume, job=body.job, alias_file=body.alias_file
         )
-        return _render(
-            await REGISTRY["check-resume-job-match"](request, _options(body))
-        )
+        return _render(await REGISTRY["check-resume-job-match"](request, _options(body)))
 
     @app.post("/select")
     async def select(body: SelectBestResumeBody) -> Response:
-        request = SelectBestResumeRequest(
-            resumes=body.resumes, job=body.job, labels=body.labels
-        )
+        request = SelectBestResumeRequest(resumes=body.resumes, job=body.job, labels=body.labels)
         return _render(await REGISTRY["select-best-resume"](request, _options(body)))
 
     @app.post("/compare")
@@ -226,9 +238,7 @@ def register_routes(app: FastAPI) -> None:
             base_label=body.base_label,
             candidate_label=body.candidate_label,
         )
-        return _render(
-            await REGISTRY["compare-resume-versions"](request, _options(body))
-        )
+        return _render(await REGISTRY["compare-resume-versions"](request, _options(body)))
 
     @app.post("/identify-gaps")
     async def identify_gaps(body: IdentifyResumeGapsBody) -> Response:
@@ -238,18 +248,14 @@ def register_routes(app: FastAPI) -> None:
             master=body.master,
             alias_file=body.alias_file,
         )
-        return _render(
-            await REGISTRY["identify-resume-gaps"](request, _options(body))
-        )
+        return _render(await REGISTRY["identify-resume-gaps"](request, _options(body)))
 
     @app.post("/suggest-terminology")
     async def suggest_terminology(body: SuggestTerminologyBody) -> Response:
         request = SuggestTerminologyRequest(
             resume=body.resume, job=body.job, alias_file=body.alias_file
         )
-        return _render(
-            await REGISTRY["suggest-terminology"](request, _options(body))
-        )
+        return _render(await REGISTRY["suggest-terminology"](request, _options(body)))
 
     @app.post("/align-terminology")
     async def align_terminology(body: AlignTerminologyBody) -> Response:
@@ -262,25 +268,22 @@ def register_routes(app: FastAPI) -> None:
             freedom=body.freedom,
             alias_file=body.alias_file,
         )
-        return _render(
-            await REGISTRY["align-terminology"](request, _options(body))
-        )
+        return _render(await REGISTRY["align-terminology"](request, _options(body)))
 
     @app.post("/align")
     async def align(body: AlignResumeBody) -> Response:
-        request = AlignResumeRequest(
-            resume=body.resume, job=body.job, evidence=body.evidence
-        )
+        request = AlignResumeRequest(resume=body.resume, job=body.job, evidence=body.evidence)
         return _render(await REGISTRY["align-resume"](request, _options(body)))
 
     @app.post("/validate-truth")
     async def validate_truth(body: ValidateResumeTruthBody) -> Response:
+        evidence = (
+            body.evidence.data if isinstance(body.evidence, EvidenceEnvelope) else body.evidence
+        )
         request = ValidateResumeTruthRequest(
-            resume=body.resume, evidence=body.evidence, alias_file=body.alias_file
+            resume=body.resume, evidence=evidence, alias_file=body.alias_file
         )
-        return _render(
-            await REGISTRY["validate-resume-truth"](request, _options(body))
-        )
+        return _render(await REGISTRY["validate-resume-truth"](request, _options(body)))
 
     @app.post("/validate-faithfulness")
     async def validate_faithfulness(body: ValidateFaithfulnessBody) -> Response:
@@ -288,24 +291,63 @@ def register_routes(app: FastAPI) -> None:
             resume=body.resume,
             source_text=body.source_text,
             source_content=(
-                body.source_content.encode("utf-8")
-                if body.source_content is not None
-                else None
+                body.source_content.encode("utf-8") if body.source_content is not None else None
             ),
             source_filename=body.source_filename,
         )
-        return _render(
-            await REGISTRY["validate-faithfulness"](request, _options(body))
-        )
+        return _render(await REGISTRY["validate-faithfulness"](request, _options(body)))
 
     @app.post("/build-evidence")
     async def build_evidence(body: BuildCandidateEvidenceBody) -> Response:
         request = BuildCandidateEvidenceRequest(
             resume=body.resume, approved_claims=body.approved_claims
         )
-        return _render(
-            await REGISTRY["build-candidate-evidence"](request, _options(body))
+        return _render(await REGISTRY["build-candidate-evidence"](request, _options(body)))
+
+    @app.post("/add-evidence")
+    async def add_evidence(body: AddEvidenceBody) -> Response:
+        if not body.confirmed:
+            return _invalid_input(
+                "Field 'confirmed' must be true to persist confirmed evidence.",
+                field="confirmed",
+            )
+        request = AddEvidenceRequest(
+            content=body.content,
+            kind=body.kind,
+            tags=body.tags,
+            root=body.root,
+            evidence_file=body.evidence_file,
+            update_active=body.update_active,
         )
+        return _render(await REGISTRY["add-evidence"](request, _options(body)))
+
+    @app.post("/record-edit-feedback")
+    async def record_edit_feedback(body: RecordEditFeedbackBody) -> Response:
+        request = RecordEditFeedbackRequest(
+            feedback=body.feedback,
+            preference_pair=body.preference_pair,
+            base_path=body.base_path,
+        )
+        return _render(await REGISTRY["record-edit-feedback"](request, _options(body)))
+
+    @app.post("/rank-edit-candidates")
+    async def rank_edit_candidates(body: RankEditCandidatesBody) -> Response:
+        request = RankEditCandidatesRequest(
+            candidates=body.candidates,
+            context=body.context,
+            profile=body.profile,
+            alias_file=body.alias_file,
+        )
+        return _render(await REGISTRY["rank-edit-candidates"](request, _options(body)))
+
+    @app.post("/refresh-preferences")
+    async def refresh_preferences(body: RefreshPreferencesBody) -> Response:
+        request = RefreshPreferencesRequest(
+            now=body.now,
+            records=body.records,
+            base_path=body.base_path,
+        )
+        return _render(await REGISTRY["refresh-preferences"](request, _options(body)))
 
     @app.post("/init")
     async def init(body: InitProjectBody) -> Response:

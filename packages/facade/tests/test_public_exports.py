@@ -6,6 +6,8 @@ from __future__ import annotations
 def test_all_public_exports_importable() -> None:
     from resume_kit_facade import (
         REGISTRY,
+        AddEvidenceRequest,
+        AddEvidenceResult,
         AlignResumeRequest,
         AlignTerminologyRequest,
         AlignTerminologyResult,
@@ -22,12 +24,18 @@ def test_all_public_exports_importable() -> None:
         IdentifyResumeGapsRequest,
         InitProjectRequest,
         ProjectConfig,
+        RankEditCandidatesRequest,
+        RankEditCandidatesResult,
+        RecordEditFeedbackRequest,
+        RecordEditFeedbackResult,
+        RefreshPreferencesRequest,
         SelectBestResumeRequest,
         SetActiveRequest,
         SuggestTerminologyRequest,
         TerminologyAlignmentDelta,
         ValidateFaithfulnessRequest,
         ValidateResumeTruthRequest,
+        add_evidence_capability,
         align_resume,
         align_terminology,
         build_candidate_evidence_capability,
@@ -43,6 +51,9 @@ def test_all_public_exports_importable() -> None:
         init_project,
         init_project_capability,
         load_config,
+        rank_edit_candidates_capability,
+        record_edit_feedback_capability,
+        refresh_preferences_capability,
         save_config,
         select_best_resume,
         set_active,
@@ -53,7 +64,7 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 18
+    assert len(REGISTRY) == 22
     assert "validate-faithfulness" in REGISTRY
     assert "extract-resume-text" in REGISTRY
     assert "export-resume" in REGISTRY
@@ -62,8 +73,16 @@ def test_all_public_exports_importable() -> None:
     assert "align-terminology" in REGISTRY
     assert "init-project" in REGISTRY
     assert "set-active" in REGISTRY
+    assert "record-edit-feedback" in REGISTRY
+    assert "rank-edit-candidates" in REGISTRY
+    assert "refresh-preferences" in REGISTRY
+    assert "add-evidence" in REGISTRY
 
     assert callable(init_project_capability)
+    assert callable(add_evidence_capability)
+    assert callable(record_edit_feedback_capability)
+    assert callable(rank_edit_candidates_capability)
+    assert callable(refresh_preferences_capability)
     assert callable(set_active_capability)
     assert callable(init_project)
     assert callable(load_config)
@@ -71,6 +90,10 @@ def test_all_public_exports_importable() -> None:
     assert callable(set_active)
     assert ProjectConfig is not None
     assert InitProjectRequest is not None
+    assert AddEvidenceRequest is not None
+    assert RecordEditFeedbackRequest is not None
+    assert RankEditCandidatesRequest is not None
+    assert RefreshPreferencesRequest is not None
     assert SetActiveRequest is not None
 
     assert callable(suggest_terminology)
@@ -95,6 +118,9 @@ def test_all_public_exports_importable() -> None:
     assert callable(validate_resume_truth_capability)
     assert callable(validate_faithfulness_capability)
     assert ValidateFaithfulnessRequest is not None
+    assert AddEvidenceResult is not None
+    assert RecordEditFeedbackResult is not None
+    assert RankEditCandidatesResult is not None
 
     assert CapabilityOptions is not None
     assert AlignResumeRequest is not None

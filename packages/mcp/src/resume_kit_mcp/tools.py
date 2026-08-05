@@ -18,6 +18,7 @@ from resume_kit_core.storage import ArtifactRef
 from resume_kit_export.models import ExportFormat
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
@@ -32,12 +33,16 @@ from resume_kit_facade.models import (
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    RankEditCandidatesRequest,
+    RecordEditFeedbackRequest,
+    RefreshPreferencesRequest,
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_schemas import EvidenceKind, UserPreferenceProfile
 
 ToolArguments = dict[str, object]
 ToolResult = dict[str, object]
@@ -58,6 +63,10 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_validate_truth",
     "resume_validate_faithfulness",
     "candidate_evidence_build",
+    "candidate_evidence_add",
+    "edit_feedback_record",
+    "edit_candidates_rank",
+    "preferences_refresh",
     "resume_export",
     "resume_suggest_terminology",
     "resume_align_terminology",
@@ -134,6 +143,10 @@ _VALIDATE_RESUME = _model_validator(CheckResumeAtsRequest, "resume")
 _VALIDATE_JOB = _model_validator(CheckResumeAtsRequest, "job")
 _VALIDATE_EVIDENCE = _model_validator(ValidateResumeTruthRequest, "evidence")
 _VALIDATE_SUGGESTION = _model_validator(AlignTerminologyRequest, "suggestion")
+_VALIDATE_FEEDBACK = _model_validator(RecordEditFeedbackRequest, "feedback")
+_VALIDATE_PREFERENCE_PAIR = _model_validator(RecordEditFeedbackRequest, "preference_pair")
+_VALIDATE_CANDIDATE = _model_validator(RankEditCandidatesRequest, "candidates")
+_VALIDATE_FEATURE_CONTEXT = _model_validator(RankEditCandidatesRequest, "context")
 
 
 def _dump(response: InterfaceResponse[object]) -> ToolResult:
@@ -223,9 +236,7 @@ def _optional_alias_file(arguments: ToolArguments) -> str | None:
         return None
     if isinstance(value, str):
         return value
-    raise _ValidationFailure(
-        "Field 'alias_file' must be a string.", field="alias_file"
-    )
+    raise _ValidationFailure("Field 'alias_file' must be a string.", field="alias_file")
 
 
 def _export_format(arguments: ToolArguments, field: str) -> ExportFormat:
@@ -275,9 +286,7 @@ def _optional_freedom(arguments: ToolArguments) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
-        raise _ValidationFailure(
-            "Field 'freedom' must be an integer.", field="freedom"
-        )
+        raise _ValidationFailure("Field 'freedom' must be an integer.", field="freedom")
     return value
 
 
@@ -295,8 +304,10 @@ def _optional_evidence_list(
     value = arguments.get(field)
     if value is None:
         return None
+    if isinstance(value, dict):
+        value = value.get("data")
     if not isinstance(value, list):
-        raise _ValidationFailure(f"Field '{field}' must be a list.", field=field)
+        raise _ValidationFailure(f"Field '{field}' must be a list or envelope.", field=field)
     return [_evidence(item, field) for item in value]
 
 
@@ -321,14 +332,63 @@ def _approved_claims(arguments: ToolArguments) -> object:
     value = arguments.get("approved_claims")
     if value is None:
         return None
+    if isinstance(value, dict):
+        value = value.get("data")
     if not isinstance(value, list):
         raise _ValidationFailure(
-            "Field 'approved_claims' must be a list.",
+            "Field 'approved_claims' must be a list or envelope.",
             field="approved_claims",
         )
     if all(isinstance(item, str) for item in value):
         return [item for item in value if isinstance(item, str)]
     return [_evidence(item, "approved_claims") for item in value]
+
+
+def _feedback(value: object, field: str) -> object:
+    return _validated(_VALIDATE_FEEDBACK, value, field)
+
+
+def _preference_pair(value: object, field: str) -> object:
+    return _validated(_VALIDATE_PREFERENCE_PAIR, value, field)
+
+
+def _candidate(value: object, field: str) -> object:
+    return _validated(_VALIDATE_CANDIDATE, value, field)
+
+
+def _feature_context(value: object, field: str) -> object:
+    return _validated(_VALIDATE_FEATURE_CONTEXT, value, field)
+
+
+def _preference_profile(arguments: ToolArguments) -> UserPreferenceProfile:
+    value = arguments.get("profile")
+    if value is None:
+        return UserPreferenceProfile()
+    try:
+        return UserPreferenceProfile.model_validate(value)
+    except ValueError as exc:
+        raise _ValidationFailure(str(exc), field="profile") from exc
+
+
+def _feedback_records(arguments: ToolArguments) -> list[object] | None:
+    value = arguments.get("records")
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise _ValidationFailure("Field 'records' must be a list.", field="records")
+    return [_feedback(item, "records") for item in value]
+
+
+def _evidence_kind(arguments: ToolArguments) -> EvidenceKind:
+    value = _optional_string(arguments, "kind", EvidenceKind.USER_STATEMENT.value)
+    try:
+        return EvidenceKind(value)
+    except ValueError as exc:
+        allowed = ", ".join(item.value for item in EvidenceKind)
+        raise _ValidationFailure(
+            f"Field 'kind' must be one of: {allowed}.",
+            field="kind",
+        ) from exc
 
 
 async def _call(
@@ -428,9 +488,7 @@ async def resume_check_job_match(arguments: ToolArguments) -> ToolResult:
 
 async def resume_select_best(arguments: ToolArguments) -> ToolResult:
     try:
-        resumes = [
-            _resume(item, "resumes") for item in _object_list(arguments, "resumes")
-        ]
+        resumes = [_resume(item, "resumes") for item in _object_list(arguments, "resumes")]
         request = _make_request(
             SelectBestResumeRequest,
             {
@@ -521,9 +579,7 @@ async def resume_validate_faithfulness(arguments: ToolArguments) -> ToolResult:
             fields["source_text"] = source_text
         else:
             fields["source_content"] = _bytes(arguments, "source_content")
-            fields["source_filename"] = _optional_string(
-                arguments, "source_filename", "source.txt"
-            )
+            fields["source_filename"] = _optional_string(arguments, "source_filename", "source.txt")
         request = _make_request(ValidateFaithfulnessRequest, fields)
     except _ValidationFailure as exc:
         return _validation_error(exc)
@@ -542,6 +598,92 @@ async def candidate_evidence_build(arguments: ToolArguments) -> ToolResult:
     except _ValidationFailure as exc:
         return _validation_error(exc)
     return await _call("build-candidate-evidence", request, arguments)
+
+
+async def candidate_evidence_add(arguments: ToolArguments) -> ToolResult:
+    try:
+        if not _optional_bool(arguments, "confirmed"):
+            raise _ValidationFailure(
+                "Field 'confirmed' must be true to persist confirmed evidence.",
+                field="confirmed",
+            )
+        tags_value = arguments.get("tags", [])
+        if not isinstance(tags_value, list) or not all(
+            isinstance(item, str) for item in tags_value
+        ):
+            raise _ValidationFailure("Field 'tags' must be a list of strings.", field="tags")
+        request = _make_request(
+            AddEvidenceRequest,
+            {
+                "content": _string(arguments, "content"),
+                "kind": _evidence_kind(arguments),
+                "tags": tags_value,
+                "root": _optional_string(arguments, "root", "."),
+                "evidence_file": _optional_string(
+                    arguments,
+                    "evidence_file",
+                    "working/user-confirmed-evidence.json",
+                ),
+                "update_active": _optional_bool(arguments, "update_active"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("add-evidence", request, arguments)
+
+
+async def edit_feedback_record(arguments: ToolArguments) -> ToolResult:
+    try:
+        preference_value = arguments.get("preference_pair")
+        request = _make_request(
+            RecordEditFeedbackRequest,
+            {
+                "feedback": _feedback(_required(arguments, "feedback"), "feedback"),
+                "preference_pair": (
+                    _preference_pair(preference_value, "preference_pair")
+                    if preference_value is not None
+                    else None
+                ),
+                "base_path": _optional_str(arguments, "base_path"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("record-edit-feedback", request, arguments)
+
+
+async def edit_candidates_rank(arguments: ToolArguments) -> ToolResult:
+    try:
+        candidates = [
+            _candidate(item, "candidates") for item in _object_list(arguments, "candidates")
+        ]
+        request = _make_request(
+            RankEditCandidatesRequest,
+            {
+                "candidates": candidates,
+                "context": _feature_context(_required(arguments, "context"), "context"),
+                "profile": _preference_profile(arguments),
+                "alias_file": _optional_alias_file(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("rank-edit-candidates", request, arguments)
+
+
+async def preferences_refresh(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            RefreshPreferencesRequest,
+            {
+                "now": _string(arguments, "now"),
+                "records": _feedback_records(arguments),
+                "base_path": _optional_str(arguments, "base_path"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("refresh-preferences", request, arguments)
 
 
 async def resume_export(arguments: ToolArguments) -> ToolResult:
@@ -598,9 +740,7 @@ async def resume_align_terminology(arguments: ToolArguments) -> ToolResult:
         request = _make_request(
             AlignTerminologyRequest,
             {
-                "suggestion": _suggestion(
-                    _required(arguments, "suggestion"), "suggestion"
-                ),
+                "suggestion": _suggestion(_required(arguments, "suggestion"), "suggestion"),
                 "location": _string(arguments, "location"),
                 "resume": _resume(_required(arguments, "resume"), "resume"),
                 "job": _job(_required(arguments, "job"), "job"),
@@ -665,6 +805,10 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_validate_truth": resume_validate_truth,
     "resume_validate_faithfulness": resume_validate_faithfulness,
     "candidate_evidence_build": candidate_evidence_build,
+    "candidate_evidence_add": candidate_evidence_add,
+    "edit_feedback_record": edit_feedback_record,
+    "edit_candidates_rank": edit_candidates_rank,
+    "preferences_refresh": preferences_refresh,
     "resume_export": resume_export,
     "resume_suggest_terminology": resume_suggest_terminology,
     "resume_align_terminology": resume_align_terminology,

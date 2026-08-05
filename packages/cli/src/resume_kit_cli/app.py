@@ -28,6 +28,7 @@ from resume_kit_core.response import InterfaceResponse
 from resume_kit_export.models import ExportFormat
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
@@ -42,13 +43,24 @@ from resume_kit_facade.models import (
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    RankEditCandidatesRequest,
+    RecordEditFeedbackRequest,
+    RefreshPreferencesRequest,
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
-from resume_kit_schemas import FaithfulnessReport
+from resume_kit_feedback import Candidate, FeatureContext
+from resume_kit_schemas import (
+    CandidateEvidence,
+    EditFeedback,
+    EvidenceKind,
+    FaithfulnessReport,
+    PreferencePair,
+    UserPreferenceProfile,
+)
 
 from resume_kit_cli import io
 from resume_kit_cli.formatters import OutputFormat, render
@@ -85,6 +97,37 @@ _AliasFile = typer.Option(
 _Format = typer.Option(..., "--format", help="Export format: pdf or docx.")
 _Out = typer.Option(None, "--out", help="Write raw bytes to this path.")
 _ResumeOrStdin = typer.Option("-", "--resume", help="Resume JSON path, or '-' for stdin.")
+_BasePath = typer.Option(
+    None,
+    "--base-path",
+    help="Optional resume-kit/ working directory for learning logs.",
+)
+_Root = typer.Option(".", "--root", help="Project root containing resume-kit/.")
+_EvidenceKind = typer.Option(
+    EvidenceKind.USER_STATEMENT,
+    "--kind",
+    help="Evidence kind.",
+)
+_EvidenceTag = typer.Option(
+    None,
+    "--tag",
+    help="Evidence tag; may be supplied multiple times.",
+)
+_Confirmed = typer.Option(
+    False,
+    "--confirmed",
+    help="Required to persist user-confirmed evidence.",
+)
+_EvidenceFile = typer.Option(
+    "working/user-confirmed-evidence.json",
+    "--evidence-file",
+    help="Evidence file path relative to resume-kit/.",
+)
+_UpdateActive = typer.Option(
+    False,
+    "--update-active",
+    help="Update config.active_evidence to this evidence file.",
+)
 
 
 def _options(no_llm: bool, strict: bool, human_in_loop: bool) -> CapabilityOptions:
@@ -128,6 +171,36 @@ def _run_gate(
     raise typer.Exit(code=code)
 
 
+def _load_approved_claims(
+    source: str | None,
+) -> list[CandidateEvidence] | list[str] | None:
+    """Load approved claims from JSON strings or evidence records."""
+    if source is None:
+        return None
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--approved-claims must contain a JSON array.")
+    if all(isinstance(item, str) for item in value):
+        return [item for item in value if isinstance(item, str)]
+    return [CandidateEvidence.model_validate(item) for item in value]
+
+
+def _load_candidates(source: str) -> list[Candidate]:
+    """Load a JSON array of feedback ``Candidate`` records."""
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--candidates must contain a JSON array.")
+    return [Candidate.model_validate(item) for item in value]
+
+
+def _load_feedback_records(source: str) -> list[EditFeedback]:
+    """Load a JSON array of ``EditFeedback`` records."""
+    value = io.load_json_value(source)
+    if not isinstance(value, list):
+        raise typer.BadParameter("--records must contain a JSON array.")
+    return [EditFeedback.model_validate(item) for item in value]
+
+
 # ---------------------------------------------------------------------------
 # LLM-capable commands
 # ---------------------------------------------------------------------------
@@ -163,9 +236,7 @@ def extract_text(
     used (pass a real path to extract PDF/DOCX).
     """
     filename = file if file != "-" else "resume.txt"
-    request = ExtractResumeTextRequest(
-        content=io.read_bytes(file), filename=filename
-    )
+    request = ExtractResumeTextRequest(content=io.read_bytes(file), filename=filename)
     options = _options(False, strict, False)
     _run(caps.extract_resume_text_capability(request, options), output)
 
@@ -266,9 +337,7 @@ def select(
     config: str | None = _Config,
 ) -> None:
     """Select the best-matching resume from a set for a job."""
-    request = SelectBestResumeRequest(
-        resumes=io.load_resumes(resumes), job=io.load_job(job)
-    )
+    request = SelectBestResumeRequest(resumes=io.load_resumes(resumes), job=io.load_job(job))
     options = _options(False, strict, False)
     _run(caps.select_best_resume(request, options), output)
 
@@ -340,9 +409,7 @@ def align_terminology(
     ),
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
     job: str = typer.Option(..., "--job", help="Job description JSON path."),
-    evidence: str | None = typer.Option(
-        None, "--evidence", help="Evidence JSON path."
-    ),
+    evidence: str | None = typer.Option(None, "--evidence", help="Evidence JSON path."),
     freedom: int | None = typer.Option(
         None, "--freedom", help="Explicit policy-freedom level (default: minimal)."
     ),
@@ -421,14 +488,123 @@ def validate_faithfulness(
 @app.command(name="build-evidence")
 def build_evidence(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    approved_claims: str | None = typer.Option(
+        None,
+        "--approved-claims",
+        help="JSON path containing approved claim strings or CandidateEvidence records.",
+    ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
 ) -> None:
     """Build candidate evidence records from a resume."""
-    request = BuildCandidateEvidenceRequest(resume=io.load_resume(resume))
+    request = BuildCandidateEvidenceRequest(
+        resume=io.load_resume(resume),
+        approved_claims=_load_approved_claims(approved_claims),
+    )
     options = _options(False, strict, False)
     _run(caps.build_candidate_evidence_capability(request, options), output)
+
+
+@app.command(name="record-edit-feedback")
+def record_edit_feedback(
+    feedback: str = typer.Option(..., "--feedback", help="EditFeedback JSON path."),
+    preference_pair: str | None = typer.Option(
+        None,
+        "--preference-pair",
+        help="Optional PreferencePair JSON path.",
+    ),
+    base_path: str | None = _BasePath,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Append edit feedback and an optional preference-pair record."""
+    request = RecordEditFeedbackRequest(
+        feedback=io.load_model(feedback, EditFeedback),
+        preference_pair=(
+            io.load_model(preference_pair, PreferencePair) if preference_pair is not None else None
+        ),
+        base_path=base_path,
+    )
+    options = _options(False, strict, False)
+    _run(caps.record_edit_feedback_capability(request, options), output)
+
+
+@app.command(name="rank-edit-candidates")
+def rank_edit_candidates(
+    candidates: str = typer.Option(..., "--candidates", help="Candidate array JSON path."),
+    context: str = typer.Option(..., "--context", help="FeatureContext JSON path."),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Optional UserPreferenceProfile JSON path.",
+    ),
+    alias_file: str | None = _AliasFile,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Rank edit candidates with the deterministic heuristic ranker."""
+    request = RankEditCandidatesRequest(
+        candidates=_load_candidates(candidates),
+        context=io.load_model(context, FeatureContext),
+        profile=(
+            io.load_model(profile, UserPreferenceProfile)
+            if profile is not None
+            else UserPreferenceProfile()
+        ),
+        alias_file=alias_file,
+    )
+    options = _options(False, strict, False)
+    _run(caps.rank_edit_candidates_capability(request, options), output)
+
+
+@app.command(name="refresh-preferences")
+def refresh_preferences(
+    now: str = typer.Option(..., "--now", help="Caller-supplied ISO timestamp."),
+    records: str | None = typer.Option(
+        None,
+        "--records",
+        help="Optional EditFeedback array JSON path; otherwise persisted log is read.",
+    ),
+    base_path: str | None = _BasePath,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Derive and persist the user preference profile."""
+    request = RefreshPreferencesRequest(
+        now=now,
+        records=_load_feedback_records(records) if records is not None else None,
+        base_path=base_path,
+    )
+    options = _options(False, strict, False)
+    _run(caps.refresh_preferences_capability(request, options), output)
+
+
+@app.command(name="add-evidence")
+def add_evidence(
+    content: str = typer.Option(..., "--content", help="Confirmed evidence content."),
+    kind: EvidenceKind = _EvidenceKind,
+    tag: list[str] | None = _EvidenceTag,
+    confirmed: bool = _Confirmed,
+    root: str = _Root,
+    evidence_file: str = _EvidenceFile,
+    update_active: bool = _UpdateActive,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Persist one user-confirmed evidence record under resume-kit/."""
+    if not confirmed:
+        raise typer.BadParameter("Pass --confirmed to persist confirmed evidence.")
+    request = AddEvidenceRequest(
+        content=content,
+        kind=kind,
+        tags=tag or [],
+        root=root,
+        evidence_file=evidence_file,
+        update_active=update_active,
+    )
+    options = _options(False, strict, False)
+    _run(caps.add_evidence_capability(request, options), output)
 
 
 @app.command()
@@ -464,8 +640,6 @@ def export(
 # ---------------------------------------------------------------------------
 # Working-directory state commands (RIT-T-0091)
 # ---------------------------------------------------------------------------
-
-_Root = typer.Option(".", "--root", help="Project root containing resume-kit/.")
 
 
 @app.command()

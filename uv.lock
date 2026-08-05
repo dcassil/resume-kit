@@ -1428,6 +1428,7 @@ source = { editable = "packages/api" }
 dependencies = [
     { name = "fastapi" },
     { name = "resume-kit-facade" },
+    { name = "resume-kit-feedback" },
     { name = "uvicorn" },
 ]
 
@@ -1440,6 +1441,7 @@ test = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "resume-kit-facade", editable = "packages/facade" },
+    { name = "resume-kit-feedback", editable = "packages/feedback" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
 
@@ -1471,12 +1473,14 @@ version = "0.0.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "resume-kit-facade" },
+    { name = "resume-kit-feedback" },
     { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "resume-kit-facade", editable = "packages/facade" },
+    { name = "resume-kit-feedback", editable = "packages/feedback" },
     { name = "typer", specifier = ">=0.12" },
 ]
 
@@ -1568,6 +1572,7 @@ dependencies = [
     { name = "resume-kit-document-parser" },
     { name = "resume-kit-evidence" },
     { name = "resume-kit-export" },
+    { name = "resume-kit-feedback" },
     { name = "resume-kit-job-parser" },
     { name = "resume-kit-matching" },
     { name = "resume-kit-schemas" },
@@ -1582,6 +1587,7 @@ requires-dist = [
     { name = "resume-kit-document-parser", editable = "packages/document-parser" },
     { name = "resume-kit-evidence", editable = "packages/evidence" },
     { name = "resume-kit-export", editable = "packages/export" },
+    { name = "resume-kit-feedback", editable = "packages/feedback" },
     { name = "resume-kit-job-parser", editable = "packages/job-parser" },
     { name = "resume-kit-matching", editable = "packages/matching" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
@@ -1674,12 +1680,14 @@ source = { editable = "packages/mcp" }
 dependencies = [
     { name = "mcp" },
     { name = "resume-kit-facade" },
+    { name = "resume-kit-feedback" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "mcp", specifier = ">=1" },
     { name = "resume-kit-facade", editable = "packages/facade" },
+    { name = "resume-kit-feedback", editable = "packages/feedback" },
 ]
 
 [[package]]

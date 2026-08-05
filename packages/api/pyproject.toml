@@ -9,6 +9,7 @@ description = "Phase 5 HTTP API transport package for Resume Kit."
 requires-python = ">=3.12"
 dependencies = [
     "resume-kit-facade",
+    "resume-kit-feedback",
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
@@ -20,6 +21,7 @@ test = [
 
 [tool.uv.sources]
 resume-kit-facade = { workspace = true }
+resume-kit-feedback = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/resume_kit_api"]

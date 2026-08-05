@@ -14,11 +14,16 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 from resume_kit_export.models import ExportFormat, ExportOptions
+from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_schemas import (
     CandidateEvidence,
+    EditFeedback,
+    EvidenceKind,
     JobDescription,
+    PreferencePair,
     ResumeDocument,
     TerminologyAlignment,
+    UserPreferenceProfile,
 )
 
 
@@ -32,9 +37,7 @@ class _Options(BaseModel):
 
     no_llm: bool = Field(default=False, description="Force the deterministic path.")
     strict: bool = Field(default=False, description="Escalate warnings to errors.")
-    human_in_loop: bool = Field(
-        default=False, description="Request human-in-the-loop behaviour."
-    )
+    human_in_loop: bool = Field(default=False, description="Request human-in-the-loop behaviour.")
 
 
 class ExtractResumeBody(_Options):
@@ -162,11 +165,17 @@ class AlignResumeBody(_Options):
     evidence: list[CandidateEvidence] | None = None
 
 
+class EvidenceEnvelope(BaseModel):
+    """Evidence records carried in a first-party response envelope."""
+
+    data: list[CandidateEvidence] = Field(default_factory=list)
+
+
 class ValidateResumeTruthBody(_Options):
     """Body for ``POST /validate-truth``."""
 
     resume: ResumeDocument
-    evidence: list[CandidateEvidence] = Field(default_factory=list)
+    evidence: list[CandidateEvidence] | EvidenceEnvelope = Field(default_factory=list)
     alias_file: str | None = Field(
         default=None,
         description="Optional project alias JSON path for synonym-aware validation.",
@@ -198,7 +207,49 @@ class BuildCandidateEvidenceBody(_Options):
     """Body for ``POST /build-evidence``."""
 
     resume: ResumeDocument
-    approved_claims: list[CandidateEvidence] | None = None
+    approved_claims: list[CandidateEvidence] | list[str] | None = None
+
+
+class AddEvidenceBody(_Options):
+    """Body for ``POST /add-evidence``."""
+
+    content: str = Field(description="Confirmed evidence content.")
+    kind: EvidenceKind = Field(default=EvidenceKind.USER_STATEMENT)
+    tags: list[str] = Field(default_factory=list)
+    confirmed: bool = Field(
+        default=False, description="Must be true to persist confirmed evidence."
+    )
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    evidence_file: str = Field(default="working/user-confirmed-evidence.json")
+    update_active: bool = Field(default=False)
+
+
+class RecordEditFeedbackBody(_Options):
+    """Body for ``POST /record-edit-feedback``."""
+
+    feedback: EditFeedback
+    preference_pair: PreferencePair | None = None
+    base_path: str | None = None
+
+
+class RankEditCandidatesBody(_Options):
+    """Body for ``POST /rank-edit-candidates``."""
+
+    candidates: list[Candidate]
+    context: FeatureContext
+    profile: UserPreferenceProfile = Field(default_factory=UserPreferenceProfile)
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware validation.",
+    )
+
+
+class RefreshPreferencesBody(_Options):
+    """Body for ``POST /refresh-preferences``."""
+
+    now: str = Field(description="Caller-supplied ISO timestamp.")
+    records: list[EditFeedback] | None = None
+    base_path: str | None = None
 
 
 class InitProjectBody(_Options):

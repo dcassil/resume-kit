@@ -19,11 +19,17 @@ from pydantic import BaseModel, Field
 from resume_kit_core import StructuredCompletionProvider
 from resume_kit_core.storage import ArtifactStore
 from resume_kit_export import ExportFormat, ExportOptions
+from resume_kit_feedback.features import Candidate, FeatureContext
+from resume_kit_feedback.ranker import RankedCandidate
 from resume_kit_schemas import (
     CandidateEvidence,
+    EditFeedback,
+    EvidenceKind,
     JobDescription,
+    PreferencePair,
     ResumeDocument,
     TerminologyAlignment,
+    UserPreferenceProfile,
 )
 from resume_kit_schemas.change import ChangeProposal
 from resume_kit_schemas.results import PolicyRejection
@@ -242,12 +248,95 @@ class BuildCandidateEvidenceRequest:
 
 
 @dataclass(frozen=True)
+class RecordEditFeedbackRequest:
+    """Inputs for the record-edit-feedback capability.
+
+    ``base_path`` points at the ``resume-kit/`` working directory whose
+    ``learning/`` logs should receive the records. When omitted, the feedback
+    engine's default ``resume-kit/`` path is used.
+    """
+
+    feedback: EditFeedback
+    preference_pair: PreferencePair | None = None
+    base_path: str | Path | None = None
+
+
+@dataclass(frozen=True)
+class RankEditCandidatesRequest:
+    """Inputs for the rank-edit-candidates capability."""
+
+    candidates: list[Candidate]
+    context: FeatureContext
+    profile: UserPreferenceProfile = field(default_factory=UserPreferenceProfile)
+    alias_file: str | Path | None = None
+
+
+@dataclass(frozen=True)
+class RefreshPreferencesRequest:
+    """Inputs for the refresh-preferences capability.
+
+    When ``records`` is ``None``, persisted records are loaded from
+    ``base_path`` before deriving the profile. ``now`` is caller-supplied data
+    for deterministic time-decay.
+    """
+
+    now: str
+    records: list[EditFeedback] | None = None
+    base_path: str | Path | None = None
+
+
+@dataclass(frozen=True)
+class AddEvidenceRequest:
+    """Inputs for adding one deterministic user-confirmed evidence record."""
+
+    content: str
+    kind: EvidenceKind
+    tags: list[str] = field(default_factory=list)
+    root: str | Path = "."
+    evidence_file: str = "working/user-confirmed-evidence.json"
+    update_active: bool = False
+
+
+class AddEvidenceResult(BaseModel):
+    """Serializable result for a persisted user-confirmed evidence record."""
+
+    model_config = {"frozen": True}
+
+    evidence: CandidateEvidence = Field(description="The confirmed evidence record.")
+    evidence_file: str = Field(
+        description="Evidence file path relative to the resume-kit working dir."
+    )
+    active_evidence: str | None = Field(
+        default=None, description="Updated active evidence pointer, if requested."
+    )
+
+
+class RecordEditFeedbackResult(BaseModel):
+    """Serializable result after persisting feedback records."""
+
+    model_config = {"frozen": True}
+
+    feedback: EditFeedback = Field(description="The persisted feedback record.")
+    preference_pair: PreferencePair | None = Field(
+        default=None, description="Optional persisted preference-pair record."
+    )
+
+
+class RankEditCandidatesResult(BaseModel):
+    """Serializable ranked candidate list."""
+
+    model_config = {"frozen": True}
+
+    ranked: list[RankedCandidate] = Field(description="Truth-passing ranked candidates.")
+
+
+@dataclass(frozen=True)
 class ExportResumeRequest:
     """Inputs for the export-resume capability.
 
     The exported artifact id is deterministic: a caller may supply an explicit
-    ``artifact_id``; otherwise :meth:`resolved_artifact_id` derives a stable id
-    from a SHA-256 hash of the format plus the rendered content — no UUIDs,
+    ``artifact_id``; otherwise :meth:`resolved_artifact_id` derives a stable
+    SHA-256-based id over the format plus rendered content — no UUIDs,
     timestamps, or random values.
     """
 

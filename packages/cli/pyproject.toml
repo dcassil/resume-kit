@@ -9,6 +9,7 @@ description = "Phase 5 command-line transport package for Resume Kit."
 requires-python = ">=3.12"
 dependencies = [
     "resume-kit-facade",
+    "resume-kit-feedback",
     "typer>=0.12",
 ]
 
@@ -17,6 +18,7 @@ resume-tool = "resume_kit_cli.app:app"
 
 [tool.uv.sources]
 resume-kit-facade = { workspace = true }
+resume-kit-feedback = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/resume_kit_cli"]

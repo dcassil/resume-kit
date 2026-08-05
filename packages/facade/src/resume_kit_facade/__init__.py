@@ -11,6 +11,7 @@ __version__ = "0.0.0"
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.capabilities import (
     REGISTRY,
+    add_evidence_capability,
     align_resume,
     align_terminology,
     build_candidate_evidence_capability,
@@ -24,6 +25,9 @@ from resume_kit_facade.capabilities import (
     extract_resume_text_capability,
     identify_resume_gaps,
     init_project_capability,
+    rank_edit_candidates_capability,
+    record_edit_feedback_capability,
+    refresh_preferences_capability,
     select_best_resume,
     set_active_capability,
     suggest_terminology,
@@ -31,6 +35,8 @@ from resume_kit_facade.capabilities import (
     validate_resume_truth_capability,
 )
 from resume_kit_facade.models import (
+    AddEvidenceRequest,
+    AddEvidenceResult,
     AlignResumeRequest,
     AlignTerminologyRequest,
     AlignTerminologyResult,
@@ -46,6 +52,11 @@ from resume_kit_facade.models import (
     ExtractResumeTextRequest,
     IdentifyResumeGapsRequest,
     InitProjectRequest,
+    RankEditCandidatesRequest,
+    RankEditCandidatesResult,
+    RecordEditFeedbackRequest,
+    RecordEditFeedbackResult,
+    RefreshPreferencesRequest,
     SelectBestResumeRequest,
     SetActiveRequest,
     SuggestTerminologyRequest,
@@ -65,6 +76,7 @@ __all__ = [
     # registry
     "REGISTRY",
     # capability callables
+    "add_evidence_capability",
     "align_resume",
     "align_terminology",
     "build_candidate_evidence_capability",
@@ -78,6 +90,9 @@ __all__ = [
     "extract_resume_text_capability",
     "identify_resume_gaps",
     "init_project_capability",
+    "rank_edit_candidates_capability",
+    "record_edit_feedback_capability",
+    "refresh_preferences_capability",
     "select_best_resume",
     "set_active_capability",
     "suggest_terminology",
@@ -94,6 +109,7 @@ __all__ = [
     "save_config",
     "set_active",
     # request models
+    "AddEvidenceRequest",
     "AlignResumeRequest",
     "AlignTerminologyRequest",
     "BuildCandidateEvidenceRequest",
@@ -107,12 +123,18 @@ __all__ = [
     "ExtractResumeTextRequest",
     "IdentifyResumeGapsRequest",
     "InitProjectRequest",
+    "RankEditCandidatesRequest",
+    "RecordEditFeedbackRequest",
+    "RefreshPreferencesRequest",
     "SelectBestResumeRequest",
     "SetActiveRequest",
     "SuggestTerminologyRequest",
     "ValidateFaithfulnessRequest",
     "ValidateResumeTruthRequest",
     # response models
+    "AddEvidenceResult",
     "AlignTerminologyResult",
+    "RankEditCandidatesResult",
+    "RecordEditFeedbackResult",
     "TerminologyAlignmentDelta",
 ]
