@@ -138,6 +138,11 @@ This initiative is scoped to the **edit → verify → export** phase and is int
     MCP + API; CLI `build-evidence --approved-claims` parity bug is fixed.
   - REQ-009: `align-terminology` becomes a truth **hard-gate** — a suggestion that fails truth validation
     is rejected/reverted, not merely reported.
+  - REQ-010: `derive_preferences` mines the captured **term-diffs** (specific-over-vague and similar
+    patterns) instead of naive token frequency, so the feedback log's signal actually reaches the profile.
+  - REQ-011: The project `alias_file` **self-heals** — accepted terminology edits in a session
+    deterministically append provenance-tagged candidate aliases (never from rejected edits, never to the
+    seed lexicon), absorbing token-matching brittleness over time.
 - **Non-Functional Requirements**
   - NFR-001: Every new capability follows the existing cross-surface parity norm (facade capability +
     CLI + MCP + API where applicable) with parity tests, consistent with prior phases.
@@ -198,8 +203,10 @@ See the decomposed tasks for per-surface design. Design invariants:
   logged decision. Skill prose is retained only as guidance for the agent's authoring step.
 - Truth `CONTRADICTED` vs `UNSUPPORTED` semantics are fixed at the engine and reflected in every surface
   and in the ranker's `unsupported_claim_risk` signal.
-- The orchestrator's design is captured in an **ADR** before implementation (this piece is the riskiest,
-  most load-bearing, and cross-surface — a wrong contract creates compounding rework).
+- The orchestrator's design is captured in an **ADR** ([[RIT-A-0001]], decided) before implementation
+  (this piece is the riskiest, most load-bearing, and cross-surface — a wrong contract creates compounding
+  rework). Key decisions: wrap the existing `ReviewController`; hard gate = sanctioned-writer + sha256
+  tamper detection; correlate by `path`; single active session; conservative `auto`; provider-optional input.
 - Resumes are the primary subject; terminology alignment shares the same truth-gate discipline.
 
 ## Testing Strategy **[CONDITIONAL: Separate Testing Initiative]**
@@ -251,9 +258,17 @@ Sequenced after [[RIT-I-0014]] lands (reuses RIT-T-0091's config contract). Deco
    `rank-edit-candidates`, `refresh-preferences`, `add-evidence --confirmed`, fix
    `build-evidence --approved-claims` parity. *(opus + high)*
 4. **RIT-T-0098** — ADR + design for the code-owned edit-session orchestrator and hard write gate
-   (session model, mode contract, gate semantics, cross-surface shape). *(opus + high)*
-5. **RIT-T-0099** — Implement the edit-session orchestrator + hard write gate across facade + CLI +
-   MCP + API with parity tests. *(opus + high)*
-6. **RIT-T-0100** — Rewire skills (`inject-keywords`, `rank-edits`, `log-edit-feedback`,
-   `resume-workflow`) onto the orchestrator + gate + reason enum. *(opus + medium)*
-7. **RIT-T-0101** — End-to-end integration test + README reconcile + version bump. *(opus + medium)*
+   (session model, mode contract, gate semantics, cross-surface shape). *(opus + high)* — **DONE:
+   decided as [[RIT-A-0001]].**
+5. **RIT-T-0099** — Implement the edit-session orchestrator + hard write gate (wrap `ReviewController`;
+   `review-edits` group) across facade + CLI + MCP + API with parity tests. *(opus + high)*
+6. **RIT-T-0102** — Diff-aware preference derivation (mine term-diffs; specific-over-vague), replacing the
+   naive token-frequency distiller. *(opus + high)*
+7. **RIT-T-0103** — Auto-grow the project alias index from accepted terminology edits (self-healing
+   token matching). *(opus + medium)* — depends on RIT-T-0099.
+8. **RIT-T-0100** — Rewire skills (`inject-keywords`, `rank-edits`, `log-edit-feedback`,
+   `resume-workflow`) onto the `review-edits` orchestrator + gate + reason enum. *(opus + medium)*
+9. **RIT-T-0101** — End-to-end integration test + README reconcile + version bump. *(opus + medium)*
+
+Dependency spine: 0095/0096 (independent) → 0097 (needs 0091+0096) & 0102 (needs 0096) → 0098 (decided,
+[[RIT-A-0001]]) → 0099 → 0103 (needs 0099) & 0100 (needs 0099) → 0101 (closes).

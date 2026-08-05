@@ -23,7 +23,7 @@ from typing import Any
 
 import typer
 from resume_kit_core import StructuredCompletionProvider
-from resume_kit_core.interface import exit_code_for
+from resume_kit_core.interface import ExitCode, exit_code_for
 from resume_kit_core.response import InterfaceResponse
 from resume_kit_export.models import ExportFormat
 from resume_kit_facade import capabilities as caps
@@ -48,6 +48,7 @@ from resume_kit_facade.models import (
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_schemas import FaithfulnessReport
 
 from resume_kit_cli import io
 from resume_kit_cli.formatters import OutputFormat, render
@@ -104,6 +105,27 @@ def _run(
     response = asyncio.run(coro)
     typer.echo(render(response, output))
     raise typer.Exit(code=exit_code_for(response))
+
+
+def _run_gate(
+    coro: Coroutine[Any, Any, InterfaceResponse[object]],
+    output: OutputFormat,
+) -> None:
+    """Await a gate ``coro``, render it, and exit non-zero when the gate fails.
+
+    A faithfulness report is carried as ``data`` on an otherwise-ok envelope, so
+    ``exit_code_for`` alone would return 0 even when the report failed. This
+    HARD GATE maps ``report.passed is False`` to a non-zero exit (``INVALID_INPUT``)
+    while still printing the full report, so callers can both read the findings
+    and branch on the exit code.
+    """
+    response = asyncio.run(coro)
+    typer.echo(render(response, output))
+    code = exit_code_for(response)
+    data = response.data
+    if isinstance(data, FaithfulnessReport) and not data.passed:
+        code = code or int(ExitCode.INVALID_INPUT)
+    raise typer.Exit(code=code)
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +413,7 @@ def validate_faithfulness(
             source_filename=source,
         )
     options = _options(False, strict, False)
-    _run(caps.validate_faithfulness_capability(request, options), output)
+    _run_gate(caps.validate_faithfulness_capability(request, options), output)
 
 
 @app.command(name="build-evidence")

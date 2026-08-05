@@ -39,6 +39,32 @@ pip install "resume-kit[cli]"
 resume-tool --help
 ```
 
+### Deterministic ingest pipeline
+
+Turning a resume/job file into structured JSON is split into **deterministic
+rails around one confined interpretation step**, so only the text→schema mapping
+needs an agent — extraction and validation are mechanical:
+
+```bash
+resume-tool init                                   # scaffold resume-kit/ + config.json (idempotent)
+resume-tool extract-text resume.docx               # deterministic text (docx/pdf/md/txt), no LLM, no network
+#  → agent maps the extracted text onto the ResumeDocument schema (the one agentic step)
+resume-tool validate-faithfulness \                # HARD GATE: exits non-zero on drift
+  --source resume.docx --json resume-kit/resumes/resume-original.json
+resume-tool set-active \                            # record active pointer + originating source path
+  --resume resumes/resume-original.json --source resume.docx
+```
+
+Text extraction (`markitdown`, `pdfminer.six`, `python-docx`) is bundled in the
+**base** install — docx/pdf/md/txt all extract deterministically with no optional
+extra. `validate-faithfulness` is a machine gate: it diffs the produced JSON
+against the source (bullet/section parity, dropped/added tokens, altered
+high-signal fields, non-ASCII scan) and **exits non-zero** when the conversion is
+not faithful, so an unfaithful conversion never silently reaches disk. The
+`resume-kit/` working directory and its `config.json` (active resume/job pointers,
+their source paths, and `alias_file`) are owned by code via `init` / `set-active`
+— not hand-authored.
+
 ## Building & publishing
 
 Build the umbrella wheel and sdist locally with [`uv`](https://docs.astral.sh/uv/):
