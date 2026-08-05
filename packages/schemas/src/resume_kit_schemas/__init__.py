@@ -35,6 +35,16 @@ from .best_practices import (
     ProvenanceKind,
     ResolutionKind,
 )
+from .scoredoc import (
+    SCOREDOC_SCHEMA_VERSION,
+    KeywordZone,
+    ScoreDegree,
+    ScoreDoc,
+    ScoreEntities,
+    ScoreRole,
+    ScoreSection,
+    ZonedKeywordIndex,
+)
 from .change import (
     ChangeAction,
     ChangeProposal,
@@ -95,6 +105,15 @@ from .resume import (
 __version__ = "0.0.0"
 
 __all__ = [
+    # scoredoc (RIT-I-0017)
+    "SCOREDOC_SCHEMA_VERSION",
+    "KeywordZone",
+    "ScoreDegree",
+    "ScoreDoc",
+    "ScoreEntities",
+    "ScoreRole",
+    "ScoreSection",
+    "ZonedKeywordIndex",
     # best-practices (RIT-I-0016)
     "BEST_PRACTICES_SCHEMA_VERSION",
     "BestPracticesFinding",
