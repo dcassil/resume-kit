@@ -351,6 +351,79 @@ _FORMATTING_RISK_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
+#: Prohibited / discouraged personal-information patterns (industry guidance:
+#: no SSN, DOB, marital status, full street address, or "references available").
+_PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+        "A Social Security number appears in the resume — never include SSNs or"
+        " government IDs; remove it.",
+    ),
+    (
+        re.compile(r"\b(date of birth|d\.?o\.?b\.?|birthdate)\b", re.IGNORECASE),
+        "Date of birth detected — omit age/DOB unless a specific country/application"
+        " requires it.",
+    ),
+    (
+        re.compile(r"\bmarital status\b", re.IGNORECASE),
+        "Marital status detected — remove it; it is not relevant and invites bias.",
+    ),
+    (
+        re.compile(r"references\s+available\s+upon\s+request", re.IGNORECASE),
+        "'References available upon request' detected — it wastes space; remove it.",
+    ),
+    (
+        re.compile(
+            r"\b\d{1,5}\s+([A-Za-z0-9.]+\s){1,4}"
+            r"(street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct)\b",
+            re.IGNORECASE,
+        ),
+        "A full street address appears present — a city and state/metro is enough;"
+        " a full street address is usually unnecessary.",
+    ),
+]
+
+#: Placeholder / leftover-AI-prompt markers that must never ship in a resume.
+_PLACEHOLDER_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"lorem ipsum|\bTODO\b|\[[^\]]*(placeholder|your name|insert)[^\]]*\]", re.IGNORECASE),
+        "Placeholder/template text detected — remove all placeholder text before"
+        " submitting.",
+    ),
+    (
+        re.compile(r"as an ai|as a language model|i cannot|i'm sorry, but", re.IGNORECASE),
+        "Text that looks like leftover AI-assistant output detected — rewrite it in"
+        " your own voice; never leave AI prompt/response fragments.",
+    ),
+]
+
+#: Conventional section-name keywords; a custom section whose title matches none
+#: of these reads as a non-standard heading to an ATS/recruiter.
+_CONVENTIONAL_SECTION_KEYWORDS: tuple[str, ...] = (
+    "summary", "objective", "profile", "about",
+    "experience", "employment", "work", "history",
+    "education", "academic",
+    "skill", "technical", "competenc",
+    "certification", "license", "credential",
+    "project", "portfolio",
+    "publication", "award", "honor", "achievement",
+    "volunteer", "leadership", "activit",
+    "language", "interest", "reference",
+)
+
+_MONTH_TOKEN_RE = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", re.IGNORECASE
+)
+
+
+def _has_month(text: str) -> bool:
+    return bool(_MONTH_TOKEN_RE.search(text))
+
+
+def _has_year(text: str) -> bool:
+    return bool(re.search(r"(19|20)\d{2}", text))
+
+
 def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
     """Deterministic structural checks that enrich recommendations.
 
@@ -420,6 +493,45 @@ def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
             "No date references detected in resume text — ensure each position includes"
             " date ranges (e.g. 'Jan 2020 – Present')."
         )
+
+    # --- Date-format consistency across work experience ---
+    dated = [
+        str(e.get("years", ""))
+        for e in work_exp
+        if isinstance(e, dict) and e.get("years")
+    ]
+    month_level = [d for d in dated if _has_month(d)]
+    year_only = [d for d in dated if _has_year(d) and not _has_month(d)]
+    if month_level and year_only:
+        tips.append(
+            "Inconsistent date formats across positions — some use month-level dates"
+            " and others year-only; use one consistent date format throughout."
+        )
+
+    # --- Non-standard section headings ---
+    custom_sections: dict[str, Any] = resume.get("customSections", {}) or {}
+    nonstandard = [
+        name
+        for name in custom_sections
+        if not any(kw in name.lower() for kw in _CONVENTIONAL_SECTION_KEYWORDS)
+    ]
+    if nonstandard:
+        shown = ", ".join(f"'{n}'" for n in nonstandard[:3])
+        tips.append(
+            f"Non-standard section heading(s) detected ({shown}) — use conventional"
+            " names (Summary, Experience, Skills, Education, Certifications, Projects)"
+            " so an ATS can categorize them."
+        )
+
+    # --- Prohibited personal information ---
+    for pattern, message in _PII_PATTERNS:
+        if pattern.search(full_text):
+            tips.append(message)
+
+    # --- Placeholder / leftover-AI text ---
+    for pattern, message in _PLACEHOLDER_PATTERNS:
+        if pattern.search(full_text):
+            tips.append(message)
 
     # --- Basic formatting risk checks ---
     for pattern, message in _FORMATTING_RISK_PATTERNS:

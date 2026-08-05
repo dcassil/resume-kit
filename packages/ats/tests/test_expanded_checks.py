@@ -268,3 +268,91 @@ def test_no_duplicate_recommendations() -> None:
     assert len(result.recommendations) == len(set(result.recommendations)), (
         "Duplicate recommendations detected"
     )
+
+
+# ---------------------------------------------------------------------------
+# RIT-I-0016: guidance-driven structural checks (additive recommendations)
+# ---------------------------------------------------------------------------
+
+
+def test_ssn_flagged() -> None:
+    resume = {**_COMPLETE_RESUME, "summary": "Contact 123-45-6789 for details."}
+    assert _has_tip(_expanded_recommendations(resume), "social security")
+
+
+def test_dob_and_marital_status_flagged() -> None:
+    resume = {**_COMPLETE_RESUME, "summary": "Date of Birth: 1990. Marital status: single."}
+    tips = _expanded_recommendations(resume)
+    assert _has_tip(tips, "date of birth")
+    assert _has_tip(tips, "marital status")
+
+
+def test_references_available_flagged() -> None:
+    resume = {**_COMPLETE_RESUME, "summary": "References available upon request."}
+    assert _has_tip(_expanded_recommendations(resume), "references available")
+
+
+def test_street_address_flagged() -> None:
+    resume = {
+        **_COMPLETE_RESUME,
+        "personalInfo": {**_COMPLETE_RESUME["personalInfo"], "location": "123 Main Street, Springfield"},
+    }
+    assert _has_tip(_expanded_recommendations(resume), "street address")
+
+
+def test_placeholder_text_flagged() -> None:
+    resume = {**_COMPLETE_RESUME, "summary": "Lorem ipsum dolor sit amet."}
+    assert _has_tip(_expanded_recommendations(resume), "placeholder")
+
+
+def test_leftover_ai_text_flagged() -> None:
+    resume = {**_COMPLETE_RESUME, "summary": "As an AI language model, I built APIs."}
+    assert _has_tip(_expanded_recommendations(resume), "ai-assistant")
+
+
+def test_inconsistent_date_formats_flagged() -> None:
+    resume = {
+        **_COMPLETE_RESUME,
+        "workExperience": [
+            {"title": "A", "company": "X", "years": "Jan 2020 - Present", "description": []},
+            {"title": "B", "company": "Y", "years": "2016 - 2019", "description": []},
+        ],
+    }
+    assert _has_tip(_expanded_recommendations(resume), "inconsistent date formats")
+
+
+def test_consistent_dates_not_flagged() -> None:
+    resume = {
+        **_COMPLETE_RESUME,
+        "workExperience": [
+            {"title": "A", "company": "X", "years": "2020 - 2022", "description": []},
+            {"title": "B", "company": "Y", "years": "2016 - 2019", "description": []},
+        ],
+    }
+    assert not _has_tip(_expanded_recommendations(resume), "inconsistent date formats")
+
+
+def test_nonstandard_section_heading_flagged() -> None:
+    resume = {
+        **_COMPLETE_RESUME,
+        "customSections": {"My Superpowers": {"sectionType": "text", "text": "stuff"}},
+    }
+    assert _has_tip(_expanded_recommendations(resume), "non-standard section")
+
+
+def test_conventional_custom_section_not_flagged() -> None:
+    resume = {
+        **_COMPLETE_RESUME,
+        "customSections": {"Certifications": {"sectionType": "stringList", "strings": ["AWS"]}},
+    }
+    assert not _has_tip(_expanded_recommendations(resume), "non-standard section")
+
+
+def test_complete_resume_no_new_structural_tips() -> None:
+    tips = _expanded_recommendations(_COMPLETE_RESUME)
+    for fragment in (
+        "social security", "date of birth", "marital status", "references available",
+        "street address", "placeholder", "ai-assistant", "inconsistent date formats",
+        "non-standard section",
+    ):
+        assert not _has_tip(tips, fragment), (fragment, tips)
