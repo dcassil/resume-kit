@@ -439,3 +439,38 @@ Plugin-only (no engine/PyPI change).
 
 Wave 1 DONE (all 3). 0082 review-tailored-resume skill (advice-only subagent critique → structured review/<session>.md). 0083 resume-workflow optional step 5 + SessionStart once-per-session offer (marker .cache/review-offered). 0084 docs/dev/debug-refine.md runbook + .gitignore + refine-log.
 **RIT-I-0012 COMPLETE.** Gate: plugin validate OK, hook bash -n OK, ruff+mypy clean (80 src), 2715 passed/1 skipped. Plugin 0.4.0. Plugin-only (no PyPI). RIT-I-0013 remains in discovery.
+
+---
+
+## RIT-I-0013 — Deterministic preference learning (ON FEATURE BRANCH feat/rit-i-0013-preference-learning)
+
+Non-LLM only (LLM path excluded). New package resume_kit_feedback. Decomposed into 4 tasks.
+- RIT-T-0085 (opus+high) scaffold feedback pkg + schemas (EditFeedback/UserPreferenceProfile/CandidateFeatures/PreferencePair) + append-only edit-feedback.jsonl log I/O + umbrella wiring + boundary tests. FOUNDATION.
+- RIT-T-0086 (opus+high) preference derivation (confidence tiers + decay) + Preference-RAG retrieval (deterministic, no embeddings).
+- RIT-T-0087 (opus+high) CandidateFeatures extraction (reuse ats/matching/evidence scorers) + pluggable Ranker + heuristic ranker + explanations + TRUTH HARD-BLOCK.
+- RIT-T-0088 (opus+medium) plugin skills (rank-edits + log-edit-feedback) + resume-workflow optional loop + integration test (reproducible for fixed log) + registration + version.
+Wave plan: W1=0085; W2=0086 ∥ 0087 (agents do NOT edit feedback/__init__.py or reconcile pyproject — orchestrator wires exports/deps at the gate); W3=0088. Branch → PR at end (not main).
+
+### Wave 1
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0085 scaffold + schemas + log | opus+high | dispatched |
+
+Wave 1 (0085) DONE: resume_kit_feedback pkg + schemas (EditFeedback/UserPreferenceProfile/CandidateFeatures/PreferencePair) + append-only log I/O + diff_terms + umbrella wiring + boundary tests. Gate: 2814 passed, ruff+mypy clean (83 src).
+
+### Wave 2 (parallel; both add modules to packages/feedback, NOT __init__.py — orchestrator wires exports at gate)
+| Task | Modules | Agent |
+| ---- | ------- | ----- |
+| RIT-T-0086 preference + RAG | feedback/preferences.py + retrieval.py | opus+high |
+| RIT-T-0087 features + ranker | feedback/features.py + ranker.py (+ pyproject deps ats/matching/evidence) | opus+high |
+
+Wave 2 DONE. 0086 preferences.py (confidence tiers WEAK/MOD/STRONG=1/3/7, half-life 30d decay, undone 2× negative) + retrieval.py (transparent additive similarity; EditContext/PreferenceContext/RetrievedEdit). 0087 features.py (extract_features reuses ats/matching/evidence scorers) + ranker.py (Ranker Protocol + HeuristicRanker, documented weights, TRUTH HARD-BLOCK excludes fabricated; Candidate/FeatureContext/RankedCandidate) + pyproject deps ats/matching/evidence. Orchestrator wired __init__ (17 exports); note 0087 relaxed feedback package boundary test allowlist to {schemas,ats,matching,evidence}.
+Gate after Wave 2: ruff+mypy clean (87 src), 2944 passed/1 skipped.
+
+### Wave 3
+| Task | Agent | Result |
+| ---- | ----- | ------ |
+| RIT-T-0088 skills + integration + registration + version | opus+medium | dispatched |
+
+Wave 3 (0088) DONE: rank-edits + log-edit-feedback agent-driven skills, resume-workflow optional loop, integration test (truth hard-block + reproducibility), plugin 0.4.0→0.5.0.
+**RIT-I-0013 COMPLETE** on branch feat/rit-i-0013-preference-learning. Gate: ruff+mypy clean (87 src), plugin validate OK, 2947 passed/1 skipped. Engine added resume_kit_feedback (would need PyPI republish to ship; branch → PR, not main).

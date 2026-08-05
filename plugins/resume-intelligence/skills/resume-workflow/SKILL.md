@@ -57,6 +57,17 @@ opt-in and never auto-runs.
    `-original.json` pristine. **LLM auto-rewrite is disabled — there is no
    `align-resume`.** All edits are targeted, agent-made, and truthful.
 
+   *Preference-learning loop (optional — no LLM):* when several truthful
+   candidate edits are available for a pending improvement, you may
+   (a) run **rank-edits** to rank the candidates against past outcomes + learned
+   preferences and present the best one(s) with an explanation (it never
+   auto-applies; the truth hard-block excludes any fabricated candidate),
+   (b) apply the chosen candidate via the truth-gated improve skills above
+   (`inject-keywords` / `update-terminology`), then
+   (c) run **log-edit-feedback** to record the outcome so future rankings
+   improve. This loop is entirely optional — skip it and the Improve phase still
+   works exactly as described above.
+
 5. **Second-agent review** *(optional — advice-only)* — run
    **review-tailored-resume**.
    gate: the **new** tailored resume JSON + the **original** resume JSON + the

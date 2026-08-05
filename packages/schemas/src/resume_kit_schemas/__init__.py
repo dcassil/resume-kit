@@ -39,6 +39,13 @@ from .change import (
 )
 from .common import Artifact, ArtifactKind, Severity, Warning
 from .evidence import CandidateEvidence, EvidenceKind
+from .feedback import (
+    CandidateFeatures,
+    EditFeedback,
+    EditOutcome,
+    PreferencePair,
+    UserPreferenceProfile,
+)
 from .job import JobDescription, Requirement, RequirementKind
 from .provenance import ClaimProvenance, ProvenanceStatus
 from .results import (
@@ -97,6 +104,12 @@ __all__ = [
     # evidence
     "CandidateEvidence",
     "EvidenceKind",
+    # feedback (preference learning)
+    "EditFeedback",
+    "EditOutcome",
+    "UserPreferenceProfile",
+    "CandidateFeatures",
+    "PreferencePair",
     # provenance
     "ClaimProvenance",
     "ProvenanceStatus",

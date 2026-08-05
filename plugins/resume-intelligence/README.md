@@ -90,6 +90,12 @@ facts, bypass evidence, or create business rules in prompt text.
 3. **Improve** (optional, no LLM, truth-gated) — `inject-keywords` (surface
    missing-but-true keywords), `update-terminology` (mirror the employer's exact
    wording for a synonym the resume already satisfies).
+   *Preference-learning loop (optional, no LLM):* `rank-edits` ranks the truthful
+   candidate edits against past outcomes + learned preferences and presents the
+   best one(s) with an explanation (human-in-loop, never auto-applies; a
+   fabricated candidate is truth-hard-blocked); apply the chosen one via the
+   improve skills above; then `log-edit-feedback` records the outcome so future
+   rankings improve.
 4. **Verify** — `validate-resume-truth`; then re-run the checks to see the delta.
 5. **Review** (optional, no LLM provider) — `review-tailored-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes
@@ -120,6 +126,8 @@ by keyword matching + terminology).
 | `export-resume` | `resume-tool export` | `resume_export` | No (deterministic) |
 | `manage-synonyms` | (agent-driven) | — | No (grows alias index) |
 | `review-tailored-resume` | (agent-driven, advice-only) | — | No (subagent) |
+| `rank-edits` | (agent-driven; drives `resume_kit_feedback`, no CLI/MCP) | — | No (deterministic ranking) |
+| `log-edit-feedback` | (agent-driven; drives `resume_kit_feedback`, no CLI/MCP) | — | No (records outcome) |
 | `resume-workflow` | (guide) | — | No (orchestration) |
 
 **Disabled / not surfaced as skills:** LLM auto-rewrite (`align-resume`) is
