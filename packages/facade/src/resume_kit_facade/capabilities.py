@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Awaitable, Callable
+from datetime import date
 from pathlib import Path
 
 from resume_kit_alignment import accept_terminology_alignment
@@ -82,6 +83,7 @@ from resume_kit_schemas import (
     AlignmentResult,
     ATSScore,
     AtsStructureReport,
+    BestPracticesReport,
     CandidateEvidence,
     EvidenceKind,
     FaithfulnessReport,
@@ -94,16 +96,24 @@ from resume_kit_schemas import (
     TerminologyAlignment,
     TruthReport,
 )
+from resume_kit_scoring import analyze_best_practices as _analyze_best_practices
+from resume_kit_scoring import project_scoredoc as _project_scoredoc
 
 from resume_kit_facade import edit_session as _edit_session
 from resume_kit_facade.alias_scope import use_alias_file
+from resume_kit_facade.baseline import build_base as _build_base
+from resume_kit_facade.baseline import build_standard as _build_standard
 from resume_kit_facade.models import (
     AddEvidenceRequest,
     AddEvidenceResult,
     AlignResumeRequest,
     AlignTerminologyRequest,
     AlignTerminologyResult,
+    AnalyzeBestPracticesRequest,
+    BaseBuildResult,
+    BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildStandardRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -128,6 +138,7 @@ from resume_kit_facade.models import (
     SessionPromptRequest,
     SessionStatusRequest,
     SetActiveRequest,
+    StandardBuildResult,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
     ValidateFaithfulnessRequest,
@@ -1059,6 +1070,95 @@ async def set_active_capability(
 
 
 # ---------------------------------------------------------------------------
+# Baselining capabilities (RIT-I-0016)
+# ---------------------------------------------------------------------------
+
+#: Dates are irrelevant to generic best-practices analysis; project the ScoreDoc
+#: at a fixed reference date so the report is byte-identical across surfaces.
+_BEST_PRACTICES_REF_DATE = date(2000, 1, 1)
+
+
+async def build_base_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the ``original -> base`` write path (RIT-T-0115).
+
+    Deterministic and filesystem-local: never requires a provider and ignores
+    ``no_llm``. Delegates to :func:`resume_kit_facade.baseline.build_base`, which
+    runs the structural check, applies auto-safe fixes, enforces the
+    claim-preservation gate, writes ``<name>-base.json`` and records the ``base``
+    pointer. Returns a serializable :class:`BaseBuildResult`.
+    """
+    if not isinstance(request, BuildBaseRequest):
+        return from_resume_kit_error(_bad_request(request, "BuildBaseRequest"))
+    try:
+        result = _build_base(request.root, mode=request.mode)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
+        return from_exception(exc)
+    response = BaseBuildResult(
+        base_path=result.base_path,
+        applied=list(result.applied),
+        deferred=list(result.deferred),
+    )
+    return build_success(response, strict=options.strict)
+
+
+async def build_standard_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the ``base -> standard`` best-practices write path (RIT-T-0118).
+
+    Deterministic and filesystem-local: never requires a provider and ignores
+    ``no_llm``. Delegates to :func:`resume_kit_facade.baseline.build_standard`,
+    which analyzes best practices, applies auto-suggestible edits plus any
+    user-supplied ``answers`` rewrites, enforces the claim-preservation gate,
+    writes ``<name>-standard.json`` and records the ``standard`` pointer. Returns
+    a serializable :class:`StandardBuildResult`.
+    """
+    if not isinstance(request, BuildStandardRequest):
+        return from_resume_kit_error(_bad_request(request, "BuildStandardRequest"))
+    try:
+        result = _build_standard(request.root, answers=request.answers)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
+        return from_exception(exc)
+    response = StandardBuildResult(
+        standard_path=result.standard_path,
+        applied=list(result.applied),
+        deferred=list(result.deferred),
+    )
+    return build_success(response, strict=options.strict)
+
+
+async def analyze_best_practices_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the generic (job-independent) best-practices score (RIT-T-0117).
+
+    Pure and deterministic: never requires a provider and ignores ``no_llm``.
+    Projects a ScoreDoc for the resume at a fixed reference date and returns the
+    :class:`~resume_kit_schemas.BestPracticesReport`. Introduces no per-item LLM
+    calls, so the report is byte-identical across every surface (NFR-001).
+    """
+    if not isinstance(request, AnalyzeBestPracticesRequest):
+        return from_resume_kit_error(_bad_request(request, "AnalyzeBestPracticesRequest"))
+    try:
+        scoredoc = _project_scoredoc(request.resume, reference_date=_BEST_PRACTICES_REF_DATE)
+        report: BestPracticesReport = _analyze_best_practices(request.resume, scoredoc)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
+# ---------------------------------------------------------------------------
 # Capability registry
 # ---------------------------------------------------------------------------
 
@@ -1091,4 +1191,7 @@ REGISTRY: dict[str, Capability] = {
     "align-terminology": align_terminology,
     "init-project": init_project_capability,
     "set-active": set_active_capability,
+    "build-base": build_base_capability,
+    "build-standard": build_standard_capability,
+    "analyze-best-practices": analyze_best_practices_capability,
 }

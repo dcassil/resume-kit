@@ -111,6 +111,9 @@ def test_registry_contains_all_capabilities() -> None:
         "align-terminology",
         "init-project",
         "set-active",
+        "build-base",
+        "build-standard",
+        "analyze-best-practices",
     }
 
 

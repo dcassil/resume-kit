@@ -166,3 +166,22 @@ def load_json_value(source: str) -> object:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
         raise _fail(f"Invalid JSON in {source}: {exc}") from exc
+
+
+def load_answers(source: str | None) -> dict[str, str] | None:
+    """Load a best-practices answers map (finding key -> rewrite) from JSON.
+
+    Returns ``None`` when no source is given. The file must contain a JSON
+    object whose keys and values are all strings.
+    """
+    if source is None:
+        return None
+    payload = load_json_value(source)
+    if not isinstance(payload, dict):
+        raise _fail(f"Expected a JSON object of answers in {source}.")
+    answers: dict[str, str] = {}
+    for key, value in payload.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise _fail(f"Answers in {source} must map strings to strings.")
+        answers[key] = value
+    return answers

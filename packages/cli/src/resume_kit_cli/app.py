@@ -31,7 +31,10 @@ from resume_kit_facade.models import (
     AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
+    AnalyzeBestPracticesRequest,
+    BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildStandardRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -732,6 +735,53 @@ def set_active(
     )
     options = _options(False, strict, False)
     _run(caps.set_active_capability(request, options), output)
+
+
+# ---------------------------------------------------------------------------
+# Baselining commands (RIT-I-0016)
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="build-base")
+def build_base(
+    root: str = _Root,
+    mode: str = typer.Option("auto", "--mode", help="Fix mode (only 'auto' is supported)."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the original->base write path behind the claim-preservation gate."""
+    request = BuildBaseRequest(root=root, mode=mode)
+    options = _options(False, strict, False)
+    _run(caps.build_base_capability(request, options), output)
+
+
+@app.command(name="build-standard")
+def build_standard(
+    root: str = _Root,
+    answers: str | None = typer.Option(
+        None,
+        "--answers",
+        help="Optional JSON path mapping finding keys to user-supplied rewrites.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the base->standard best-practices write path behind the gate."""
+    request = BuildStandardRequest(root=root, answers=io.load_answers(answers))
+    options = _options(False, strict, False)
+    _run(caps.build_standard_capability(request, options), output)
+
+
+@app.command(name="analyze-best-practices")
+def analyze_best_practices(
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the generic (job-independent) best-practices score on a resume."""
+    request = AnalyzeBestPracticesRequest(resume=io.load_resume(resume))
+    options = _options(False, strict, False)
+    _run(caps.analyze_best_practices_capability(request, options), output)
 
 
 @review_edits_app.command(name="open")

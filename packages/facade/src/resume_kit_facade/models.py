@@ -126,6 +126,85 @@ class SetActiveRequest:
 
 
 @dataclass(frozen=True)
+class BuildBaseRequest:
+    """Inputs for the build-base capability (RIT-I-0016, RIT-T-0115).
+
+    Deterministic, filesystem-local: runs the ``original -> base`` write path on
+    the active original resume under ``root`` (structural check → auto-safe fixes
+    → claim-preservation gate → persist ``<name>-base.json`` → record the ``base``
+    pointer). ``mode`` currently supports only ``"auto"`` (auto-safe fixes;
+    ``needs_judgment`` findings are deferred for the ``standard`` walkthrough).
+    """
+
+    root: str | Path = "."
+    mode: str = "auto"
+
+
+@dataclass(frozen=True)
+class BuildStandardRequest:
+    """Inputs for the build-standard capability (RIT-I-0016, RIT-T-0118).
+
+    Deterministic, filesystem-local: runs the ``base -> standard`` best-practices
+    write path under ``root`` (analyze best practices → apply auto-suggestible
+    edits + any user-supplied ``answers`` rewrites keyed by
+    ``resume_kit_scoring.finding_key`` → claim-preservation gate → persist
+    ``<name>-standard.json`` → record the ``standard`` pointer). Findings needing
+    user input that were not answered are returned as ``deferred``.
+    """
+
+    root: str | Path = "."
+    answers: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class AnalyzeBestPracticesRequest:
+    """Inputs for the analyze-best-practices capability (RIT-I-0016, RIT-T-0117).
+
+    Pure and deterministic: projects a ScoreDoc for ``resume`` at a fixed
+    placement reference date (dates are irrelevant to generic best-practices
+    analysis) and returns the generic, job-independent
+    :class:`~resume_kit_schemas.BestPracticesReport`. Never requires a provider
+    and ignores ``no_llm``; introduces no per-item LLM calls (NFR-001).
+    """
+
+    resume: ResumeDocument
+
+
+class BaseBuildResult(BaseModel):
+    """Serializable outcome of the ``original -> base`` build (RIT-T-0115).
+
+    Frozen facade response mirroring the engine's ``BuildBaseResult`` dataclass
+    so CLI/MCP/API can return the write-path outcome as JSON.
+    """
+
+    model_config = {"frozen": True}
+
+    base_path: str = Field(description="Written base version path, relative to resume-kit/.")
+    applied: list[str] = Field(default_factory=list, description="Auto-safe fixes applied.")
+    deferred: list[str] = Field(
+        default_factory=list, description="Findings deferred to the standard walkthrough."
+    )
+
+
+class StandardBuildResult(BaseModel):
+    """Serializable outcome of the ``base -> standard`` build (RIT-T-0118).
+
+    Frozen facade response mirroring the engine's ``BuildStandardResult``
+    dataclass so CLI/MCP/API can return the write-path outcome as JSON.
+    """
+
+    model_config = {"frozen": True}
+
+    standard_path: str = Field(
+        description="Written standard version path, relative to resume-kit/."
+    )
+    applied: list[str] = Field(default_factory=list, description="Best-practices edits applied.")
+    deferred: list[str] = Field(
+        default_factory=list, description="Findings needing user input that were not answered."
+    )
+
+
+@dataclass(frozen=True)
 class ValidateFaithfulnessRequest:
     """Inputs for the validate-faithfulness capability (RIT-T-0092).
 
