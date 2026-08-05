@@ -74,6 +74,19 @@ class ProjectConfig(BaseModel):
             relative to ``resume-kit/`` by convention.
         active_evidence: Path of the active evidence JSON file, relative to
             ``resume-kit/`` by convention.
+        base_resume: Path of the ``base`` resume JSON — ``active_resume``
+            (original) after ATS structural/format/parse fixes, faithful to the
+            original (RIT-I-0016). ``None`` until baselining produces it.
+        base_derived_from: The resume path ``base_resume`` was derived from (by
+            convention the original ``active_resume``), recording lineage. Only
+            written together with ``base_resume``.
+        standard_resume: Path of the ``standard`` resume JSON — ``base`` after
+            the generic best-practices human-in-the-loop pass (RIT-I-0016). This
+            is the default input for all downstream tailoring once present.
+            ``None`` until the walkthrough produces it.
+        standard_derived_from: The resume path ``standard_resume`` was derived
+            from (by convention ``base_resume``), recording lineage. Only written
+            together with ``standard_resume``.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -85,6 +98,10 @@ class ProjectConfig(BaseModel):
     active_job_source: str | None = None
     evidence_file: str | None = None
     active_evidence: str | None = None
+    base_resume: str | None = None
+    base_derived_from: str | None = None
+    standard_resume: str | None = None
+    standard_derived_from: str | None = None
 
 
 def working_dir(root: str | Path) -> Path:
@@ -231,5 +248,53 @@ def set_active(
     if job is not None:
         config.active_job = job
         config.active_job_source = job_source
+    save_config(root, config)
+    return config
+
+
+def resolve_active_resume(config: ProjectConfig) -> str | None:
+    """Resolve the resume path downstream tailoring should consume.
+
+    Implements the version-lineage precedence ``standard -> base -> original``:
+    prefer the best-practices-groomed ``standard_resume``, then the ATS-cleaned
+    ``base_resume``, then the immutable original ``active_resume``. A project
+    that only ever set ``active_resume`` (the pre-RIT-I-0016 world) therefore
+    resolves to exactly that original, so this is fully backward-compatible.
+    Returns ``None`` only when no resume pointer of any tier is set.
+    """
+    return config.standard_resume or config.base_resume or config.active_resume
+
+
+def set_version(
+    root: str | Path,
+    *,
+    base: str | None = None,
+    base_derived_from: str | None = None,
+    standard: str | None = None,
+    standard_derived_from: str | None = None,
+) -> ProjectConfig:
+    """Record the ``base`` and/or ``standard`` version pointers plus lineage.
+
+    Mirrors :func:`set_active`'s contract: loads the existing config (preserving
+    unknown keys and any pointer not being changed), sets whichever of
+    ``base_resume`` / ``standard_resume`` (and their ``*_derived_from``
+    companions) were supplied, and saves atomically. A ``*_derived_from`` given
+    without its matching pointer is a caller error (``ValueError``) so lineage
+    can never drift away from the version it describes. Additive: it never
+    touches ``active_resume`` (the original). Returns the updated config.
+    """
+    if base is None and standard is None:
+        raise ValueError("set_version requires at least one of base or standard.")
+    if base_derived_from is not None and base is None:
+        raise ValueError("base_derived_from given without a base.")
+    if standard_derived_from is not None and standard is None:
+        raise ValueError("standard_derived_from given without a standard.")
+    config = load_config(root)
+    if base is not None:
+        config.base_resume = base
+        config.base_derived_from = base_derived_from
+    if standard is not None:
+        config.standard_resume = standard
+        config.standard_derived_from = standard_derived_from
     save_config(root, config)
     return config

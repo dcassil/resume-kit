@@ -173,3 +173,89 @@ async def test_set_active_capability_orphan_source_errors(tmp_path: Path) -> Non
         SetActiveRequest(resume_source="/orphan.docx", root=str(tmp_path)), _OPTIONS
     )
     assert response.errors != []
+
+
+# --- RIT-T-0113: version lineage (original -> base -> standard) ---------------
+
+
+def test_resolve_active_resume_precedence_and_fallbacks() -> None:
+    from resume_kit_facade.project_config import resolve_active_resume
+
+    # legacy: only the original is set -> resolves to the original
+    original_only = ProjectConfig(active_resume="resumes/x-original.json")
+    assert resolve_active_resume(original_only) == "resumes/x-original.json"
+
+    # base present -> base wins over original
+    with_base = ProjectConfig(
+        active_resume="resumes/x-original.json",
+        base_resume="resumes/x-base.json",
+    )
+    assert resolve_active_resume(with_base) == "resumes/x-base.json"
+
+    # standard present -> standard wins over base and original
+    with_standard = ProjectConfig(
+        active_resume="resumes/x-original.json",
+        base_resume="resumes/x-base.json",
+        standard_resume="resumes/x-standard.json",
+    )
+    assert resolve_active_resume(with_standard) == "resumes/x-standard.json"
+
+    # nothing set -> None
+    assert resolve_active_resume(ProjectConfig()) is None
+
+
+def test_set_version_records_pointers_and_lineage(tmp_path: Path) -> None:
+    from resume_kit_facade.project_config import resolve_active_resume, set_version
+
+    set_active(tmp_path, resume="resumes/x-original.json")
+    cfg = set_version(
+        tmp_path,
+        base="resumes/x-base.json",
+        base_derived_from="resumes/x-original.json",
+    )
+    assert cfg.base_resume == "resumes/x-base.json"
+    assert cfg.base_derived_from == "resumes/x-original.json"
+    # original pointer untouched (additive)
+    assert cfg.active_resume == "resumes/x-original.json"
+    assert resolve_active_resume(cfg) == "resumes/x-base.json"
+
+    cfg = set_version(
+        tmp_path,
+        standard="resumes/x-standard.json",
+        standard_derived_from="resumes/x-base.json",
+    )
+    # base pointer preserved across a second version write
+    assert cfg.base_resume == "resumes/x-base.json"
+    assert cfg.standard_resume == "resumes/x-standard.json"
+    assert cfg.standard_derived_from == "resumes/x-base.json"
+    assert resolve_active_resume(cfg) == "resumes/x-standard.json"
+
+
+def test_set_version_requires_a_pointer_and_guards_lineage(tmp_path: Path) -> None:
+    from resume_kit_facade.project_config import set_version
+
+    with pytest.raises(ValueError):
+        set_version(tmp_path)
+    with pytest.raises(ValueError):
+        set_version(tmp_path, base_derived_from="resumes/x-original.json")
+    with pytest.raises(ValueError):
+        set_version(tmp_path, standard_derived_from="resumes/x-base.json")
+
+
+def test_version_pointers_round_trip_and_preserve_unknown_keys(tmp_path: Path) -> None:
+    # A legacy config with an unknown preference key + only the original.
+    cfg = ProjectConfig(active_resume="resumes/x-original.json")
+    cfg.__pydantic_extra__["preference_state"] = {"weight": 3}  # type: ignore[index]
+    save_config(tmp_path, cfg)
+
+    from resume_kit_facade.project_config import set_version
+
+    set_version(tmp_path, base="resumes/x-base.json", base_derived_from="resumes/x-original.json")
+    reloaded = load_config(tmp_path)
+    # new lineage fields persisted
+    assert reloaded.base_resume == "resumes/x-base.json"
+    # unknown key survived the version write untouched
+    assert reloaded.model_dump()["preference_state"] == {"weight": 3}
+    # backward-compat: a config with no base/standard loads with None defaults
+    legacy = ProjectConfig.model_validate({"active_resume": "resumes/y-original.json"})
+    assert legacy.base_resume is None and legacy.standard_resume is None

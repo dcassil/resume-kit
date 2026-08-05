@@ -85,8 +85,10 @@ from resume_kit_facade.project_config import (
     ProjectConfig,
     init_project,
     load_config,
+    resolve_active_resume,
     save_config,
     set_active,
+    set_version,
 )
 
 __all__ = [
@@ -129,8 +131,10 @@ __all__ = [
     "ProjectConfig",
     "init_project",
     "load_config",
+    "resolve_active_resume",
     "save_config",
     "set_active",
+    "set_version",
     # request models
     "AddEvidenceRequest",
     "AlignResumeRequest",

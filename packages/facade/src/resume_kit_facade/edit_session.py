@@ -44,7 +44,12 @@ from resume_kit_facade.models import (
     EditSessionStatus,
     ReconcileSessionResult,
 )
-from resume_kit_facade.project_config import atomic_write_json, load_config, working_dir
+from resume_kit_facade.project_config import (
+    atomic_write_json,
+    load_config,
+    resolve_active_resume,
+    working_dir,
+)
 
 _SESSION_RELATIVE = Path("working") / "edit-session.json"
 _TERMINAL = {
@@ -77,7 +82,10 @@ def open_session(
     if mode not in _MODES:
         _raise_gate("invalid_mode", f"Unsupported edit-session mode: {mode!r}.")
     config = load_config(root)
-    active_resume = config.active_resume
+    # Tailor from the resolved lineage input (standard -> base -> original,
+    # RIT-I-0016). Legacy projects with only ``active_resume`` resolve to that
+    # original unchanged, preserving prior behavior.
+    active_resume = resolve_active_resume(config)
     active_job = config.active_job
     if active_resume is None or active_job is None:
         _raise_gate(
@@ -930,14 +938,15 @@ def _check_tamper(root: str | Path, state: EditSessionState) -> None:
 
 def _ensure_bound_to_active(root: str | Path, state: EditSessionState) -> None:
     config = load_config(root)
-    if state.active_resume != config.active_resume or state.active_job != config.active_job:
+    resolved_resume = resolve_active_resume(config)
+    if state.active_resume != resolved_resume or state.active_job != config.active_job:
         _raise_gate(
             "session_active_mismatch",
             "Active edit session does not match active_resume and active_job.",
             {
                 "session_active_resume": state.active_resume,
                 "session_active_job": state.active_job,
-                "config_active_resume": config.active_resume,
+                "config_active_resume": resolved_resume,
                 "config_active_job": config.active_job,
             },
         )
