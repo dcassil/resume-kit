@@ -34,11 +34,24 @@ opt-in and never auto-runs.
 ## Steps
 
 1. **Ingest the resume** — run **resume-to-json**.
-   gate: a source resume file (PDF/DOCX/MD/text). Writes
-   `resume-kit/resumes/<name>-original.json` and sets `active_resume`.
+   gate: a source resume file (PDF/DOCX/MD/text). It orchestrates the gated
+   pipeline: `resume-tool init` (if needed) → `resume-tool extract-text <source>`
+   (deterministic, no LLM) → a confined interpretation subagent maps the extracted
+   text into `ResumeDocument` JSON → `resume-tool validate-faithfulness --source
+   <source> --json <candidate>` is the **blocking HARD GATE** (non-zero exit on
+   drift; loops the subagent once on failure, then surfaces to the user) →
+   on pass, writes `resume-kit/resumes/<name>-original.json` and records
+   `active_resume` + source via `resume-tool set-active` (never hand-edits
+   `config.json`).
 
 2. **Ingest the job** — run **job-to-json**.
-   gate: the job posting (text/URL/file). Writes
+   gate: the job posting (text/URL/file). For file inputs it runs
+   `resume-tool extract-text <file>`; pasted text / URL content skips extraction.
+   A confined interpretation subagent maps the text into `JobDescription` JSON
+   (structured `requirements`/`keywords`), then it records `active_job` (+ source
+   for files) via `resume-tool set-active --job ... [--job-source ...]`.
+   Note: `validate-faithfulness` targets `ResumeDocument`, so it does **not** gate
+   jobs — job faithfulness is enforced by the skill's prose extraction gates. Writes
    `resume-kit/jobs/<name>-original.json` and sets `active_job`.
 
 3. **Check the resume** — run all three (they are independent):
