@@ -19,10 +19,12 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .best_practices import FindingLocation, FindingSeverity
 from .common import Warning
 
 MatchKind = Literal["exact", "stem", "alias"]
@@ -137,15 +139,62 @@ class ATSScore(BaseModel):
     )
 
 
+class FixAffordance(StrEnum):
+    """How the base fixer (RIT-T-0115) may act on a structural finding.
+
+    The ``auto_safe_*`` values are deterministic, faithfulness-preserving
+    transforms the fixer may apply unattended; ``needs_judgment`` requires the
+    interactive walkthrough (missing facts, ambiguous rename, or a rewrite).
+    This axis is orthogonal to :class:`FindingSeverity`. Unknown codes or a
+    missing locator MUST be treated as ``needs_judgment``.
+    """
+
+    AUTO_SAFE_RENAME = "auto_safe_rename"
+    AUTO_SAFE_STRIP = "auto_safe_strip"
+    AUTO_SAFE_NORMALIZE = "auto_safe_normalize"
+    AUTO_SAFE_REORDER = "auto_safe_reorder"
+    NEEDS_JUDGMENT = "needs_judgment"
+
+
+class AtsStructureFinding(BaseModel):
+    """One machine-actionable structural finding (RIT-T-0114).
+
+    The structured channel behind the human-readable ``recommendations``
+    strings: a stable ``code``, the shared-taxonomy ``severity``, a structured
+    ``location``, a ``fix_affordance`` telling the base fixer whether it can act
+    unattended, and a small ``metadata`` map carrying the concrete target of the
+    fix (matched span, replacement text, section name, normalized value).
+    """
+
+    model_config = {"frozen": True}
+
+    code: str = Field(description="Stable finding code, e.g. 'PII_SSN', 'NONSTANDARD_SECTION'.")
+    message: str = Field(description="Human-readable message (also surfaced in recommendations).")
+    severity: FindingSeverity = Field(description="Shared grooming-finding severity.")
+    fix_affordance: FixAffordance = Field(description="How the base fixer may act on this finding.")
+    location: FindingLocation = Field(
+        default_factory=FindingLocation,
+        description="Structured locator for where the finding applies.",
+    )
+    metadata: dict[str, str] = Field(
+        default_factory=dict,
+        description="Concrete fix target (matched span, replacement, section name, etc.).",
+    )
+
+
 class AtsStructureReport(BaseModel):
     """Resume-only structural ATS report — no job, no composite score.
 
     Carries only the structural signal a resume can be assessed on without a
     job description: how many key sections are present and deterministic
-    structural recommendations (contact info, section presence, dates,
+    structural findings/recommendations (contact info, section presence, dates,
     formatting risks). Deliberately excludes ``keyword_match``,
     ``skills_coverage``, and any composite ``overall_score`` — those require a
     job and live on :class:`ATSScore`. Frozen because it is a pure report value.
+
+    ``findings`` is the machine channel (RIT-T-0114) the base fixer consumes;
+    ``recommendations`` is the human channel, derived deterministically from the
+    findings' messages. Both are populated and kept in sync.
     """
 
     model_config = {"frozen": True}
@@ -156,9 +205,13 @@ class AtsStructureReport(BaseModel):
         le=100.0,
         description="Key resume sections present (0-100).",
     )
+    findings: list[AtsStructureFinding] = Field(
+        default_factory=list,
+        description="Machine-actionable structural findings (code + severity + fix affordance).",
+    )
     recommendations: list[str] = Field(
         default_factory=list,
-        description="Deterministic structural recommendations (resume-only).",
+        description="Human-readable structural recommendations, derived from findings.",
     )
 
 

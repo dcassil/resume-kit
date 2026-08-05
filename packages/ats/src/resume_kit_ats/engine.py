@@ -25,8 +25,12 @@ from typing import Any
 
 from resume_kit_schemas import (
     ATSScore,
+    AtsStructureFinding,
     AtsStructureReport,
     ATSSubScores,
+    FindingLocation,
+    FindingSeverity,
+    FixAffordance,
     MatchedKeyword,
 )
 from resume_kit_schemas.job import JobDescription
@@ -335,42 +339,69 @@ _DATE_PATTERN: re.Pattern[str] = re.compile(
 # gate (RIT-T-0092) so the two never diverge on what counts as non-ASCII.
 _NON_ASCII_PATTERN: re.Pattern[str] = re.compile(r"[^\x00-\x7F]")
 
-_FORMATTING_RISK_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+#: (pattern, message, code, severity, fix_affordance) — formatting risks.
+_FORMATTING_RISK_PATTERNS: list[
+    tuple[re.Pattern[str], str, str, FindingSeverity, FixAffordance]
+] = [
     (
         _NON_ASCII_PATTERN,
         "Non-ASCII characters detected — some ATS systems may mis-parse them.",
+        "FORMATTING_NON_ASCII",
+        FindingSeverity.RECOMMENDATION,
+        FixAffordance.AUTO_SAFE_NORMALIZE,
     ),
     (
         re.compile(r"\t"),
         "Tab characters detected — prefer spaces for ATS compatibility.",
+        "FORMATTING_TAB",
+        FindingSeverity.RECOMMENDATION,
+        FixAffordance.AUTO_SAFE_NORMALIZE,
     ),
     (
         re.compile(r"(?:[•‣◦⁃∙])"),
         "Unicode bullet characters detected — plain hyphens or dashes are safer for ATS.",
+        "FORMATTING_UNICODE_BULLET",
+        FindingSeverity.RECOMMENDATION,
+        FixAffordance.AUTO_SAFE_NORMALIZE,
     ),
 ]
 
 
 #: Prohibited / discouraged personal-information patterns (industry guidance:
 #: no SSN, DOB, marital status, full street address, or "references available").
-_PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+#: (pattern, message, code, severity, fix_affordance) — prohibited PII. Exact
+#: matched spans can be stripped auto-safely; a street address needs judgment to
+#: preserve city/state, so it is not auto-strippable.
+_PII_PATTERNS: list[tuple[re.Pattern[str], str, str, FindingSeverity, FixAffordance]] = [
     (
         re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
         "A Social Security number appears in the resume — never include SSNs or"
         " government IDs; remove it.",
+        "PII_SSN",
+        FindingSeverity.WARNING,
+        FixAffordance.AUTO_SAFE_STRIP,
     ),
     (
         re.compile(r"\b(date of birth|d\.?o\.?b\.?|birthdate)\b", re.IGNORECASE),
         "Date of birth detected — omit age/DOB unless a specific country/application"
         " requires it.",
+        "PII_DOB",
+        FindingSeverity.WARNING,
+        FixAffordance.AUTO_SAFE_STRIP,
     ),
     (
         re.compile(r"\bmarital status\b", re.IGNORECASE),
         "Marital status detected — remove it; it is not relevant and invites bias.",
+        "PII_MARITAL_STATUS",
+        FindingSeverity.WARNING,
+        FixAffordance.AUTO_SAFE_STRIP,
     ),
     (
         re.compile(r"references\s+available\s+upon\s+request", re.IGNORECASE),
         "'References available upon request' detected — it wastes space; remove it.",
+        "PII_REFERENCES_LINE",
+        FindingSeverity.RECOMMENDATION,
+        FixAffordance.AUTO_SAFE_STRIP,
     ),
     (
         re.compile(
@@ -380,20 +411,31 @@ _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         "A full street address appears present — a city and state/metro is enough;"
         " a full street address is usually unnecessary.",
+        "PII_STREET_ADDRESS",
+        FindingSeverity.RECOMMENDATION,
+        FixAffordance.NEEDS_JUDGMENT,
     ),
 ]
 
-#: Placeholder / leftover-AI-prompt markers that must never ship in a resume.
-_PLACEHOLDER_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+#: (pattern, message, code, severity, fix_affordance) — placeholder / leftover AI.
+_PLACEHOLDER_PATTERNS: list[
+    tuple[re.Pattern[str], str, str, FindingSeverity, FixAffordance]
+] = [
     (
         re.compile(r"lorem ipsum|\bTODO\b|\[[^\]]*(placeholder|your name|insert)[^\]]*\]", re.IGNORECASE),
         "Placeholder/template text detected — remove all placeholder text before"
         " submitting.",
+        "PLACEHOLDER_TEXT",
+        FindingSeverity.WARNING,
+        FixAffordance.AUTO_SAFE_STRIP,
     ),
     (
         re.compile(r"as an ai|as a language model|i cannot|i'm sorry, but", re.IGNORECASE),
         "Text that looks like leftover AI-assistant output detected — rewrite it in"
         " your own voice; never leave AI prompt/response fragments.",
+        "AI_LEFTOVER_TEXT",
+        FindingSeverity.WARNING,
+        FixAffordance.NEEDS_JUDGMENT,
     ),
 ]
 
@@ -424,54 +466,75 @@ def _has_year(text: str) -> bool:
     return bool(re.search(r"(19|20)\d{2}", text))
 
 
-def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
-    """Deterministic structural checks that enrich recommendations.
+def _structure_findings(resume: dict[str, Any]) -> list[AtsStructureFinding]:
+    """Deterministic structural findings — the machine channel (RIT-T-0114).
 
-    These checks inspect the raw resume dict for common ATS failure modes:
-    contact-info presence, required section presence, date presence, and
-    basic formatting risks. They NEVER alter the composite score.
+    Inspects the raw resume dict for common ATS failure modes (contact-info
+    presence, section presence, date presence/consistency, non-standard
+    headings, prohibited PII, placeholder/AI-leftover text, formatting risks).
+    Each finding carries a stable ``code``, shared-taxonomy ``severity``, a
+    ``fix_affordance`` telling the base fixer whether it can act unattended, and
+    ``metadata`` with the concrete fix target. NEVER alters the composite score.
+    The human-readable ``recommendations`` list is derived from these findings.
     """
-    tips: list[str] = []
+    findings: list[AtsStructureFinding] = []
 
-    # --- Contact-info checks ---
+    def add(
+        code: str,
+        message: str,
+        severity: FindingSeverity,
+        affordance: FixAffordance,
+        *,
+        section: str | None = None,
+        metadata: dict[str, str] | None = None,
+    ) -> None:
+        findings.append(
+            AtsStructureFinding(
+                code=code,
+                message=message,
+                severity=severity,
+                fix_affordance=affordance,
+                location=FindingLocation(section=section),
+                metadata=metadata or {},
+            )
+        )
+
+    _W, _R = FindingSeverity.WARNING, FindingSeverity.RECOMMENDATION
+    _NJ = FixAffordance.NEEDS_JUDGMENT
+
+    # --- Contact-info checks (can't fabricate contact info -> needs judgment) ---
     personal: dict[str, Any] = resume.get("personalInfo", {}) or {}
     if not personal.get("email"):
-        tips.append(
+        add("MISSING_EMAIL",
             "No email address detected — add a professional email to your contact"
-            " information."
-        )
+            " information.", _W, _NJ, section="personalInfo")
     if not personal.get("phone"):
-        tips.append(
-            "No phone number detected — most ATS systems expect a contact phone number."
-        )
+        add("MISSING_PHONE",
+            "No phone number detected — most ATS systems expect a contact phone number.",
+            _W, _NJ, section="personalInfo")
     if not personal.get("name"):
-        tips.append(
+        add("MISSING_NAME",
             "No name detected in personalInfo — ensure your full name is at the top of"
-            " your resume."
-        )
+            " your resume.", _W, _NJ, section="personalInfo")
 
     # --- Section presence checks ---
     if not resume.get("summary"):
-        tips.append(
+        add("MISSING_SUMMARY",
             "No summary or objective section found — a 2-3 sentence summary helps ATS"
-            " context-match your profile."
-        )
+            " context-match your profile.", _R, _NJ, section="summary")
     if not resume.get("workExperience"):
-        tips.append(
+        add("MISSING_EXPERIENCE",
             "No work experience section found — ensure your positions are structured"
-            " under a Work Experience heading."
-        )
+            " under a Work Experience heading.", _W, _NJ, section="experience")
     if not resume.get("education"):
-        tips.append(
+        add("MISSING_EDUCATION",
             "No education section found — include your highest degree even if it is"
-            " older."
-        )
+            " older.", _R, _NJ, section="education")
     additional: dict[str, Any] = resume.get("additional", {}) or {}
     if not additional.get("technicalSkills"):
-        tips.append(
+        add("MISSING_SKILLS",
             "No technical skills listed — a dedicated Skills section significantly"
-            " improves ATS keyword matching."
-        )
+            " improves ATS keyword matching.", _R, _NJ, section="skills")
 
     # --- Date presence checks ---
     work_exp: list[Any] = resume.get("workExperience", []) or []
@@ -482,19 +545,18 @@ def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
         count = len(entries_without_dates)
         noun = "entry" if count == 1 else "entries"
         verb = "is" if count == 1 else "are"
-        tips.append(
+        add("MISSING_DATES",
             f"{count} work experience {noun} {verb} missing date ranges"
-            f" — add start/end years for each position."
-        )
+            f" — add start/end years for each position.", _W, _NJ,
+            section="experience", metadata={"count": str(count)})
 
     full_text = _extract_all_text(resume)
     if work_exp and not _DATE_PATTERN.search(full_text):
-        tips.append(
+        add("NO_DATES_IN_TEXT",
             "No date references detected in resume text — ensure each position includes"
-            " date ranges (e.g. 'Jan 2020 – Present')."
-        )
+            " date ranges (e.g. 'Jan 2020 – Present').", _W, _NJ, section="experience")
 
-    # --- Date-format consistency across work experience ---
+    # --- Date-format consistency (normalizing to one format is auto-safe) ---
     dated = [
         str(e.get("years", ""))
         for e in work_exp
@@ -503,12 +565,14 @@ def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
     month_level = [d for d in dated if _has_month(d)]
     year_only = [d for d in dated if _has_year(d) and not _has_month(d)]
     if month_level and year_only:
-        tips.append(
+        add("INCONSISTENT_DATES",
             "Inconsistent date formats across positions — some use month-level dates"
-            " and others year-only; use one consistent date format throughout."
-        )
+            " and others year-only; use one consistent date format throughout.",
+            _R, FixAffordance.AUTO_SAFE_NORMALIZE,
+            section="experience",
+            metadata={"month_level": "; ".join(month_level), "year_only": "; ".join(year_only)})
 
-    # --- Non-standard section headings ---
+    # --- Non-standard section headings (rename target is ambiguous -> judgment) ---
     custom_sections: dict[str, Any] = resume.get("customSections", {}) or {}
     nonstandard = [
         name
@@ -517,28 +581,30 @@ def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
     ]
     if nonstandard:
         shown = ", ".join(f"'{n}'" for n in nonstandard[:3])
-        tips.append(
+        add("NONSTANDARD_SECTION",
             f"Non-standard section heading(s) detected ({shown}) — use conventional"
             " names (Summary, Experience, Skills, Education, Certifications, Projects)"
-            " so an ATS can categorize them."
-        )
+            " so an ATS can categorize them.", _R, _NJ,
+            metadata={"sections": "; ".join(nonstandard)})
 
-    # --- Prohibited personal information ---
-    for pattern, message in _PII_PATTERNS:
-        if pattern.search(full_text):
-            tips.append(message)
+    # --- Prohibited PII / placeholder / formatting risks (from the pattern tables) ---
+    for table in (_PII_PATTERNS, _PLACEHOLDER_PATTERNS, _FORMATTING_RISK_PATTERNS):
+        for pattern, message, code, severity, affordance in table:
+            match = pattern.search(full_text)
+            if match:
+                add(code, message, severity, affordance,
+                    metadata={"match": match.group(0)})
 
-    # --- Placeholder / leftover-AI text ---
-    for pattern, message in _PLACEHOLDER_PATTERNS:
-        if pattern.search(full_text):
-            tips.append(message)
+    return findings
 
-    # --- Basic formatting risk checks ---
-    for pattern, message in _FORMATTING_RISK_PATTERNS:
-        if pattern.search(full_text):
-            tips.append(message)
 
-    return tips
+def _expanded_recommendations(resume: dict[str, Any]) -> list[str]:
+    """Human-readable structural recommendations, derived from the findings.
+
+    Kept as the stable string channel for existing consumers; the messages are
+    exactly the finding messages, in finding order.
+    """
+    return [f.message for f in _structure_findings(resume)]
 
 
 # ---------------------------------------------------------------------------
@@ -653,11 +719,12 @@ def check_ats_structure(
     )
 
     section_score = _compute_section_completeness(resume_dict)
-    recommendations = _expanded_recommendations(resume_dict)
+    findings = _structure_findings(resume_dict)
 
     return AtsStructureReport(
         section_completeness=round(section_score, 1),
-        recommendations=recommendations,
+        findings=findings,
+        recommendations=[f.message for f in findings],
     )
 
 
