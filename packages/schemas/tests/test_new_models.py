@@ -13,6 +13,7 @@ from resume_kit_schemas import (
     ClaimProvenance,
     EvidenceKind,
     JobDescription,
+    ProvenanceReasonCode,
     ProvenanceStatus,
     Requirement,
     RequirementKind,
@@ -59,9 +60,24 @@ def test_provenance_status_enum_values() -> None:
     }
 
 
+def test_provenance_reason_code_enum_values() -> None:
+    assert {
+        ProvenanceReasonCode.MISSING_EVIDENCE.value,
+        ProvenanceReasonCode.STRUCTURAL_CONFLICT.value,
+        ProvenanceReasonCode.REFUTED_BY_EVIDENCE.value,
+        ProvenanceReasonCode.UNKNOWN_SKILL.value,
+    } == {
+        "missing_evidence",
+        "structural_conflict",
+        "refuted_by_evidence",
+        "unknown_skill",
+    }
+
+
 def test_claim_provenance_confidence_bounds() -> None:
     cp = ClaimProvenance(claim="Led team", status=ProvenanceStatus.SUPPORTED, evidence_ids=["e1"])
     assert cp.confidence == 1.0
+    assert cp.reason_code is None
     with pytest.raises(ValidationError):
         ClaimProvenance(claim="x", status=ProvenanceStatus.AMBIGUOUS, confidence=2.0)
 

@@ -27,8 +27,9 @@ from resume_kit_alignment import (
 from resume_kit_evidence import build_candidate_evidence
 from resume_kit_matching import analyze_terminology_alignment
 from resume_kit_schemas import ResumeDocument, TerminologyAlignment
-from resume_kit_schemas.evidence import CandidateEvidence
+from resume_kit_schemas.evidence import CandidateEvidence, EvidenceKind
 from resume_kit_schemas.job import JobDescription, Requirement
+from resume_kit_schemas.results import PolicyReasonCode
 from resume_kit_schemas.resume import (
     AdditionalInfo,
     Experience,
@@ -92,9 +93,7 @@ class TestMapper:
             canonical="kubernet",
         )
         bullet = "Ran workloads on Kubernetes across three regions."
-        change = build_terminology_change(
-            sug, "workExperience[0].description[0]", bullet
-        )
+        change = build_terminology_change(sug, "workExperience[0].description[0]", bullet)
         assert change.action == "replace"
         assert change.path == "workExperience[0].description[0]"
         # original == the FULL current field text (replace-verification gate).
@@ -136,9 +135,7 @@ class TestAcceptBulletTruthSafe:
         location = "workExperience[0].description[0]"
         assert location in sug.locations
 
-        result = accept_terminology_alignment(
-            sug, location, resume, job, evidence
-        )
+        result = accept_terminology_alignment(sug, location, resume, job, evidence)
 
         # Minimal freedom for a description bullet is F4.
         assert result.freedom == 4
@@ -151,13 +148,8 @@ class TestAcceptBulletTruthSafe:
         # Truth still passes: the claim is unchanged, only the wording mirrored.
         assert result.truth_passed
         # Deterministic delta: score does not drop.
-        assert (
-            result.delta.keyword_match_after >= result.delta.keyword_match_before
-        )
-        assert (
-            result.delta.skills_coverage_after
-            >= result.delta.skills_coverage_before
-        )
+        assert result.delta.keyword_match_after >= result.delta.keyword_match_before
+        assert result.delta.skills_coverage_after >= result.delta.skills_coverage_before
         # The mirrored literal term is now present in the resume.
         assert "k8s" in result.resume.workExperience[0].description[0]
 
@@ -166,19 +158,12 @@ class TestAcceptBulletTruthSafe:
         job = _job_k8s()
         evidence = _evidence(resume)
         sug = next(
-            s
-            for s in analyze_terminology_alignment(job, resume)
-            if "summary" in s.locations
+            s for s in analyze_terminology_alignment(job, resume) if "summary" in s.locations
         )
-        result = accept_terminology_alignment(
-            sug, "summary", resume, job, evidence
-        )
+        result = accept_terminology_alignment(sug, "summary", resume, job, evidence)
         assert result.freedom == 6
         assert result.swap_applied
-        assert (
-            result.resume.summary
-            == "Platform engineer specializing in k8s operations."
-        )
+        assert result.resume.summary == "Platform engineer specializing in k8s operations."
         assert result.truth_passed
 
     def test_accept_is_deterministic(self) -> None:
@@ -186,9 +171,7 @@ class TestAcceptBulletTruthSafe:
         job = _job_k8s()
         evidence = _evidence(resume)
         loc = "workExperience[0].description[0]"
-        sug = next(
-            s for s in analyze_terminology_alignment(job, resume) if loc in s.locations
-        )
+        sug = next(s for s in analyze_terminology_alignment(job, resume) if loc in s.locations)
         a = accept_terminology_alignment(sug, loc, resume, job, evidence)
         b = accept_terminology_alignment(sug, loc, resume, job, evidence)
         assert a.change == b.change
@@ -241,6 +224,44 @@ class TestUnsupportedAndBlockedLocationsRejected:
         assert not result.swap_applied
         # Employer identity untouched.
         assert result.resume.workExperience[0].company == "Northwind Ltd"
+
+    def test_truth_failed_swap_is_rejected_and_reverted(self) -> None:
+        resume = ResumeDocument(
+            personalInfo=PersonalInfo(name="Sam Rivera"),
+            summary="Python",
+        )
+        job = JobDescription(
+            title="Rust Engineer",
+            summary="Rust role.",
+            requirements=[Requirement(text="Rust", keywords=["Rust"])],
+            keywords=["Rust"],
+        )
+        evidence = [
+            *build_candidate_evidence(resume),
+            CandidateEvidence(
+                id="refute-rust",
+                kind=EvidenceKind.USER_STATEMENT,
+                content="Rust",
+                tags=["refuted"],
+                user_confirmed=True,
+            ),
+        ]
+        sug = TerminologyAlignment(
+            jd_keyword="Rust",
+            current_wording="Python",
+            locations=["summary"],
+            canonical="adversarial",
+        )
+
+        result = accept_terminology_alignment(sug, "summary", resume, job, evidence)
+
+        assert result.resume == resume
+        assert result.applied == []
+        assert result.rejected
+        assert result.rejected[-1].reason_code is PolicyReasonCode.TRUTH_VALIDATION_FAILED
+        assert result.swap_applied is False
+        assert result.truth_passed is False
+        assert result.field_after == "Python"
 
     def test_bare_skill_element_swap_rejected(self) -> None:
         resume = _resume_bullet()

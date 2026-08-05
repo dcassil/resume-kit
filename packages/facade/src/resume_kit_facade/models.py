@@ -230,6 +230,7 @@ class ValidateResumeTruthRequest:
 
     resume: ResumeDocument
     evidence: list[CandidateEvidence] = field(default_factory=list)
+    alias_file: str | Path | None = None
 
 
 @dataclass(frozen=True)

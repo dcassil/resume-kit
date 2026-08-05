@@ -43,7 +43,7 @@ from resume_kit_schemas import ResumeDocument, TerminologyAlignment
 from resume_kit_schemas.change import ChangeProposal
 from resume_kit_schemas.evidence import CandidateEvidence
 from resume_kit_schemas.job import JobDescription
-from resume_kit_schemas.results import PolicyRejection
+from resume_kit_schemas.results import PolicyReasonCode, PolicyRejection
 from resume_kit_terms import surface_form
 
 from .apply import _resolve_path, apply_diffs
@@ -181,14 +181,16 @@ def build_terminology_change(
     )
 
 
-def _score(
-    resume: ResumeDocument, job: JobDescription
-) -> tuple[float, float]:
+def _score(resume: ResumeDocument, job: JobDescription) -> tuple[float, float]:
     keyword_match = calculate_keyword_match(resume, job)
-    skills_coverage, _matched = _compute_skills_coverage(
-        resume.model_dump(), job.model_dump()
-    )
+    skills_coverage, _matched = _compute_skills_coverage(resume.model_dump(), job.model_dump())
     return keyword_match, skills_coverage
+
+
+def _truth_failure_explanation(truth_passed: bool) -> str:
+    if truth_passed:
+        return ""
+    return "Terminology suggestion rejected: the applied change failed truth validation."
 
 
 def accept_terminology_alignment(
@@ -258,11 +260,39 @@ def accept_terminology_alignment(
     )
     updated = ResumeDocument.model_validate(result_dict)
 
-    truth = validate_resume_truth(updated, evidence)
+    truth_before = validate_resume_truth(resume, evidence)
+    truth_after = validate_resume_truth(updated, evidence)
+    swap_applied = bool(applied) and resolved and value_changed(change)
+    contradiction_regressed = truth_after.contradiction_count > truth_before.contradiction_count
+
+    if swap_applied and contradiction_regressed:
+        rejection = PolicyRejection(
+            path=change.path,
+            action=change.action,
+            reason_code=PolicyReasonCode.TRUTH_VALIDATION_FAILED,
+            explanation=_truth_failure_explanation(truth_after.passed),
+            change=change,
+        )
+        return AcceptResult(
+            resume=resume,
+            change=change,
+            applied=[],
+            rejected=[*rejected, rejection],
+            freedom=effective_freedom,
+            delta=ScoreDelta(
+                keyword_match_before=km_before,
+                keyword_match_after=km_before,
+                skills_coverage_before=sc_before,
+                skills_coverage_after=sc_before,
+            ),
+            truth_passed=truth_after.passed,
+            swap_applied=False,
+            location=location,
+            field_before=original_field_text,
+            field_after=original_field_text,
+        )
 
     km_after, sc_after = _score(updated, job)
-
-    swap_applied = bool(applied) and resolved and value_changed(change)
 
     updated_field, _ = _resolve_path(result_dict, location)
     field_after = updated_field if isinstance(updated_field, str) else ""
@@ -279,7 +309,7 @@ def accept_terminology_alignment(
             skills_coverage_before=sc_before,
             skills_coverage_after=sc_after,
         ),
-        truth_passed=truth.passed,
+        truth_passed=truth_after.passed,
         swap_applied=swap_applied,
         location=location,
         field_before=original_field_text,

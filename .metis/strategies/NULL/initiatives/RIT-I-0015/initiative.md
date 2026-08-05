@@ -4,14 +4,14 @@ level: initiative
 title: "Enforced human-in-the-loop edit loop + truth semantics & feedback surfaces"
 short_code: "RIT-I-0015"
 created_at: 2026-08-05T14:55:06.978119+00:00
-updated_at: 2026-08-05T14:55:06.978119+00:00
+updated_at: 2026-08-05T16:17:02.043284+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0014]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/active"
 
 
 exit_criteria_met: false

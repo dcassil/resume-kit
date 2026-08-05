@@ -1524,6 +1524,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "resume-kit-core" },
     { name = "resume-kit-schemas" },
+    { name = "resume-kit-terms" },
 ]
 
 [package.metadata]
@@ -1531,6 +1532,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "resume-kit-core", editable = "packages/core" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
+    { name = "resume-kit-terms", editable = "packages/terms" },
 ]
 
 [[package]]

@@ -503,6 +503,7 @@ async def resume_validate_truth(arguments: ToolArguments) -> ToolResult:
             {
                 "resume": _resume(_required(arguments, "resume"), "resume"),
                 "evidence": _optional_evidence_list(arguments, "evidence") or [],
+                "alias_file": _optional_alias_file(arguments),
             },
         )
     except _ValidationFailure as exc:

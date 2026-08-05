@@ -121,7 +121,10 @@ def test_validate_truth() -> None:
         "/validate-truth", json={"resume": _resume(), "evidence": []}
     )
     assert resp.status_code == 200
-    _assert_envelope(resp.json())
+    payload = resp.json()
+    _assert_envelope(payload)
+    assert payload["data"]["needs_evidence_count"] >= 1
+    assert payload["data"]["claims"][0]["reason_code"] == "missing_evidence"
 
 
 def test_build_evidence() -> None:

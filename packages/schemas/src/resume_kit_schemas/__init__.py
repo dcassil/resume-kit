@@ -47,7 +47,7 @@ from .feedback import (
     UserPreferenceProfile,
 )
 from .job import JobDescription, Requirement, RequirementKind
-from .provenance import ClaimProvenance, ProvenanceStatus
+from .provenance import ClaimProvenance, ProvenanceReasonCode, ProvenanceStatus
 from .results import (
     AlignmentResult,
     FaithfulnessCode,
@@ -115,6 +115,7 @@ __all__ = [
     "PreferencePair",
     # provenance
     "ClaimProvenance",
+    "ProvenanceReasonCode",
     "ProvenanceStatus",
     # change
     "ChangeProposal",

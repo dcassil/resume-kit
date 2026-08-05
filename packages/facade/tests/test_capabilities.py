@@ -44,6 +44,7 @@ from resume_kit_schemas import (
     ResumeSelectionResult,
     TruthReport,
 )
+from resume_kit_schemas.provenance import ProvenanceReasonCode
 
 
 def _job() -> JobDescription:
@@ -213,6 +214,8 @@ async def test_validate_resume_truth() -> None:
     )
     assert response.ok
     assert isinstance(response.data, TruthReport)
+    assert response.data.needs_evidence_count >= 1
+    assert response.data.claims[0].reason_code is ProvenanceReasonCode.MISSING_EVIDENCE
 
 
 @pytest.mark.asyncio

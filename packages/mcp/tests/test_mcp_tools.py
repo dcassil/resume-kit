@@ -164,6 +164,18 @@ async def test_warnings_remain_separate_from_errors() -> None:
     assert payload["errors"] == []
 
 
+async def test_validate_truth_returns_reason_code_fields() -> None:
+    payload = await HANDLERS["resume_validate_truth"](
+        {"resume": _resume(), "evidence": [], "no_llm": True}
+    )
+
+    _assert_envelope(payload)
+    data = payload["data"]
+    assert isinstance(data, dict)
+    assert data["needs_evidence_count"] >= 1
+    assert data["claims"][0]["reason_code"] == "missing_evidence"
+
+
 async def test_resume_align_human_in_loop_surfaces_questions_without_advancing() -> None:
     provider = FakeStructuredCompletionProvider(
         [

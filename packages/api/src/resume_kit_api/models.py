@@ -167,6 +167,10 @@ class ValidateResumeTruthBody(_Options):
 
     resume: ResumeDocument
     evidence: list[CandidateEvidence] = Field(default_factory=list)
+    alias_file: str | None = Field(
+        default=None,
+        description="Optional project alias JSON path for synonym-aware validation.",
+    )
 
 
 class ValidateFaithfulnessBody(_Options):

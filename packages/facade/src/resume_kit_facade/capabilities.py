@@ -475,7 +475,12 @@ async def validate_resume_truth_capability(
             _bad_request(request, "ValidateResumeTruthRequest")
         )
     try:
-        report: TruthReport = validate_resume_truth(request.resume, request.evidence)
+        with use_alias_file(request.alias_file):
+            report: TruthReport = validate_resume_truth(
+                request.resume,
+                request.evidence,
+                alias_file=str(request.alias_file) if request.alias_file else None,
+            )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure

@@ -276,7 +276,7 @@ def register_routes(app: FastAPI) -> None:
     @app.post("/validate-truth")
     async def validate_truth(body: ValidateResumeTruthBody) -> Response:
         request = ValidateResumeTruthRequest(
-            resume=body.resume, evidence=body.evidence
+            resume=body.resume, evidence=body.evidence, alias_file=body.alias_file
         )
         return _render(
             await REGISTRY["validate-resume-truth"](request, _options(body))

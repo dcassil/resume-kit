@@ -117,6 +117,8 @@ class TruthReport(BaseModel):
 
     claims: list[ClaimProvenance] = Field(default_factory=list)
     status_counts: dict[ProvenanceStatus, int] = Field(default_factory=dict)
+    needs_evidence_count: int = 0
+    contradiction_count: int = 0
     has_unsupported_or_contradicted: bool = False
     passed: bool = True
 
@@ -127,10 +129,11 @@ class TruthReport(BaseModel):
             counts[claim.status] += 1
 
         has_failure = (
-            counts[ProvenanceStatus.UNSUPPORTED] > 0
-            or counts[ProvenanceStatus.CONTRADICTED] > 0
+            counts[ProvenanceStatus.UNSUPPORTED] > 0 or counts[ProvenanceStatus.CONTRADICTED] > 0
         )
         self.status_counts = counts
+        self.needs_evidence_count = counts[ProvenanceStatus.UNSUPPORTED]
+        self.contradiction_count = counts[ProvenanceStatus.CONTRADICTED]
         self.has_unsupported_or_contradicted = has_failure
         self.passed = not has_failure
         return self
@@ -168,9 +171,7 @@ class FaithfulnessFinding(BaseModel):
     code: FaithfulnessCode = Field(description="Which class of drift was found.")
     severity: str = Field(description="'error' (hard-fail) or 'warning' (advisory).")
     message: str = Field(description="Human-readable explanation of the finding.")
-    items: list[str] = Field(
-        default_factory=list, description="The offending items, if any."
-    )
+    items: list[str] = Field(default_factory=list, description="The offending items, if any.")
 
 
 class FaithfulnessReport(BaseModel):
@@ -182,9 +183,7 @@ class FaithfulnessReport(BaseModel):
     never an exception; a transport maps ``passed=False`` to a non-zero exit.
     """
 
-    passed: bool = Field(
-        default=True, description="False iff any error-severity finding exists."
-    )
+    passed: bool = Field(default=True, description="False iff any error-severity finding exists.")
     findings: list[FaithfulnessFinding] = Field(
         default_factory=list, description="All drift findings, error and warning."
     )

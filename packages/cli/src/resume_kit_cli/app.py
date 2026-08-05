@@ -369,6 +369,7 @@ def align_terminology(
 def validate_truth(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
     evidence: str | None = typer.Option(None, "--evidence", help="Evidence JSON path."),
+    alias_file: str | None = _AliasFile,
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
@@ -377,6 +378,7 @@ def validate_truth(
     request = ValidateResumeTruthRequest(
         resume=io.load_resume(resume),
         evidence=io.load_evidence(evidence) if evidence else [],
+        alias_file=alias_file,
     )
     options = _options(False, strict, False)
     _run(caps.validate_resume_truth_capability(request, options), output)

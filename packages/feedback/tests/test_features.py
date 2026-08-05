@@ -90,6 +90,31 @@ def test_unsupported_claim_risk_low_for_supported() -> None:
     assert features.unsupported_claim_risk < 1.0
 
 
+def test_unsupported_claim_risk_low_for_project_alias(tmp_path) -> None:
+    alias_file = tmp_path / "aliases.json"
+    alias_file.write_text('{"version": 1, "aliases": {"quibblewidget": ["zorbulator"]}}')
+    context = FeatureContext(
+        resume=_resume(),
+        job=_job(),
+        evidence=[
+            CandidateEvidence(
+                id="alias-skill",
+                kind=EvidenceKind.SKILL,
+                content="quibblewidget",
+                user_confirmed=True,
+            )
+        ],
+        alias_file=str(alias_file),
+    )
+    candidate = Candidate(
+        candidate_id="c-alias",
+        section="skill",
+        proposed_text="zorbulator",
+    )
+    features = extract_features(candidate, context, profile=EMPTY_PROFILE)
+    assert features.unsupported_claim_risk < 1.0
+
+
 def test_unsupported_claim_risk_hard_for_fabricated() -> None:
     fabricated = Candidate(
         candidate_id="c-fab",
@@ -206,9 +231,7 @@ def test_historical_success_from_log() -> None:
             timestamp="2026-01-02T00:00:00Z",
         ),
     ]
-    context = FeatureContext(
-        resume=_resume(), job=_job(), evidence=_evidence(), history=history
-    )
+    context = FeatureContext(resume=_resume(), job=_job(), evidence=_evidence(), history=history)
     features = extract_features(_supported_candidate(), context, profile=EMPTY_PROFILE)
     assert features.historical_success == 0.5
 
