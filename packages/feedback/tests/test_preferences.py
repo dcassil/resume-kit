@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from resume_kit_feedback import append_preference_pair
 from resume_kit_feedback.preferences import (
     MODERATE_THRESHOLD,
@@ -25,6 +26,9 @@ def _rec(
     final: str | None = "Built scalable services",
     edit_type: str = "keyword_substitution",
     removed: list[str] | None = None,
+    added: list[str] | None = None,
+    preserved: list[str] | None = None,
+    target_terms: list[str] | None = None,
 ) -> EditFeedback:
     return EditFeedback(
         edit_id=edit_id,
@@ -35,11 +39,13 @@ def _rec(
         original_text=original,
         proposed_text=proposed,
         final_text=final,
-        target_terms=["scalable"],
+        target_terms=target_terms if target_terms is not None else ["scalable"],
         predicted_ats_gain=0.1,
         confidence=0.8,
         outcome=outcome,  # type: ignore[arg-type]
         removed_terms=removed or [],
+        added_terms=added or [],
+        preserved_terms=preserved or [],
         timestamp=timestamp,
     )
 
@@ -108,7 +114,16 @@ def test_undone_weighs_stronger_than_rejected(tmp_path: Path) -> None:
 
 def test_decay_ordering_recent_outranks_old(tmp_path: Path) -> None:
     # Recent term "alpha" strongly corroborated; old term "omega" less so.
-    recent = [_rec(f"a{i}", proposed="alpha", final="alpha", original="") for i in range(4)]
+    recent = [
+        _rec(
+            f"a{i}",
+            proposed="alpha",
+            final="alpha",
+            original="",
+            target_terms=["alpha"],
+        )
+        for i in range(4)
+    ]
     old = [
         _rec(
             f"o{i}",
@@ -116,6 +131,7 @@ def test_decay_ordering_recent_outranks_old(tmp_path: Path) -> None:
             final="omega",
             original="",
             timestamp="2020-01-01T00:00:00Z",
+            target_terms=["omega"],
         )
         for i in range(4)
     ]
@@ -154,3 +170,216 @@ def test_moderate_threshold_constant_boundary(tmp_path: Path) -> None:
     n = int(MODERATE_THRESHOLD)
     profile = derive_preferences([_rec(f"e{i}") for i in range(n)], now=NOW, base_path=tmp_path)
     assert "scalable" in profile.accepted_phrases
+
+
+@pytest.mark.parametrize(
+    ("records", "present", "absent"),
+    [
+        (
+            [
+                _rec(f"add{i}", added=["Kubernetes"], target_terms=[])
+                for i in range(int(MODERATE_THRESHOLD))
+            ],
+            "kubernetes",
+            "built",
+        ),
+        (
+            [
+                _rec(f"keep{i}", preserved=["Terraform"], target_terms=[])
+                for i in range(int(MODERATE_THRESHOLD))
+            ],
+            "terraform",
+            "services",
+        ),
+    ],
+)
+def test_accepted_phrases_are_mined_from_diff_terms_only(
+    tmp_path: Path,
+    records: list[EditFeedback],
+    present: str,
+    absent: str,
+) -> None:
+    profile = derive_preferences(records, now=NOW, base_path=tmp_path)
+    assert present in profile.accepted_phrases
+    assert absent not in profile.accepted_phrases
+    assert "and" not in profile.accepted_phrases
+    assert "for" not in profile.accepted_phrases
+
+
+def test_accepted_modified_contributes_accept_and_reject_signals(tmp_path: Path) -> None:
+    records = [
+        _rec(
+            f"mod{i}",
+            outcome="accepted_modified",
+            proposed="Built quality improvements",
+            final="Built Lighthouse diagnostics",
+            removed=["quality"],
+            added=["Lighthouse"],
+            target_terms=[],
+        )
+        for i in range(int(MODERATE_THRESHOLD))
+    ]
+
+    profile = derive_preferences(records, now=NOW, base_path=tmp_path)
+
+    assert "lighthouse" in profile.accepted_phrases
+    assert "quality" in profile.rejected_phrases
+
+
+def test_real_session_specific_over_vague_signal_surfaces(tmp_path: Path) -> None:
+    records = [
+        _rec(
+            "session-1",
+            outcome="accepted_modified",
+            proposed="Improved mobile fixes for React",
+            final="Added Chrome coverage for React",
+            removed=["fixes"],
+            added=["Chrome"],
+            preserved=["React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-2",
+            outcome="accepted_modified",
+            proposed="Improved mobile fixes for React",
+            final="Added Firefox coverage for React",
+            removed=["fixes"],
+            added=["Firefox"],
+            preserved=["React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-3",
+            outcome="accepted_modified",
+            proposed="Improved mobile fixes for React",
+            final="Added Edge coverage for React",
+            removed=["fixes"],
+            added=["Edge"],
+            preserved=["React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-4",
+            outcome="accepted_modified",
+            proposed="Added improvements for mobile React",
+            final="Added Lighthouse checks for mobile React",
+            removed=["improvements"],
+            added=["Lighthouse"],
+            preserved=["mobile", "React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-5",
+            outcome="accepted_modified",
+            proposed="Added improvements for mobile React",
+            final="Added SSR handling for mobile React",
+            removed=["improvements"],
+            added=["SSR"],
+            preserved=["mobile", "React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-6",
+            outcome="accepted_modified",
+            proposed="Added improvements for mobile React",
+            final="Added SSR Lighthouse checks for mobile React",
+            removed=["improvements"],
+            added=["SSR", "Lighthouse"],
+            preserved=["mobile", "React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-7",
+            outcome="accepted_modified",
+            proposed="Improved quality for mobile React",
+            final="Improved compatibility for mobile React",
+            removed=["quality"],
+            added=["compatibility"],
+            preserved=["mobile", "React"],
+            target_terms=[],
+        ),
+        _rec(
+            "session-8",
+            outcome="accepted_modified",
+            proposed="Improved quality for mobile React",
+            final="Improved compatibility checks for mobile React",
+            removed=["quality"],
+            added=["compatibility"],
+            preserved=["mobile", "React"],
+            target_terms=[],
+        ),
+    ]
+
+    profile = derive_preferences(records, now=NOW, base_path=tmp_path)
+
+    assert any(
+        pattern.startswith("prefers specific over vague") for pattern in profile.disliked_patterns
+    )
+    assert any("fixes" in pattern for pattern in profile.disliked_patterns)
+    assert any("improvements" in pattern for pattern in profile.disliked_patterns)
+    assert any(
+        phrase.startswith("specific replacements") and "chrome" in phrase and "ssr" in phrase
+        for phrase in profile.accepted_phrases
+    )
+    assert "and" not in profile.accepted_phrases
+    assert "for" not in profile.accepted_phrases
+    assert "and" not in profile.rejected_phrases
+    assert "for" not in profile.disliked_patterns
+
+
+def test_support_threshold_excludes_one_off_terms_but_surfaces_repeated_pattern(
+    tmp_path: Path,
+) -> None:
+    records = [
+        _rec(
+            "one-off-1",
+            outcome="accepted_modified",
+            removed=["things"],
+            added=["GraphQL"],
+            target_terms=[],
+        ),
+        _rec(
+            "one-off-2",
+            outcome="accepted_modified",
+            removed=["work"],
+            added=["OpenTelemetry"],
+            target_terms=[],
+        ),
+        _rec(
+            "one-off-3",
+            outcome="accepted_modified",
+            removed=["quality"],
+            added=["99.9% uptime"],
+            target_terms=[],
+        ),
+    ]
+
+    profile = derive_preferences(records, now=NOW, base_path=tmp_path)
+
+    assert "graphql" not in profile.accepted_phrases
+    assert "opentelemetry" not in profile.accepted_phrases
+    assert "99 9 uptime" not in profile.accepted_phrases
+    assert any(
+        pattern.startswith("prefers specific over vague") for pattern in profile.disliked_patterns
+    )
+
+
+def test_preference_pairs_sharpen_specificity_signal(tmp_path: Path) -> None:
+    for specific in ("Chrome", "Firefox", "Edge"):
+        append_preference_pair(
+            PreferencePair(
+                preferred_candidate=specific,
+                rejected_candidate="fixes",
+                strength=1.0,
+                timestamp=NOW,
+            ),
+            base_path=tmp_path,
+        )
+
+    profile = derive_preferences([], now=NOW, base_path=tmp_path)
+
+    assert any(
+        pattern.startswith("prefers specific over vague") for pattern in profile.disliked_patterns
+    )
+    assert any("fixes" in pattern for pattern in profile.disliked_patterns)
+    assert profile.confidence > 0.0

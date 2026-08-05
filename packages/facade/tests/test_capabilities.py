@@ -281,6 +281,11 @@ async def test_refresh_preferences_derives_from_persisted_log(tmp_path: Path) ->
                         "edit_id": f"edit-{index}",
                         "outcome": "accepted",
                         "final_text": "Built scalable Python APIs.",
+                        # Diff-aware derivation (RIT-T-0102) mines added_terms,
+                        # not raw final_text tokens; give the accepted records
+                        # repeated diff signal above the support threshold.
+                        "added_terms": ["Python"],
+                        "removed_terms": ["stuff"],
                     }
                 ),
                 base_path=base,
