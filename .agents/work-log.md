@@ -388,3 +388,34 @@ Gate after Wave 3: ruff+mypy clean (80 src), plugin validate OK, 2689 passed/1 s
 
 Wave 4 (0076) DONE (sonnet): 19 integration tests (analyze/accept/adversarial/facade-parity/exports/determinism); orchestrator fixed 2 ruff nits.
 **RIT-I-0010 COMPLETE.** Final gate: ruff+mypy clean (80 src), plugin validate OK, 2708 passed/1 skipped. Ready to commit+push per initiative.
+
+---
+
+## RIT-I-0011 — Single-responsibility skill redesign + self-gating + flow guide
+
+Plugin-UX initiative (skills-only, except one authorized additive engine slice). Decomposed (opus+high) into 5 tasks. Final skill set = 13 + resume-workflow guide; remove extract-resume, extract-job-description, align-resume, check-resume-ats, check-resume-job-match, align-terminology(→update-terminology).
+- RIT-T-0077 (opus+high) expose resume-only `check_ats_structure` across engine→facade→CLI/MCP/API (private _compute_section_completeness/_expanded_recommendations are resume-only; make public). NFR-1102 exception.
+- RIT-T-0078 (opus+medium) check-ats-structure + check-keyword-match skills + gate identify-resume-gaps. Needs 0077.
+- RIT-T-0079 (opus+medium) inject-keywords (NEW truth-gated) + update-terminology (rename align-terminology).
+- RIT-T-0080 (opus+medium) universal prerequisite-gate convention (_shared) + gates on 7 skills + resume-workflow guide.
+- RIT-T-0081 (sonnet+medium, orchestrator-run) remove 6 deprecated dirs, reconcile EXPECTED_SKILL_SLUGS/EXPECTED_CLI_OR_MCP + README + plugin version bump + validate + full gate.
+
+Wave plan: W1 = 0077 ∥ 0080. W2 = 0078 ∥ 0079. W3 = 0081 integration.
+
+### Wave 1
+| Task | Files | Agent | Result |
+| ---- | ----- | ----- | ------ |
+| RIT-T-0077 structure surface | packages/ats,facade,cli,mcp,api + pkg tests | opus+high | dispatched |
+| RIT-T-0080 gates + guide | plugins skill dirs (ingest/verify/support/export) + resume-workflow + _shared | opus+medium | dispatched |
+
+Wave 1 DONE. RIT-T-0077 (opus): check_ats_structure engine→AtsStructureReport→facade→CLI check-ats-structure/MCP resume_check_ats_structure/API; parity+per-surface tests; registry 13→14; composite untouched. RIT-T-0080 (opus): _shared/prerequisites.md + gates on 7 skills + resume-workflow guide.
+Gate after Wave 1: ruff+mypy clean (80 src), plugin validate OK, 2714 passed; only failing = test_skill_slug_set_is_complete (expected — RIT-T-0081 reconciles slug set incl resume-workflow + new skills + _shared dir discovery).
+
+### Wave 2 (parallel, file-disjoint skill dirs)
+| Task | Files | Agent | Result |
+| ---- | ----- | ----- | ------ |
+| RIT-T-0078 check skills | skills/check-ats-structure,check-keyword-match,identify-resume-gaps | opus+medium | dispatched |
+| RIT-T-0079 improve skills | skills/inject-keywords,update-terminology | opus+medium | dispatched |
+
+Wave 2 DONE. 0078 check-ats-structure + check-keyword-match + gated identify-resume-gaps. 0079 inject-keywords (NEW, truth-gated no-fabrication) + update-terminology (rename). Wave 3 (0081, orchestrator): removed 6 deprecated dirs, reconciled slug test + EXPECTED_CLI_OR_MCP + _shared discovery, README rewrite + Workflow section, cross-link cleanup (subagent), plugin 0.2.0→0.3.0.
+**RIT-I-0011 COMPLETE.** Final gate: ruff+mypy clean (80 src), plugin validate OK, 2715 passed/1 skipped. 15 skills → 13 single-responsibility skills + resume-workflow guide; every skill self-gates.

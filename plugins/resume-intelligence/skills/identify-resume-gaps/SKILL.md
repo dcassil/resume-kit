@@ -1,12 +1,36 @@
 ---
 name: identify-resume-gaps
 description: >
-  Deterministically analyse keyword gaps between a tailored resume, a master
-  resume, and a job description.  Returns injectable and non-injectable
-  missing keywords.  No LLM required.
+  Deterministically produce ONLY the missing / injectable keyword list between a
+  tailored resume, a master resume, and a job description — which job keywords
+  are missing from the tailored resume, which can be injected from the master
+  (injectable), and which are absent from both (non-injectable). No coverage
+  percentage focus, no composite score. No LLM required.
 ---
 
-> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **resume-to-json** skill) and, where a job is involved, a `JobDescription` JSON (build it with **job-to-json** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
+## Prerequisites
+
+Run the shared **Prerequisites gate** first — see
+[`_shared/prerequisites.md`](../_shared/prerequisites.md).
+
+- **Required inputs:**
+  - a **`JobDescription` JSON** — the `active_job` pointer in
+    `resume-kit/config.json` (or an explicit job JSON path the caller passes).
+  - a **tailored `ResumeDocument` JSON** — the `active_resume` pointer (or an
+    explicit resume JSON path the caller passes) — the resume being evaluated.
+  - a **master `ResumeDocument` JSON** — the full master resume used to decide
+    injectability. Prefer an explicit master path; where applicable fall back to
+    the configured master pointer. If no distinct master is available, say so —
+    without a master, injectable vs. non-injectable cannot be distinguished.
+- **If any required input is missing** (no pointer, file absent, or a raw file
+  where a canonical JSON is required): **STOP**. Do not guess and do not run on
+  partial input. Name the upstream skill for the missing one:
+  - Missing/unconverted resume (tailored or master) → run **`resume-to-json`**.
+  - Missing/unconverted job → run **`job-to-json`**.
+
+Conversions are best run in **subagents** (large intermediate text stays out of
+the main context); pass the saved JSON paths back here — they live under
+`resume-kit/resumes/` and `resume-kit/jobs/`.
 
 ## Purpose
 
@@ -16,10 +40,10 @@ which are absent from both (non-injectable).
 
 ## When to use
 
-- Before running `align-resume` to understand what gaps exist and whether they
-  are addressable.
-- When the user wants to see missing keywords without committing to a full
-  alignment run.
+- To understand what keyword gaps exist and whether they are addressable before
+  editing or mirroring terminology in the resume.
+- When the user wants to see the missing / injectable keyword list without
+  committing to any resume changes.
 
 ## Inputs
 
@@ -89,7 +113,7 @@ the `manage-synonyms` skill for the full workflow and file format.
 A **gap** is a JD keyword absent from the resume — surface it here, never rewrite
 it in. Distinct from a **terminology mirror**, where the resume already satisfies
 the JD keyword under a different surface form (an alias hit); mirroring the
-employer's exact wording is truthful and is handled by the **`align-terminology`**
+employer's exact wording is truthful and is handled by the **`update-terminology`**
 skill. Keep the two apart: a real gap must NOT be aliased or mirrored away.
 
 ## Notes

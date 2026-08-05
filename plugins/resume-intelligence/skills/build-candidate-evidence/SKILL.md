@@ -7,16 +7,26 @@ description: >
 
 > **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **resume-to-json** skill) and, where a job is involved, a `JobDescription` JSON (build it with **job-to-json** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
 
+## Prerequisites
+
+Run the shared **Prerequisites gate** first — see
+[`_shared/prerequisites.md`](../_shared/prerequisites.md).
+
+- **Required input:** a resume/master `ResumeDocument` JSON (`config.json`
+  `active_resume` or an explicit path).
+- **If missing:** STOP and run **resume-to-json** to produce the `ResumeDocument`
+  JSON before calling this skill.
+
 ## Purpose
 
 Produce structured `CandidateEvidence` records that ground subsequent
-`align-resume` and `validate-resume-truth` calls.  Evidence records capture
+`inject-keywords` / `update-terminology` and `validate-resume-truth` calls.  Evidence records capture
 what the candidate can truthfully claim, preventing the alignment engine from
 fabricating experience.
 
 ## When to use
 
-- Before running `align-resume` with evidence constraints.
+- Before running `inject-keywords` or `update-terminology` with evidence constraints.
 - Before running `validate-resume-truth` to produce an evidence baseline.
 - When the user wants to review and approve their own claims before alignment.
 
@@ -66,4 +76,4 @@ Input fields: `resume`, `approved_claims` (optional), `strict`.
 - The returned evidence list is the authoritative input for truth validation
   and alignment.  Do not modify evidence records in agent code.
 - If the user needs to approve claims before alignment, surface the returned
-  list and collect approval before passing to `align-resume` as `evidence`.
+  list and collect approval before passing to `inject-keywords` / `update-terminology` as `evidence`.

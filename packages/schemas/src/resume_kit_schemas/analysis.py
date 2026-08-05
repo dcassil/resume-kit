@@ -137,6 +137,31 @@ class ATSScore(BaseModel):
     )
 
 
+class AtsStructureReport(BaseModel):
+    """Resume-only structural ATS report — no job, no composite score.
+
+    Carries only the structural signal a resume can be assessed on without a
+    job description: how many key sections are present and deterministic
+    structural recommendations (contact info, section presence, dates,
+    formatting risks). Deliberately excludes ``keyword_match``,
+    ``skills_coverage``, and any composite ``overall_score`` — those require a
+    job and live on :class:`ATSScore`. Frozen because it is a pure report value.
+    """
+
+    model_config = {"frozen": True}
+
+    section_completeness: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Key resume sections present (0-100).",
+    )
+    recommendations: list[str] = Field(
+        default_factory=list,
+        description="Deterministic structural recommendations (resume-only).",
+    )
+
+
 class KeywordGapAnalysis(BaseModel):
     """Result of keyword gap analysis. Ported from upstream refinement schema."""
 

@@ -10,9 +10,20 @@ description: >
 
 # job-to-json — build a JobDescription from a posting
 
+## Prerequisites
+
+Run the shared **Prerequisites gate** first — see
+[`_shared/prerequisites.md`](../_shared/prerequisites.md).
+
+- **Required input:** the **job posting** as text, a URL's content, or a
+  PDF/DOCX/MD/text file — provided by the caller.
+- **If it is missing:** STOP and ask the caller for the posting text, URL, or
+  file. There is no upstream skill — this skill is itself the first step that
+  produces the `JobDescription` JSON others depend on.
+
 ## Purpose
 
-`check-resume-ats`, `check-resume-job-match`, and `identify-resume-gaps` score a
+`check-ats-structure`, `check-keyword-match`, and `identify-resume-gaps` score a
 resume **against a JobDescription**. The deterministic no-LLM `resume-tool
 extract-job` only captures the raw text — it does NOT populate the structured
 `requirements` and `keywords`, so `skills_coverage` comes back `0`. This skill
@@ -121,6 +132,6 @@ resume-kit/
 ## Output
 
 The saved path to a valid `JobDescription` JSON with populated `requirements`,
-`qualifications`, and `keywords` — ready for `check-resume-ats`,
-`check-resume-job-match`, and `identify-resume-gaps` to produce meaningful
+`qualifications`, and `keywords` — ready for `check-ats-structure`,
+`check-keyword-match`, and `identify-resume-gaps` to produce meaningful
 keyword-match AND skills-coverage scores.

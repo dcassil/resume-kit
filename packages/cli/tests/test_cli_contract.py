@@ -38,6 +38,7 @@ def test_help_lists_all_commands() -> None:
         "extract",
         "extract-job",
         "check-ats",
+        "check-ats-structure",
         "match",
         "select",
         "compare",

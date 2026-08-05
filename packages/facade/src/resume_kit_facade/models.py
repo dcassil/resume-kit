@@ -87,6 +87,19 @@ class CheckResumeAtsRequest:
 
 
 @dataclass(frozen=True)
+class CheckAtsStructureRequest:
+    """Inputs for the check-ats-structure capability (RIT-T-0077).
+
+    Resume-only: runs the deterministic structural ATS check on *resume* alone
+    (section presence + structural recommendations). No job description and no
+    alias file are involved — the check carries no keyword/skills-coverage
+    signal, so project synonyms are irrelevant to it.
+    """
+
+    resume: ResumeDocument
+
+
+@dataclass(frozen=True)
 class CheckResumeJobMatchRequest:
     """Inputs for the check-resume-job-match capability.
 

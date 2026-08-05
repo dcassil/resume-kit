@@ -1,7 +1,7 @@
 {
   "name": "resume-intelligence",
-  "version": "0.2.0",
-  "description": "Resume Intelligence Toolkit skills: extract, ATS check, job match, select, compare, gap analysis, controlled alignment, truth validation, candidate evidence, and PDF/DOCX export — over the resume-kit MCP server and resume-tool CLI.",
+  "version": "0.3.0",
+  "description": "Resume Intelligence Toolkit skills: single-responsibility, self-gating flow (resume-workflow guide) — resume/job → JSON, ATS-structure check, keyword match, gap analysis, truth-gated keyword injection + terminology mirroring, truth validation, candidate evidence, version compare/select, and PDF/DOCX export — over the resume-kit MCP server and resume-tool CLI.",
   "author": {
     "name": "Daniel Cassil"
   },

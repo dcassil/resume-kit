@@ -32,6 +32,7 @@ from resume_kit_facade.models import (
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
+    CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
@@ -176,6 +177,19 @@ def check_ats(
     )
     options = _options(False, strict, False)
     _run(caps.check_resume_ats(request, options), output)
+
+
+@app.command(name="check-ats-structure")
+def check_ats_structure(
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+) -> None:
+    """Run the resume-only structural ATS check (no job)."""
+    request = CheckAtsStructureRequest(resume=io.load_resume(resume))
+    options = _options(False, strict, False)
+    _run(caps.check_ats_structure(request, options), output)
 
 
 @app.command()

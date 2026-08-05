@@ -25,6 +25,7 @@ from resume_kit_facade.models import (
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
+    CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     ExportResumeRequest,
@@ -437,6 +438,20 @@ _SURFACE_CASES = (
         mcp_args=lambda ctx: {"resume": _resume(ctx), "job": _job(ctx)},
         api_path="/check-ats",
         api_body=lambda ctx: {"resume": _resume(ctx), "job": _job(ctx)},
+    ),
+    SurfaceCase(
+        name="check-ats-structure",
+        capability="check-ats-structure",
+        request=lambda ctx: CheckAtsStructureRequest(resume=ctx.data.resume),
+        cli_args=lambda ctx: [
+            "check-ats-structure",
+            "--resume",
+            str(ctx.paths.resume),
+        ],
+        mcp_name="resume_check_ats_structure",
+        mcp_args=lambda ctx: {"resume": _resume(ctx)},
+        api_path="/check-ats-structure",
+        api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(
         name="identify-resume-gaps",

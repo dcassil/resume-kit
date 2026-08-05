@@ -7,15 +7,15 @@ description: >
   proposes an alias, runs the truthfulness gate, asks the user to confirm, and
   ONLY THEN appends a justified entry to `resume-kit/learning/synonyms.json` so
   future deterministic runs match it automatically. The agent writes DATA;
-  scoring stays deterministic and provider-free. Referenced by check-resume-ats,
-  check-resume-job-match, and identify-resume-gaps. Best run in a subagent.
+  scoring stays deterministic and provider-free. Referenced by
+  check-keyword-match and identify-resume-gaps. Best run in a subagent.
 ---
 
 # manage-synonyms — propose → truth-gate → confirm → append aliases
 
 ## Purpose
 
-`check-resume-ats`, `check-resume-job-match`, and `identify-resume-gaps` score a
+`check-keyword-match` and `identify-resume-gaps` score a
 resume against a job **deterministically** — no LLM at scoring time. Matching
 uses a packaged seed lexicon UNIONed with an optional **project alias file**
 (`resume-kit/learning/synonyms.json`, RIT-T-0068 format). When a scoring run

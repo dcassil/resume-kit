@@ -29,34 +29,38 @@ SKILLS_DIR = PLUGIN_DIR / "skills"
 
 EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
     [
-        "extract-resume",
-        "extract-job-description",
-        "check-resume-ats",
-        "check-resume-job-match",
-        "select-best-resume",
-        "compare-resume-versions",
-        "identify-resume-gaps",
-        "align-resume",
-        "validate-resume-truth",
-        "build-candidate-evidence",
-        "export-resume",
+        # Ingest
         "resume-to-json",
         "job-to-json",
+        # Check
+        "check-ats-structure",
+        "check-keyword-match",
+        "identify-resume-gaps",
+        # Improve
+        "inject-keywords",
+        "update-terminology",
+        # Verify / support
+        "validate-resume-truth",
+        "build-candidate-evidence",
+        "compare-resume-versions",
+        "select-best-resume",
+        # Export / maintain / flow
+        "export-resume",
         "manage-synonyms",
-        "align-terminology",
+        "resume-workflow",
     ]
 )
 
-# CLI commands and MCP tool names that must appear (one per slug)
+# CLI commands and MCP tool names that must appear (one per slug). Workflow /
+# agent-driven skills (resume-to-json, job-to-json, inject-keywords,
+# update-terminology, manage-synonyms, resume-workflow) are intentionally exempt
+# — they orchestrate other skills/tools rather than wrapping a single capability.
 EXPECTED_CLI_OR_MCP: dict[str, list[str]] = {
-    "extract-resume": ["resume-tool", "resume_extract"],
-    "extract-job-description": ["resume-tool", "job_description_extract"],
-    "check-resume-ats": ["resume-tool", "resume_check_ats"],
-    "check-resume-job-match": ["resume-tool", "resume_check_job_match"],
+    "check-ats-structure": ["resume-tool", "resume_check_ats_structure"],
+    "check-keyword-match": ["resume-tool", "resume_check_job_match"],
     "select-best-resume": ["resume-tool", "resume_select_best"],
     "compare-resume-versions": ["resume-tool", "resume_compare_versions"],
     "identify-resume-gaps": ["resume-tool", "resume_identify_gaps"],
-    "align-resume": ["resume-tool", "resume_align"],
     "validate-resume-truth": ["resume-tool", "resume_validate_truth"],
     "build-candidate-evidence": ["resume-tool", "candidate_evidence_build"],
     "export-resume": ["resume-tool", "resume_export"],
@@ -115,7 +119,11 @@ def test_skills_directory_exists() -> None:
 
 def test_skill_slug_set_is_complete() -> None:
     """The set of skill directories matches exactly the 10 expected slugs."""
-    actual = {d.name for d in SKILLS_DIR.iterdir() if d.is_dir()}
+    actual = {
+        d.name
+        for d in SKILLS_DIR.iterdir()
+        if d.is_dir() and not d.name.startswith("_")
+    }
     missing = EXPECTED_SKILL_SLUGS - actual
     extra = actual - EXPECTED_SKILL_SLUGS
     assert not missing, f"Missing skill directories: {sorted(missing)}"

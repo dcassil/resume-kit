@@ -62,32 +62,66 @@ Alongside `active_resume` and `active_job`, `config.json` may carry an optional
 
 This is purely a plugin/agent convention: **no Python package opens
 `config.json`.** The skill reads the pointer and passes the resolved path to the
-scoring surfaces through their `alias_file` parameter — `resume-tool check-ats
---alias-file <path>` / `match --alias-file <path>` / `identify-gaps
---alias-file <path>` on the CLI, an `alias_file` field on the
-`resume_check_ats` / `resume_check_job_match` / `resume_identify_gaps` MCP tools,
-and an `alias_file` body field on the corresponding API routes. When the pointer
-is absent the surfaces run seed-only, identical to prior behaviour.
+keyword-scoring surfaces through their `alias_file` parameter — `resume-tool
+match --alias-file <path>` / `identify-gaps --alias-file <path>` on the CLI, an
+`alias_file` field on the `resume_check_job_match` / `resume_identify_gaps` MCP
+tools, and an `alias_file` body field on the corresponding API routes. (Keyword
+matching uses the alias index; `check-ats-structure` is structure-only and takes
+no alias file.) When the pointer is absent the surfaces run seed-only, identical
+to prior behaviour.
 
 These skills describe how an agent drives the `resume-tool` CLI or the MCP
-server to invoke each of the 10 built capabilities.  Skills are thin
-invocation guides — they do not implement resume intelligence logic and must
-not invent facts, bypass evidence, or create business rules in prompt text.
+server. Each skill does ONE thing and self-gates on its prerequisites (it stops
+and names the upstream skill to run first when a required input — a resume/job
+JSON — is missing, rather than producing empty output). Start with the
+`resume-workflow` guide, which sequences the skills. Skills are thin invocation
+guides — they do not implement resume intelligence logic and must not invent
+facts, bypass evidence, or create business rules in prompt text.
+
+## Workflow (start here)
+
+`resume-workflow` is the entry-point guide; it runs the skills in order:
+
+1. **Ingest** — `resume-to-json`, `job-to-json` (no LLM; the agent converts the
+   files/posting into canonical JSON).
+2. **Check** — `check-ats-structure` (structural/parse issues, resume-only),
+   `check-keyword-match` (resume↔job keyword coverage), `identify-resume-gaps`
+   (missing / injectable keywords).
+3. **Improve** (optional, no LLM, truth-gated) — `inject-keywords` (surface
+   missing-but-true keywords), `update-terminology` (mirror the employer's exact
+   wording for a synonym the resume already satisfies).
+4. **Verify** — `validate-resume-truth`; then re-run the checks to see the delta.
+5. **Export** — `export-resume` (PDF/DOCX).
+
+Supporting: `build-candidate-evidence`, `compare-resume-versions`,
+`select-best-resume`, and `manage-synonyms` (grows the project alias index used
+by keyword matching + terminology).
 
 ## Capability Map
 
 | Skill directory | CLI command | MCP tool name | LLM required? |
 |---|---|---|---|
-| `extract-resume` | `resume-tool extract` | `resume_extract` | Optional (no-LLM path available) |
-| `extract-job-description` | `resume-tool extract-job` | `job_description_extract` | Optional (no-LLM path available) |
-| `check-resume-ats` | `resume-tool check-ats` | `resume_check_ats` | No (deterministic) |
-| `check-resume-job-match` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
-| `select-best-resume` | `resume-tool select` | `resume_select_best` | No (deterministic) |
-| `compare-resume-versions` | `resume-tool compare` | `resume_compare_versions` | No (deterministic) |
+| `resume-to-json` | (agent-driven) | — | No (agent converts) |
+| `job-to-json` | (agent-driven) | — | No (agent converts) |
+| `check-ats-structure` | `resume-tool check-ats-structure` | `resume_check_ats_structure` | No (deterministic) |
+| `check-keyword-match` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
 | `identify-resume-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |
-| `align-resume` | `resume-tool align` | `resume_align` | Yes (provider required) |
+| `inject-keywords` | (agent-driven, truth-gated) | — | No (agent edits) |
+| `update-terminology` | `resume-tool suggest-terminology` / `align-terminology` | `resume_suggest_terminology` / `resume_align_terminology` | No (deterministic) |
 | `validate-resume-truth` | `resume-tool validate-truth` | `resume_validate_truth` | No (deterministic) |
 | `build-candidate-evidence` | `resume-tool build-evidence` | `candidate_evidence_build` | No (deterministic) |
+| `compare-resume-versions` | `resume-tool compare` | `resume_compare_versions` | No (deterministic) |
+| `select-best-resume` | `resume-tool select` | `resume_select_best` | No (deterministic) |
+| `export-resume` | `resume-tool export` | `resume_export` | No (deterministic) |
+| `manage-synonyms` | (agent-driven) | — | No (grows alias index) |
+| `resume-workflow` | (guide) | — | No (orchestration) |
+
+**Disabled / not surfaced as skills:** LLM auto-rewrite (`align-resume`) is
+disabled for now — the no-LLM `inject-keywords` + `update-terminology` cover
+truthful tailoring. The raw LLM extract tools (`resume_extract`,
+`job_description_extract`) remain callable via CLI/MCP but are not surfaced as
+skills; prefer the agent-driven `resume-to-json` / `job-to-json`, which need no
+provider.
 
 ## Architecture Note
 

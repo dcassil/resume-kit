@@ -86,6 +86,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_extract",
         "job_description_extract",
         "resume_check_ats",
+        "resume_check_ats_structure",
         "resume_check_job_match",
         "resume_select_best",
         "resume_compare_versions",

@@ -75,6 +75,7 @@ def test_registry_contains_all_capabilities() -> None:
         "extract-resume",
         "extract-job-description",
         "check-resume-ats",
+        "check-ats-structure",
         "check-resume-job-match",
         "select-best-resume",
         "compare-resume-versions",

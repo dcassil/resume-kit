@@ -10,10 +10,21 @@ description: >
 
 # resume-to-json — build a ResumeDocument from a resume file
 
+## Prerequisites
+
+Run the shared **Prerequisites gate** first — see
+[`_shared/prerequisites.md`](../_shared/prerequisites.md).
+
+- **Required input:** a **source resume file path** (PDF, DOCX, Markdown, or
+  plain text) provided by the caller.
+- **If it is missing:** STOP and ask the caller for the source resume file path.
+  There is no upstream skill — this skill is itself the first step that produces
+  the `ResumeDocument` JSON others depend on.
+
 ## Purpose
 
-Every resume-intelligence capability that takes a resume (check-resume-ats,
-check-resume-job-match, align-resume, validate-resume-truth, select-best-resume,
+Every resume-intelligence capability that takes a resume (check-ats-structure,
+check-keyword-match, validate-resume-truth, select-best-resume,
 compare-resume-versions, identify-resume-gaps, build-candidate-evidence,
 export-resume) operates on a structured **ResumeDocument JSON** — not on a raw
 PDF/DOCX/MD file. This skill turns a document into that JSON.
@@ -187,5 +198,5 @@ should just read the file yourself and skip this.
 
 The saved path to a valid `ResumeDocument` JSON at
 `resume-kit/resumes/<orig-basename>-original.json` — a faithful, lossless
-representation ready for check-resume-ats, align-resume, validate-resume-truth,
+representation ready for check-ats-structure, check-keyword-match, validate-resume-truth,
 and the other resume-intelligence capabilities.

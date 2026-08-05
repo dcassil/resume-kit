@@ -47,6 +47,7 @@ from resume_kit_facade.models import (
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
+    CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
@@ -63,6 +64,7 @@ from resume_kit_api.models import (
     AlignResumeBody,
     AlignTerminologyBody,
     BuildCandidateEvidenceBody,
+    CheckAtsStructureBody,
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
     CompareResumeVersionsBody,
@@ -174,6 +176,13 @@ def register_routes(app: FastAPI) -> None:
             resume=body.resume, job=body.job, alias_file=body.alias_file
         )
         return _render(await REGISTRY["check-resume-ats"](request, _options(body)))
+
+    @app.post("/check-ats-structure")
+    async def check_ats_structure(body: CheckAtsStructureBody) -> Response:
+        request = CheckAtsStructureRequest(resume=body.resume)
+        return _render(
+            await REGISTRY["check-ats-structure"](request, _options(body))
+        )
 
     @app.post("/match")
     async def match(body: CheckResumeJobMatchBody) -> Response:

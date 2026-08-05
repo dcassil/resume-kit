@@ -1,7 +1,7 @@
 ---
-name: align-terminology
+name: update-terminology
 description: >
-  Section-by-section, human-in-loop terminology alignment. When a deterministic
+  Section-by-section, human-in-loop terminology update. When a deterministic
   ATS/match/gap run finds a JD keyword the resume already satisfies under a
   DIFFERENT surface form (an ALIAS hit — e.g. resume "k8s", JD "Kubernetes"),
   this workflow proposes mirroring the employer's EXACT wording, presents the
@@ -13,11 +13,11 @@ description: >
   (validate_resume_truth) regardless. Best run in a subagent.
 ---
 
-# align-terminology — analyze → present per section → accept/skip → apply → report delta
+# update-terminology — analyze → present per section → accept/skip → apply → report delta
 
 ## Purpose
 
-`check-resume-ats`, `check-resume-job-match`, and `identify-resume-gaps` score a
+`check-keyword-match` and `identify-resume-gaps` score a
 resume against a job **deterministically** — no LLM at scoring time. When the
 resume already demonstrates a job's required skill but under a *different surface
 form* (an **alias hit**), the employer's exact wording is missing even though the
@@ -30,6 +30,34 @@ deterministic terminology-alignment analysis, presents the resulting suggestions
 applies only the accepted mirrors, and reports the before/after keyword-match
 delta plus a per-change log (path, old→new wording). **Scoring stays
 deterministic; the agent only presents suggestions and applies accepted ones.**
+
+This is the single-purpose WORDING skill: it only **swaps the surface wording of
+a keyword the resume already satisfies**. To add a keyword the resume was
+*missing* (present in the master resume but absent from this one), use
+**inject-keywords** instead — the two never overlap.
+
+## Prerequisites gate — run this FIRST
+
+Before doing anything, run the shared prerequisites gate defined in
+[`../_shared/prerequisites.md`](../_shared/prerequisites.md). This skill's
+required inputs are:
+
+- A `ResumeDocument` JSON — the active resume (`config.json` → `active_resume`,
+  under `resume-kit/resumes/`), or an explicit path the caller passed.
+- A `JobDescription` JSON — the active job (`config.json` → `active_job`, under
+  `resume-kit/jobs/`), or an explicit path.
+- The project `alias_file` (`config.json` → `alias_file`, default
+  `resume-kit/learning/synonyms.json`) — honored so grown synonyms produce
+  suggestions (see below). The file may be absent; that is not a blocker.
+
+**If the resume JSON or job JSON is missing, wrong type, or absent: STOP.** Do
+not guess, do not run on partial inputs. Name the specific upstream skill:
+
+- Need a `ResumeDocument` JSON but only have a resume file → run **resume-to-json**.
+- Need a `JobDescription` JSON but only have posting text/URL/file → run **job-to-json**.
+
+Only when both resume and job resolve to valid JSON do you proceed to the steps
+below.
 
 ## Run me in a subagent
 
@@ -143,8 +171,8 @@ candidate lacks.
   match** is a **GAP**, not a mirror candidate. Surface it and route the user to
   **`identify-resume-gaps`** — never rewrite an absent skill into the resume to
   close the gap.
-- **Never edit identity, employer, or date fields.** Terminology alignment only
-  restates a skill's surface wording; it never touches names, companies,
+- **Never edit identity, employer, or date fields.** Terminology updates only
+  restate a skill's surface wording; they never touch names, companies,
   titles-of-record, or dates.
 - **Never apply without explicit per-suggestion acceptance**, and never
   auto-apply the whole set. Report every change you make.
@@ -157,17 +185,19 @@ Acceptance is additionally **truth-gated by the engine (`validate_resume_truth`)
 regardless** of user acceptance: the engine is the backstop, not your only line
 of defense. Honor the gate; never work around it.
 
-## Gaps vs. terminology mirrors
+## Gaps vs. terminology updates vs. keyword injection
 
-Do not confuse the two:
+Do not confuse these:
 
-- **Terminology mirror** (this skill) — the resume ALREADY satisfies the JD
+- **Terminology update** (this skill) — the resume ALREADY satisfies the JD
   keyword under a different surface form (alias hit). Mirroring the employer's
-  exact wording is truthful.
+  exact wording is truthful. WORDING only.
+- **Keyword injection** (`inject-keywords`) — the JD keyword is absent from THIS
+  resume, but the **master resume proves the candidate genuinely has it**
+  (injectable). Surfacing it into the skills list / summary is truthful.
 - **Gap** (`identify-resume-gaps`) — the JD keyword is absent from the resume
-  entirely (no match). It must be **surfaced, never rewritten in**. If the master
-  resume proves the skill, that's an *injectable* keyword for `align-resume`; if
-  neither resume shows it, it is a real, non-injectable gap.
+  entirely (no match) AND the master resume does not prove it either. It must be
+  **surfaced, never rewritten in** — a real, non-injectable gap.
 
 ## Output
 

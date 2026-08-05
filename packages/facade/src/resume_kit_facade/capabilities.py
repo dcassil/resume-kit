@@ -32,6 +32,7 @@ from collections.abc import Awaitable, Callable
 
 from resume_kit_alignment import accept_terminology_alignment
 from resume_kit_alignment import align_resume as _align_resume
+from resume_kit_ats import check_ats_structure as _check_ats_structure
 from resume_kit_ats import compute_ats_score
 from resume_kit_core import InterfaceResponse, Question, ResumeKitError
 from resume_kit_core.interface import (
@@ -68,6 +69,7 @@ from resume_kit_matching import (
 from resume_kit_schemas import (
     AlignmentResult,
     ATSScore,
+    AtsStructureReport,
     CandidateEvidence,
     JobDescription,
     JobMatchReport,
@@ -86,6 +88,7 @@ from resume_kit_facade.models import (
     AlignTerminologyResult,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
+    CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
@@ -317,6 +320,31 @@ async def check_resume_ats(
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
     return build_success(score, strict=options.strict)
+
+
+async def check_ats_structure(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the RESUME-ONLY structural ATS check (no job, no composite score).
+
+    Deterministic and job-independent: returns an
+    :class:`~resume_kit_schemas.AtsStructureReport` carrying only section
+    completeness and structural recommendations. This does NOT compute the
+    job-requiring composite ``check-resume-ats`` — it surfaces the resume-only
+    structural signal on its own.
+    """
+    if not isinstance(request, CheckAtsStructureRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "CheckAtsStructureRequest")
+        )
+    try:
+        report: AtsStructureReport = _check_ats_structure(request.resume)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
 
 
 async def check_resume_job_match(
@@ -607,6 +635,7 @@ REGISTRY: dict[str, Capability] = {
     "extract-resume": extract_resume,
     "extract-job-description": extract_job_description,
     "check-resume-ats": check_resume_ats,
+    "check-ats-structure": check_ats_structure,
     "check-resume-job-match": check_resume_job_match,
     "select-best-resume": select_best_resume,
     "compare-resume-versions": compare_resume_versions,

@@ -23,7 +23,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from resume_kit_schemas import ATSScore, ATSSubScores, MatchedKeyword
+from resume_kit_schemas import (
+    ATSScore,
+    AtsStructureReport,
+    ATSSubScores,
+    MatchedKeyword,
+)
 from resume_kit_schemas.job import JobDescription
 from resume_kit_schemas.resume import ResumeDocument
 from resume_kit_terms import (
@@ -499,6 +504,44 @@ def compute_ats_score(
         injectable_keywords=injectable_keywords[:10],
         recommendations=all_tips,
         matched_keywords=matched_keywords,
+    )
+
+
+def check_ats_structure(
+    resume: ResumeDocument | dict[str, Any],
+) -> AtsStructureReport:
+    """Run the RESUME-ONLY structural ATS check and return a minimal report.
+
+    Job-independent: inspects only the resume for structural ATS signal —
+    section presence (``_compute_section_completeness``) and deterministic
+    structural recommendations (``_expanded_recommendations``: contact info,
+    section presence, date presence, formatting risks). Returns ONLY
+    ``section_completeness`` + ``recommendations``; no keyword match, no skills
+    coverage, no composite overall score (those require a job and live on
+    :class:`~resume_kit_schemas.ATSScore`).
+
+    Reuses the exact private helpers that ``compute_ats_score`` calls, so the
+    two never diverge and no scoring math is duplicated or changed.
+
+    Args:
+        resume: The resume — either a
+            :class:`~resume_kit_schemas.ResumeDocument` instance or a plain
+            dict in the upstream shape.
+
+    Returns:
+        :class:`~resume_kit_schemas.AtsStructureReport` with section
+        completeness (0–100) and structural recommendations.
+    """
+    resume_dict: dict[str, Any] = (
+        resume.model_dump() if isinstance(resume, ResumeDocument) else resume
+    )
+
+    section_score = _compute_section_completeness(resume_dict)
+    recommendations = _expanded_recommendations(resume_dict)
+
+    return AtsStructureReport(
+        section_completeness=round(section_score, 1),
+        recommendations=recommendations,
     )
 
 

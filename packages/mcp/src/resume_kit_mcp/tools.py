@@ -22,6 +22,7 @@ from resume_kit_facade.models import (
     AlignTerminologyRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
+    CheckAtsStructureRequest,
     CheckResumeAtsRequest,
     CheckResumeJobMatchRequest,
     CompareResumeVersionsRequest,
@@ -43,6 +44,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_extract",
     "job_description_extract",
     "resume_check_ats",
+    "resume_check_ats_structure",
     "resume_check_job_match",
     "resume_select_best",
     "resume_compare_versions",
@@ -374,6 +376,19 @@ async def resume_check_ats(arguments: ToolArguments) -> ToolResult:
     return await _call("check-resume-ats", request, arguments)
 
 
+async def resume_check_ats_structure(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            CheckAtsStructureRequest,
+            {
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("check-ats-structure", request, arguments)
+
+
 async def resume_check_job_match(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -561,6 +576,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_extract": resume_extract,
     "job_description_extract": job_description_extract,
     "resume_check_ats": resume_check_ats,
+    "resume_check_ats_structure": resume_check_ats_structure,
     "resume_check_job_match": resume_check_job_match,
     "resume_select_best": resume_select_best,
     "resume_compare_versions": resume_compare_versions,

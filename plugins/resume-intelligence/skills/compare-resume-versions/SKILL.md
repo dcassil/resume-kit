@@ -8,6 +8,16 @@ description: >
 
 > **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **resume-to-json** skill) and, where a job is involved, a `JobDescription` JSON (build it with **job-to-json** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
 
+## Prerequisites
+
+Run the shared **Prerequisites gate** first — see
+[`_shared/prerequisites.md`](../_shared/prerequisites.md).
+
+- **Required inputs:** **two** `ResumeDocument` JSONs (base vs candidate) **and** a
+  `JobDescription` JSON (`config.json` `active_job` or an explicit path).
+- **If missing:** STOP and name the upstream skill — any missing resume JSON → run
+  **resume-to-json**; missing job JSON → run **job-to-json**.
+
 ## Purpose
 
 Produce a `ResumeComparisonResult` that shows how two resume versions differ

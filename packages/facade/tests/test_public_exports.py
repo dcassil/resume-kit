@@ -11,6 +11,7 @@ def test_all_public_exports_importable() -> None:
         AlignTerminologyResult,
         BuildCandidateEvidenceRequest,
         CapabilityOptions,
+        CheckAtsStructureRequest,
         CheckResumeAtsRequest,
         CheckResumeJobMatchRequest,
         CompareResumeVersionsRequest,
@@ -25,6 +26,7 @@ def test_all_public_exports_importable() -> None:
         align_resume,
         align_terminology,
         build_candidate_evidence_capability,
+        check_ats_structure,
         check_resume_ats,
         check_resume_job_match,
         compare_resume_versions,
@@ -38,8 +40,9 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 13
+    assert len(REGISTRY) == 14
     assert "export-resume" in REGISTRY
+    assert "check-ats-structure" in REGISTRY
     assert "suggest-terminology" in REGISTRY
     assert "align-terminology" in REGISTRY
 
@@ -52,6 +55,7 @@ def test_all_public_exports_importable() -> None:
 
     assert callable(align_resume)
     assert callable(build_candidate_evidence_capability)
+    assert callable(check_ats_structure)
     assert callable(check_resume_ats)
     assert callable(check_resume_job_match)
     assert callable(compare_resume_versions)
@@ -65,6 +69,7 @@ def test_all_public_exports_importable() -> None:
     assert CapabilityOptions is not None
     assert AlignResumeRequest is not None
     assert BuildCandidateEvidenceRequest is not None
+    assert CheckAtsStructureRequest is not None
     assert CheckResumeAtsRequest is not None
     assert CheckResumeJobMatchRequest is not None
     assert CompareResumeVersionsRequest is not None
