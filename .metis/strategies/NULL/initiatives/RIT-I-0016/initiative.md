@@ -4,14 +4,14 @@ level: initiative
 title: "Resume baselining: original to base to standard onboarding pipeline"
 short_code: "RIT-I-0016"
 created_at: 2026-08-05T16:41:16.870587+00:00
-updated_at: 2026-08-05T18:26:55.510826+00:00
+updated_at: 2026-08-06T21:42:49.854398+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0015, RIT-I-0017]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -21,6 +21,19 @@ initiative_id: resume-baselining-original-to-base
 ---
 
 # Resume baselining: original → base → standard onboarding pipeline
+
+## Completion Note — 2026-08-06
+
+**Completed.** The full `original → base → standard` baselining pipeline is shipped end to end. All decomposed tasks are done:
+
+- **Substrate & phases (RIT-T-0113–0118):** ProjectConfig version lineage + resolution (`standard ?? base ?? original`); job-independent structural ruleset; `base` auto-fix driver behind the claim-preservation gate; BestPracticesReport schema + shared severity taxonomy; the deterministic best-practices analyzer with `auto_suggestible` / `needs_user_input` classification; the `standard` walkthrough on the RIT-I-0015 orchestrator + hard write gate.
+- **Surfaces & skills (RIT-T-0119–0120):** facade + CLI/MCP/API adapters with cross-surface parity; plugin skills + `resume-workflow` gating all tailoring behind `standard` (with a recorded-override path).
+- **Closeout (RIT-T-0121):** real-fixture `original → base → standard` E2E integration test (full lineage + offline/no-LLM guarantee) through the CLI transport; README + plugin-README reconciled to shipped behavior; version bump 0.6.0 → 0.7.0.
+- **Phase 7 conditional (RIT-T-0122):** bounded source PDF/DOCX parse-risk detector emitting WARNING/needs-judgment findings into the `base` report (never gates). Cut line exercised: shipped all four DOCX detectors + PDF image-only; **deferred** PDF multi-column/table/text-box geometry (layout reconstruction) to a follow-on.
+
+**Deferred (not blocking closure):** RIT-T-0125 (interactive base fixing, edit-session standard walkthrough surfacing, ATS-view report reuse) remains as a standalone backlog feature; one slice depends on RIT-T-0109 in RIT-I-0017. The follow-on PDF layout-geometry detectors from RIT-T-0122's cut line are also parked for a future initiative.
+
+Gate at closure: full suite 3380 passed / 1 skipped; `ruff` + `mypy packages/` clean; boundary invariants (render libs confined to `packages/export`) preserved.
 
 ## Context **[REQUIRED]**
 
