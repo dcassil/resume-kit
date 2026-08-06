@@ -21,7 +21,10 @@ from resume_kit_facade.models import (
     AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
+    AnalyzeBestPracticesRequest,
+    BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildStandardRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -89,6 +92,9 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_align_terminology",
     "project_init",
     "project_set_active",
+    "resume_build_base",
+    "resume_build_standard",
+    "resume_analyze_best_practices",
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
@@ -849,6 +855,61 @@ async def project_set_active(arguments: ToolArguments) -> ToolResult:
     return await _call("set-active", request, arguments)
 
 
+def _optional_answers(arguments: ToolArguments) -> dict[str, str] | None:
+    value = arguments.get("answers")
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise _ValidationFailure("Field 'answers' must be an object.", field="answers")
+    answers: dict[str, str] = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or not isinstance(item, str):
+            raise _ValidationFailure(
+                "Field 'answers' must map strings to strings.", field="answers"
+            )
+        answers[key] = item
+    return answers
+
+
+async def resume_build_base(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            BuildBaseRequest,
+            {
+                "root": _optional_string(arguments, "root", "."),
+                "mode": _optional_string(arguments, "mode", "auto"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("build-base", request, arguments)
+
+
+async def resume_build_standard(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            BuildStandardRequest,
+            {
+                "root": _optional_string(arguments, "root", "."),
+                "answers": _optional_answers(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("build-standard", request, arguments)
+
+
+async def resume_analyze_best_practices(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            AnalyzeBestPracticesRequest,
+            {"resume": _resume(_required(arguments, "resume"), "resume")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("analyze-best-practices", request, arguments)
+
+
 async def edit_session_open(arguments: ToolArguments) -> ToolResult:
     try:
         changes = [_change(item, "changes") for item in _object_list(arguments, "changes")]
@@ -980,4 +1041,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_align_terminology": resume_align_terminology,
     "project_init": project_init,
     "project_set_active": project_set_active,
+    "resume_build_base": resume_build_base,
+    "resume_build_standard": resume_build_standard,
+    "resume_analyze_best_practices": resume_analyze_best_practices,
 }

@@ -203,3 +203,74 @@ def test_empty_job_is_low_confidence_and_zero_overall() -> None:
     report = check_job_match(_resume_with_skill_once(), JobDescription())
     assert report.confidence == 0.0
     assert 0.0 <= report.overall_score <= 100.0
+
+
+# ---------------------------------------------------------------------------
+# RIT-T-0107: categorized skills in a custom section count as high-value
+# placement (previously they were treated as ordinary body text -> 0).
+# ---------------------------------------------------------------------------
+
+
+def _placement_score(report) -> float:
+    return next(d.score for d in report.dimensions if d.key == "evidence_placement")
+
+
+def _resume_skills_in_custom_section() -> ResumeDocument:
+    """JD terms live ONLY in a categorized custom 'Cloud Skills' section."""
+    return ResumeDocument.model_validate(
+        {
+            "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "555"},
+            "summary": "Engineer.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Prev",
+                    "years": "2020-2023",
+                    "description": ["Delivered internal tooling."],
+                }
+            ],
+            "additional": {"technicalSkills": []},
+            "customSections": {
+                "Cloud Skills": {
+                    "sectionType": "stringList",
+                    "strings": ["Python", "Docker", "Kubernetes"],
+                }
+            },
+        }
+    )
+
+
+def _resume_skills_only_in_summary() -> ResumeDocument:
+    """Control: the same terms sit in a low-value zone (summary) only."""
+    return ResumeDocument.model_validate(
+        {
+            "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "555"},
+            "summary": "Python Docker Kubernetes.",
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Prev",
+                    "years": "2020-2023",
+                    "description": ["Delivered internal tooling."],
+                }
+            ],
+            "additional": {"technicalSkills": []},
+        }
+    )
+
+
+def test_categorized_skills_earn_placement_credit() -> None:
+    report = check_job_match(_resume_skills_in_custom_section(), _job())
+    # Pre-fix this was 0.0 (custom sections were excluded from high-value text).
+    assert _placement_score(report) > 0.0
+
+
+def test_low_value_zone_does_not_earn_placement() -> None:
+    report = check_job_match(_resume_skills_only_in_summary(), _job())
+    assert _placement_score(report) == 0.0
+
+
+def test_categorized_beats_summary_placement() -> None:
+    hi = _placement_score(check_job_match(_resume_skills_in_custom_section(), _job()))
+    lo = _placement_score(check_job_match(_resume_skills_only_in_summary(), _job()))
+    assert hi > lo

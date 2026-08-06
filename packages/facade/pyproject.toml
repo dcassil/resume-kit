@@ -15,6 +15,7 @@ dependencies = [
     "resume-kit-job-parser",
     "resume-kit-ats",
     "resume-kit-matching",
+    "resume-kit-scoring",
     "resume-kit-alignment",
     "resume-kit-evidence",
     "resume-kit-export",
@@ -28,6 +29,7 @@ resume-kit-document-parser = { workspace = true }
 resume-kit-job-parser = { workspace = true }
 resume-kit-ats = { workspace = true }
 resume-kit-matching = { workspace = true }
+resume-kit-scoring = { workspace = true }
 resume-kit-alignment = { workspace = true }
 resume-kit-evidence = { workspace = true }
 resume-kit-export = { workspace = true }

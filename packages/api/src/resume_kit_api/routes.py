@@ -46,7 +46,10 @@ from resume_kit_facade.models import (
     AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
+    AnalyzeBestPracticesRequest,
+    BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildStandardRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -78,7 +81,10 @@ from resume_kit_api.models import (
     AddEvidenceBody,
     AlignResumeBody,
     AlignTerminologyBody,
+    AnalyzeBestPracticesBody,
+    BuildBaseBody,
     BuildCandidateEvidenceBody,
+    BuildStandardBody,
     CheckAtsStructureBody,
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
@@ -422,6 +428,21 @@ def register_routes(app: FastAPI) -> None:
             root=body.root,
         )
         return _render(await REGISTRY["set-active"](request, _options(body)))
+
+    @app.post("/build-base")
+    async def build_base(body: BuildBaseBody) -> Response:
+        request = BuildBaseRequest(root=body.root, mode=body.mode)
+        return _render(await REGISTRY["build-base"](request, _options(body)))
+
+    @app.post("/build-standard")
+    async def build_standard(body: BuildStandardBody) -> Response:
+        request = BuildStandardRequest(root=body.root, answers=body.answers)
+        return _render(await REGISTRY["build-standard"](request, _options(body)))
+
+    @app.post("/analyze-best-practices")
+    async def analyze_best_practices(body: AnalyzeBestPracticesBody) -> Response:
+        request = AnalyzeBestPracticesRequest(resume=body.resume)
+        return _render(await REGISTRY["analyze-best-practices"](request, _options(body)))
 
     @app.post("/export")
     async def export(body: ExportResumeBody) -> Response:

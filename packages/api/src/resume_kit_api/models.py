@@ -329,6 +329,44 @@ class SetActiveBody(_Options):
     root: str = Field(default=".", description="Project root containing resume-kit/.")
 
 
+class BuildBaseBody(_Options):
+    """Body for ``POST /build-base`` — run the original->base write path.
+
+    Filesystem-local (RIT-T-0115): runs the structural check + auto-safe fixes
+    under ``root`` behind the claim-preservation gate, writes the ``base``
+    version, and records the pointer. ``mode`` currently supports only ``auto``.
+    """
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    mode: str = Field(default="auto", description="Fix mode (only 'auto' is supported).")
+
+
+class BuildStandardBody(_Options):
+    """Body for ``POST /build-standard`` — run the base->standard write path.
+
+    Filesystem-local (RIT-T-0118): analyzes best practices and applies
+    auto-suggestible edits plus any ``answers`` rewrites (keyed by finding key)
+    under ``root`` behind the claim-preservation gate, writes the ``standard``
+    version, and records the pointer.
+    """
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    answers: dict[str, str] | None = Field(
+        default=None,
+        description="Optional map of finding keys to user-supplied rewrites.",
+    )
+
+
+class AnalyzeBestPracticesBody(_Options):
+    """Body for ``POST /analyze-best-practices`` — resume only, no job.
+
+    Pure and deterministic (RIT-T-0117): returns the generic, job-independent
+    ``BestPracticesReport`` for the resume.
+    """
+
+    resume: ResumeDocument
+
+
 class ExportResumeBody(_Options):
     """Body for ``POST /export`` — render a resume to ``pdf`` or ``docx``.
 

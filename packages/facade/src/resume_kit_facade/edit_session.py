@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from resume_kit_alignment import ReviewController, apply_diffs
 from resume_kit_core import CoreError, ErrorCode, ResumeKitError
+from resume_kit_evidence import validate_resume_truth
 from resume_kit_schemas import (
     ATSScore,
     CandidateEvidence,
@@ -43,7 +44,12 @@ from resume_kit_facade.models import (
     EditSessionStatus,
     ReconcileSessionResult,
 )
-from resume_kit_facade.project_config import atomic_write_json, load_config, working_dir
+from resume_kit_facade.project_config import (
+    atomic_write_json,
+    load_config,
+    resolve_active_resume,
+    working_dir,
+)
 
 _SESSION_RELATIVE = Path("working") / "edit-session.json"
 _TERMINAL = {
@@ -76,7 +82,10 @@ def open_session(
     if mode not in _MODES:
         _raise_gate("invalid_mode", f"Unsupported edit-session mode: {mode!r}.")
     config = load_config(root)
-    active_resume = config.active_resume
+    # Tailor from the resolved lineage input (standard -> base -> original,
+    # RIT-I-0016). Legacy projects with only ``active_resume`` resolve to that
+    # original unchanged, preserving prior behavior.
+    active_resume = resolve_active_resume(config)
     active_job = config.active_job
     if active_resume is None or active_job is None:
         _raise_gate(
@@ -215,7 +224,17 @@ def commit_session(
     freedom: int,
     alias_timestamp: str | None = None,
 ) -> CommitSessionResult:
-    """Run the hard write gate, apply approved diffs, and persist the result."""
+    """Run the hard write gate, apply approved diffs, and persist the result.
+
+    Freshness contract for the truth gate: the AUTHORITATIVE truth check is
+    always computed over the assembled post-apply document (the exact bytes that
+    would be persisted), via :func:`_assembled_contradicted_paths`. The
+    per-change provenance check (:func:`_contradicted_paths`) is only an advisory
+    fast pre-gate over provenance seeded at proposal time. No version is ever
+    persisted whose assembled form fails truth validation, so a claim that
+    becomes ``CONTRADICTED`` only in the COMBINATION of accepted changes is still
+    refused here even though each change looked supported in isolation.
+    """
     state = load_session(root)
     unlogged = _unlogged_changes(state)
     if unlogged:
@@ -242,6 +261,13 @@ def commit_session(
     before_match, before_ats = _score(root, original, state.active_job)
     result_dict, applied, rejected = apply_diffs(original, accepted, freedom=freedom)
     updated_resume = ResumeDocument.model_validate(result_dict)
+    assembled_contradicted = _assembled_contradicted_paths(root, state, updated_resume)
+    if assembled_contradicted:
+        _raise_gate(
+            "truth_contradicted_assembled",
+            "Assembled resume fails truth validation (contradicted claims).",
+            {"paths": assembled_contradicted},
+        )
     grown_aliases = grow_aliases_from_accepted_terminology(
         root=root,
         state=state,
@@ -646,7 +672,52 @@ def _matching_provenance(state: EditSessionState, change: ChangeProposal) -> lis
     ]
 
 
+def _assembled_contradicted_paths(
+    root: str | Path,
+    state: EditSessionState,
+    resume: ResumeDocument,
+) -> list[str]:
+    """Freshly recompute truth over the ASSEMBLED post-apply resume.
+
+    This is the write gate's *authoritative* truth check. Unlike
+    :func:`_contradicted_paths` — a fast pre-gate that only inspects per-change
+    ``claim_provenance`` seeded when each change was individually proposed — this
+    runs the deterministic ``validate_resume_truth`` validator over the exact
+    document ``apply_diffs`` produced. A claim that only becomes contradicted in
+    the COMBINATION of accepted changes is therefore caught here. Deterministic
+    and offline (no network/LLM); returns every field path classified
+    ``CONTRADICTED``. ``UNSUPPORTED`` retains its existing (non-blocking-here)
+    handling and is intentionally not escalated by this task.
+    """
+    config = load_config(root)
+    alias_file = (
+        str(_project_file(root, config.alias_file))
+        if config.alias_file and config.alias_file.strip()
+        else None
+    )
+    report = validate_resume_truth(
+        resume,
+        state.review_session.evidence,
+        alias_file=alias_file,
+    )
+    return [
+        provenance.field_path
+        for provenance in report.claims
+        if provenance.status is ProvenanceStatus.CONTRADICTED
+        and provenance.field_path is not None
+    ]
+
+
 def _contradicted_paths(state: EditSessionState, changes: list[ChangeProposal]) -> list[str]:
+    """Fast advisory pre-gate: per-change provenance seeded at proposal time.
+
+    This is NOT the authoritative truth check — it only inspects the
+    ``claim_provenance`` computed when each change was individually proposed. The
+    authoritative gate is :func:`_assembled_contradicted_paths`, which recomputes
+    truth over the assembled post-apply document. Keeping this pre-check preserves
+    the existing fast refusal for already-known contradictions before the more
+    expensive assembly + revalidation runs.
+    """
     paths: list[str] = []
     for change in changes:
         if any(
@@ -868,14 +939,15 @@ def _check_tamper(root: str | Path, state: EditSessionState) -> None:
 
 def _ensure_bound_to_active(root: str | Path, state: EditSessionState) -> None:
     config = load_config(root)
-    if state.active_resume != config.active_resume or state.active_job != config.active_job:
+    resolved_resume = resolve_active_resume(config)
+    if state.active_resume != resolved_resume or state.active_job != config.active_job:
         _raise_gate(
             "session_active_mismatch",
             "Active edit session does not match active_resume and active_job.",
             {
                 "session_active_resume": state.active_resume,
                 "session_active_job": state.active_job,
-                "config_active_resume": config.active_resume,
+                "config_active_resume": resolved_resume,
                 "config_active_job": config.active_job,
             },
         )

@@ -21,8 +21,10 @@ from resume_kit_facade.project_config import (
     working_dir,
 )
 from resume_kit_schemas import (
+    CandidateEvidence,
     ChangeProposal,
     ClaimProvenance,
+    EvidenceKind,
     JobDescription,
     ProvenanceStatus,
     ResumeDocument,
@@ -440,3 +442,131 @@ async def test_rejected_and_non_terminology_edits_do_not_grow_aliases(
     assert committed.data is not None
     assert committed.data.grown_aliases == []
     assert not alias_file.exists()
+
+async def _open_with_evidence(
+    root: Path,
+    *,
+    changes: list[ChangeProposal],
+    provenance: list[ClaimProvenance],
+    evidence: list[CandidateEvidence],
+    mode: str = "interactive",
+) -> None:
+    response = await caps.REGISTRY["open-edit-session"](
+        OpenEditSessionRequest(
+            root=root,
+            mode=mode,
+            changes=changes,
+            claim_provenance=provenance,
+            evidence=evidence,
+        ),
+        CapabilityOptions(),
+    )
+    assert not response.errors
+
+
+async def _approve(root: Path, path: str) -> None:
+    decided = await caps.REGISTRY["decide-change"](
+        DecideChangeRequest(root=root, path=path, action=ReviewAction.APPROVE),
+        CapabilityOptions(),
+    )
+    assert not decided.errors
+
+
+@pytest.mark.asyncio
+async def test_assembled_truth_gate_refuses_combination_contradiction(tmp_path: Path) -> None:
+    """RIT-T-0112: two changes each seeded SUPPORTED (so the per-change
+    provenance pre-gate passes) still refuse at commit because the fresh
+    recompute over the ASSEMBLED post-apply document classifies a claim as
+    CONTRADICTED. Under the old provenance-only gate this session would have
+    wrongly committed.
+    """
+    _setup_project(tmp_path)
+    summary_change = _change("Built Python and FastAPI services.", path="summary")
+    skill_change = ChangeProposal(
+        path="additional.technicalSkills",
+        action="append",
+        original=None,
+        value="Quantum Teleportation",
+        reason="Add a claimed skill.",
+    )
+    evidence = [
+        CandidateEvidence(
+            id="e1",
+            kind=EvidenceKind.USER_STATEMENT,
+            content="Quantum Teleportation",
+            tags=["contradicted"],
+        )
+    ]
+    await _open_with_evidence(
+        tmp_path,
+        changes=[summary_change, skill_change],
+        provenance=[
+            ClaimProvenance(
+                claim="Built Python and FastAPI services.",
+                field_path="summary",
+                status=ProvenanceStatus.SUPPORTED,
+            ),
+            ClaimProvenance(
+                claim="Quantum Teleportation",
+                field_path="additional.technicalSkills",
+                status=ProvenanceStatus.SUPPORTED,
+            ),
+        ],
+        evidence=evidence,
+    )
+    await _approve(tmp_path, "summary")
+    await _approve(tmp_path, "additional.technicalSkills")
+
+    response = await caps.REGISTRY["commit-session"](
+        CommitSessionRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+
+    assert response.errors
+    assert response.errors[0].details["gate_code"] == "truth_contradicted_assembled"
+    assert "additional.technicalSkills[0]" in response.errors[0].details["paths"]
+    # Nothing was persisted: the working artifact must not exist.
+    assert not (working_dir(tmp_path) / "working" / "daniel.tailored.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_assembled_truth_gate_allows_clean_session(tmp_path: Path) -> None:
+    """RIT-T-0112 backward-compat: a session whose ASSEMBLED document has no
+    contradicted claims still commits unchanged even when evidence is present
+    (the fresh recompute is additive, not stricter for clean sessions).
+    """
+    _setup_project(tmp_path)
+    change = _change("Built Python and FastAPI services.", path="summary")
+    evidence = [
+        CandidateEvidence(
+            id="e1",
+            kind=EvidenceKind.USER_STATEMENT,
+            content="Candidate has never worked on quantum teleportation.",
+            tags=["contradicted:quantum"],
+        )
+    ]
+    await _open_with_evidence(
+        tmp_path,
+        changes=[change],
+        provenance=[
+            ClaimProvenance(
+                claim="Built Python and FastAPI services.",
+                field_path="summary",
+                status=ProvenanceStatus.SUPPORTED,
+            )
+        ],
+        evidence=evidence,
+    )
+    await _approve(tmp_path, "summary")
+
+    response = await caps.REGISTRY["commit-session"](
+        CommitSessionRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+
+    assert not response.errors
+    assert response.data is not None
+    written = json.loads(
+        (working_dir(tmp_path) / "working" / "daniel.tailored.json").read_text(encoding="utf-8")
+    )
+    assert written["summary"] == "Built Python and FastAPI services."

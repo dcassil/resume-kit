@@ -199,6 +199,7 @@ def test_known_packages_present() -> None:
         "mcp",
         "api",
         "export",
+        "scoring",
     }
     unexpected = set(package_dirs) - expected
     assert not unexpected, (

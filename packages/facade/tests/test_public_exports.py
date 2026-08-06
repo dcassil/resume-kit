@@ -11,7 +11,11 @@ def test_all_public_exports_importable() -> None:
         AlignResumeRequest,
         AlignTerminologyRequest,
         AlignTerminologyResult,
+        AnalyzeBestPracticesRequest,
+        BaseBuildResult,
+        BuildBaseRequest,
         BuildCandidateEvidenceRequest,
+        BuildStandardRequest,
         CapabilityOptions,
         CheckAtsStructureRequest,
         CheckResumeAtsRequest,
@@ -41,6 +45,7 @@ def test_all_public_exports_importable() -> None:
         SessionPromptRequest,
         SessionStatusRequest,
         SetActiveRequest,
+        StandardBuildResult,
         SuggestTerminologyRequest,
         TerminologyAlignmentDelta,
         ValidateFaithfulnessRequest,
@@ -48,7 +53,10 @@ def test_all_public_exports_importable() -> None:
         add_evidence_capability,
         align_resume,
         align_terminology,
+        analyze_best_practices_capability,
+        build_base_capability,
         build_candidate_evidence_capability,
+        build_standard_capability,
         check_ats_structure,
         check_resume_ats,
         check_resume_job_match,
@@ -80,7 +88,10 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 28
+    assert len(REGISTRY) == 31
+    assert "build-base" in REGISTRY
+    assert "build-standard" in REGISTRY
+    assert "analyze-best-practices" in REGISTRY
     assert "validate-faithfulness" in REGISTRY
     assert "extract-resume-text" in REGISTRY
     assert "export-resume" in REGISTRY
@@ -140,6 +151,15 @@ def test_all_public_exports_importable() -> None:
     assert SuggestTerminologyRequest is not None
     assert AlignTerminologyResult is not None
     assert TerminologyAlignmentDelta is not None
+
+    assert callable(build_base_capability)
+    assert callable(build_standard_capability)
+    assert callable(analyze_best_practices_capability)
+    assert BuildBaseRequest is not None
+    assert BuildStandardRequest is not None
+    assert AnalyzeBestPracticesRequest is not None
+    assert BaseBuildResult is not None
+    assert StandardBuildResult is not None
 
     assert callable(align_resume)
     assert callable(build_candidate_evidence_capability)

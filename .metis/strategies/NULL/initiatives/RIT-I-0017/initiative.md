@@ -1,23 +1,23 @@
 ---
-id: scoredoc-buildoc-projection
+id: separate-scoring-representation
 level: initiative
 title: "Separate scoring representation (ScoreDoc) from build representation (BuildDoc) via deterministic projection"
 short_code: "RIT-I-0017"
-created_at: 2026-08-05T17:00:00.000000+00:00
-updated_at: 2026-08-05T17:00:00.000000+00:00
+created_at: 2026-08-05T17:00:00+00:00
+updated_at: 2026-08-05T19:19:44.075857+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0015]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/active"
 
 
 exit_criteria_met: false
 estimated_complexity: M
 strategy_id: NULL
-initiative_id: RIT-I-0017
+initiative_id: separate-scoring-representation
 ---
 
 # Separate scoring representation (ScoreDoc) from build representation (BuildDoc) via deterministic projection Initiative
@@ -96,7 +96,7 @@ build schema, renderer, and export are untouched.
 - **Not** modifying `ResumeDocument`/BuildDoc, the renderer, or export in any way. Purely additive.
 - **Not** scoring the rendered artifact, bundling a PDF/DOCX text extractor, or adding a parse-confidence
   or source-map model (explicitly rejected for the base in [[RIT-A-0002]]).
-- **Not** introducing new score *types* — `check-ats-structure` (structural) and `check-job-match`
+- **Not** introducing new score *types* — `check-structure` (structural) and `check-job-match`
   (content) keep their identity; ScoreDoc is the shared substrate they read from.
 - **Not** any LLM/provider dependency or network call in a scoring command — projection and scoring stay
   deterministic and offline.
@@ -119,7 +119,7 @@ build schema, renderer, and export are untouched.
     `additional.technicalSkills` or other BuildDoc field names — and applies zone weights
     (experience > skills_list > summary) plus recency weighting.
   - REQ-004: ATS scoring (`packages/ats`) — `skills_coverage`, `section_completeness`, and
-    `check-ats-structure` — reads its inputs from ScoreDoc sections/entities/zoned index, not from raw
+    `check-structure` — reads its inputs from ScoreDoc sections/entities/zoned index, not from raw
     BuildDoc fields.
   - REQ-005: The **85.8 -> 75.8** regression fixture scores correctly (categorized skills counted) under
     the new path; a golden test pins the corrected score.
@@ -195,7 +195,7 @@ See the decomposed tasks for per-surface design. Design invariants:
 
 ### Integration Testing
 - **Strategy**: End-to-end over a real resume/job fixture proving (a) the **85.8->75.8** case now scores
-  correctly with categorized skills counted, (b) `check-ats-structure` and `check-job-match` produce
+  correctly with categorized skills counted, (b) `check-structure` and `check-job-match` produce
   coherent numbers off the shared ScoreDoc, (c) the "what the ATS sees" report returns identical content
   across CLI/MCP/API/facade (parity), (d) build/export are byte-for-byte unaffected.
 - **Data Management**: reuse existing resume/job fixtures; add a categorized-skills fixture that
@@ -234,7 +234,7 @@ Sequenced after [[RIT-I-0015]] lands. Decision recorded in [[RIT-A-0002]]. Decom
 4. **RIT-T-0107** — Repoint **matching** (`keywords.py`) onto the ScoreDoc zoned index with zone +
    recency weighting; remove hardcoded `additional.*` reads. *(opus + medium)*
 5. **RIT-T-0108** — Repoint **ats** (`engine.py`: skills_coverage, section_completeness,
-   check-ats-structure) onto ScoreDoc sections/entities. *(opus + medium)*
+   check-structure) onto ScoreDoc sections/entities. *(opus + medium)*
 6. **RIT-T-0109** — "What the ATS sees" report capability across facade + CLI + MCP + API with parity
    tests. *(opus + medium)*
 7. **RIT-T-0110** — Plugin skill for the ATS-view report + `resume-workflow` wiring. *(sonnet + medium)*

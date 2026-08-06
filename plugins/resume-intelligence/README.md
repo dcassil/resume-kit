@@ -77,6 +77,8 @@ All state lives under `resume-kit/` in the current project:
 resume-kit/
 ├── config.json                          # active_resume / active_job / alias_file pointers + preferences
 ├── resumes/<name>-original.json         # immutable faithful resume conversions
+├── resumes/<name>-base.json             # baselining: original + auto-safe structural fixes
+├── resumes/<name>-standard.json         # baselining: base + best-practices (default tailoring input)
 ├── jobs/<name>-original.json            # immutable job conversions
 ├── working/edit-session.json            # code-owned active edit-session state
 ├── working/<name>.tailored.json         # commit-session output for a tailored resume
@@ -120,11 +122,22 @@ facts, bypass evidence, or create business rules in prompt text.
 `resume-workflow` is the entry-point guide; it runs the skills in order:
 
 1. **Ingest** — `parse-resume`, `parse-job` (no LLM; the agent converts the
-   files/posting into canonical JSON).
-2. **Check** — `check-structure` (structural/parse issues, resume-only),
-   `check-keywords` (resume↔job keyword coverage), `check-gaps`
-   (missing / injectable keywords).
-3. **Improve** (no LLM, truth-gated) — `update-keywords` and
+   files/posting into canonical JSON). Writes the immutable `<name>-original.json`.
+2. **Baseline** *(job-independent — REQUIRED before any tailoring)* — take
+   `original` through `original → base → standard`: `update-structure` runs the
+   structural check + the auto-safe `base` fix behind the claim-preservation gate
+   (`<name>-base.json`); `check-best-practices` scores `base` and classifies each
+   finding `auto_suggestible` vs `needs_user_input`; `update-best-practices`
+   applies the auto-suggestible rewrites plus user-supplied facts and writes
+   `<name>-standard.json` behind the same gate. **`standard` then becomes the
+   default resume for all tailoring below** (active resolution is
+   `standard ?? base ?? original`). If the user declines baselining, that
+   override is recorded so the tailoring gate is satisfied.
+3. **Check** *(tailoring — gated on `standard` or a recorded override)* —
+   `check-keywords` (resume↔job keyword coverage) and `check-gaps`
+   (missing / injectable keywords), both run against `standard`. The structural
+   check already ran in baselining and is not repeated.
+4. **Improve** (no LLM, truth-gated; gated on `standard`) — `update-keywords` and
    `update-terminology` produce truthful `ChangeProposal` records, prompt for
    mode (`interactive`, `review_at_end`, or `auto`), then drive
    `resume-tool review-edits open` → `resume-tool review-edits prompt` →
@@ -139,13 +152,13 @@ facts, bypass evidence, or create business rules in prompt text.
    `CONTRADICTED` for structural conflicts or active refutations, and uses
    `UNSUPPORTED` for missing evidence. Every claim includes a stable
    `reason_code`.
-4. **Verify** — `validate-facts`; then re-run the checks to see the delta.
-5. **Review** (optional, no LLM provider) — `review-resume` dispatches a
+5. **Verify** — `validate-facts`; then re-run the checks to see the delta.
+6. **Review** (optional, no LLM provider) — `review-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes
    parseable, advice-only findings to `resume-kit/review/<session>.md` (it never
    edits the resume; act on findings via `update-keywords` /
    `update-terminology` / `validate-facts`).
-6. **Export** — `export-resume` (PDF/DOCX).
+7. **Export** — `export-resume` (PDF/DOCX).
 
 Supporting: `extract-evidence`, `compare-versions`,
 `select-resume`, and `learn-terminology` (grows the project alias index used

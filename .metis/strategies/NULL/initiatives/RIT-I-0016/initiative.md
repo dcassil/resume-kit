@@ -4,14 +4,14 @@ level: initiative
 title: "Resume baselining: original to base to standard onboarding pipeline"
 short_code: "RIT-I-0016"
 created_at: 2026-08-05T16:41:16.870587+00:00
-updated_at: 2026-08-05T16:41:16.870587+00:00
+updated_at: 2026-08-06T21:42:49.854398+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0015, RIT-I-0017]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -22,9 +22,22 @@ initiative_id: resume-baselining-original-to-base
 
 # Resume baselining: original → base → standard onboarding pipeline
 
+## Completion Note — 2026-08-06
+
+**Completed.** The full `original → base → standard` baselining pipeline is shipped end to end. All decomposed tasks are done:
+
+- **Substrate & phases (RIT-T-0113–0118):** ProjectConfig version lineage + resolution (`standard ?? base ?? original`); job-independent structural ruleset; `base` auto-fix driver behind the claim-preservation gate; BestPracticesReport schema + shared severity taxonomy; the deterministic best-practices analyzer with `auto_suggestible` / `needs_user_input` classification; the `standard` walkthrough on the RIT-I-0015 orchestrator + hard write gate.
+- **Surfaces & skills (RIT-T-0119–0120):** facade + CLI/MCP/API adapters with cross-surface parity; plugin skills + `resume-workflow` gating all tailoring behind `standard` (with a recorded-override path).
+- **Closeout (RIT-T-0121):** real-fixture `original → base → standard` E2E integration test (full lineage + offline/no-LLM guarantee) through the CLI transport; README + plugin-README reconciled to shipped behavior; version bump 0.6.0 → 0.7.0.
+- **Phase 7 conditional (RIT-T-0122):** bounded source PDF/DOCX parse-risk detector emitting WARNING/needs-judgment findings into the `base` report (never gates). Cut line exercised: shipped all four DOCX detectors + PDF image-only; **deferred** PDF multi-column/table/text-box geometry (layout reconstruction) to a follow-on.
+
+**Deferred (not blocking closure):** RIT-T-0125 (interactive base fixing, edit-session standard walkthrough surfacing, ATS-view report reuse) remains as a standalone backlog feature; one slice depends on RIT-T-0109 in RIT-I-0017. The follow-on PDF layout-geometry detectors from RIT-T-0122's cut line are also parked for a future initiative.
+
+Gate at closure: full suite 3380 passed / 1 skipped; `ruff` + `mypy packages/` clean; boundary invariants (render libs confined to `packages/export`) preserved.
+
 ## Context **[REQUIRED]**
 
-Today the toolkit is a **job-tailoring** pipeline. When resume-kit is initialized in a project (or a user supplies a new resume), the deterministic ingest boundary (RIT-I-0014) produces a single immutable artifact — `<name>-original.json` — behind a `validate-faithfulness` hard gate. From there every downstream skill (`check-keyword-match`, `inject-keywords`, `align-terminology`, …) operates **against a specific job description**. There is no step that gets the resume itself into good shape *before* any job enters the picture.
+Today the toolkit is a **job-tailoring** pipeline. When resume-kit is initialized in a project (or a user supplies a new resume), the deterministic ingest boundary (RIT-I-0014) produces a single immutable artifact — `<name>-original.json` — behind a `validate-faithfulness` hard gate. From there every downstream skill (`check-keywords`, `update-keywords`, `align-terminology`, …) operates **against a specific job description**. There is no step that gets the resume itself into good shape *before* any job enters the picture.
 
 This creates two problems:
 
@@ -40,7 +53,7 @@ This initiative introduces a **baselining / onboarding flow** that runs once per
 The best-practices model driving `base` and `standard` is derived from a consolidated list of dos/donts compiled from major ATS vendors (Workable, SmartRecruiters, Jobvite, Lever, Indeed, LinkedIn). Only the **job-independent** subset of that list is in scope here; the job-dependent items already live in (or belong to) the tailoring skills and are explicitly out of scope (see Non-Goals and the companion notes in `.metis/adrs/`).
 
 This work reuses two existing substrates:
-- The deterministic **ATS structure engine** (`packages/ats` → `resume_check_ats_structure` / `check-ats-structure`), which is already job-independent and emits `section_completeness` + `recommendations`. `base` extends this engine; it does not replace it.
+- The deterministic **ATS structure engine** (`packages/ats` → `resume_check_ats_structure` / `check-structure`), which is already job-independent and emits `section_completeness` + `recommendations`. `base` extends this engine; it does not replace it.
 - The **enforced human-in-the-loop edit loop** (RIT-I-0015): the `standard` walkthrough is an edit session subject to the same write gate, truth validation, and feedback logging.
 
 ## Goals & Non-Goals **[REQUIRED]**
@@ -54,7 +67,7 @@ This work reuses two existing substrates:
 - Expose the new capabilities across all surfaces (facade / CLI / MCP / API) and as plugin skills, consistent with the existing architecture, and wire them into the `resume-workflow` guide as the mandatory pre-tailoring phase.
 
 **Non-Goals:**
-- **Any job-specific work.** Keyword matching, JD-driven tailoring/terminology, gap analysis, seniority-vs-target framing — all remain in the tailoring skills (`check-keyword-match`, `inject-keywords`, `align-terminology`, `identify-resume-gaps`). The `standard` score is explicitly *not* computed against a job.
+- **Any job-specific work.** Keyword matching, JD-driven tailoring/terminology, gap analysis, seniority-vs-target framing — all remain in the tailoring skills (`check-keywords`, `update-keywords`, `align-terminology`, `check-gaps`). The `standard` score is explicitly *not* computed against a job.
 - **Export / file-format / submission concerns** (DOCX vs PDF, selectable-text verification, parsed-field round-trip, upload checks). These belong to `export-resume` / `resume_export`. The one adjacent item we *do* touch is the descriptive, name-bearing filename when writing `base`.
 - **Rebuilding truth/faithfulness validation.** We *reuse* `resume_validate_truth` / `validate-faithfulness`; we do not re-implement them.
 - **True source-file layout/rendering ATS detection** (real multi-column, tables, text-boxes, headers/footers, images/scanned PDFs, shapes behind text). The current structure engine operates on parsed JSON + a text scan and structurally *cannot* see these. Deep source-file (PDF/DOCX) inspection is called out as a **dependency/risk** and is scoped as a bounded extension at the ingest boundary — see Requirements REQ-011 and Risks. If it proves large, it splits into a follow-on initiative.
@@ -116,7 +129,7 @@ Follows the established layered architecture: deterministic engines in packages 
 - **Surfaces**: facade capabilities + CLI/MCP/API adapters + plugin skills; `resume-workflow` updated to require baselining before any tailoring.
 
 ### Sequence (described)
-init/new-resume → ingest(`original`) → `check-ats-structure` → fix driver (auto|interactive) → faithfulness gate → write `base` → best-practices score(`base`) → walkthrough(items: auto-suggest | elicit) → per-edit truth gate + write gate + feedback log → on accept-all → write `standard` → set `standard` as default → (later) tailoring uses `standard`.
+init/new-resume → ingest(`original`) → `check-structure` → fix driver (auto|interactive) → faithfulness gate → write `base` → best-practices score(`base`) → walkthrough(items: auto-suggest | elicit) → per-edit truth gate + write gate + feedback log → on accept-all → write `standard` → set `standard` as default → (later) tailoring uses `standard`.
 
 ## Detailed Design **[REQUIRED]**
 

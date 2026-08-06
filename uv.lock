@@ -31,6 +31,7 @@ members = [
     "resume-kit-mcp",
     "resume-kit-policy",
     "resume-kit-schemas",
+    "resume-kit-scoring",
     "resume-kit-terms",
 ]
 
@@ -1330,7 +1331,7 @@ wheels = [
 
 [[package]]
 name = "resume-kit"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "markitdown", extra = ["docx"] },
@@ -1576,6 +1577,7 @@ dependencies = [
     { name = "resume-kit-job-parser" },
     { name = "resume-kit-matching" },
     { name = "resume-kit-schemas" },
+    { name = "resume-kit-scoring" },
 ]
 
 [package.metadata]
@@ -1591,6 +1593,7 @@ requires-dist = [
     { name = "resume-kit-job-parser", editable = "packages/job-parser" },
     { name = "resume-kit-matching", editable = "packages/matching" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
+    { name = "resume-kit-scoring", editable = "packages/scoring" },
 ]
 
 [[package]]
@@ -1661,6 +1664,7 @@ dependencies = [
     { name = "resume-kit-ats" },
     { name = "resume-kit-core" },
     { name = "resume-kit-schemas" },
+    { name = "resume-kit-scoring" },
     { name = "resume-kit-terms" },
 ]
 
@@ -1670,6 +1674,7 @@ requires-dist = [
     { name = "resume-kit-ats", editable = "packages/ats" },
     { name = "resume-kit-core", editable = "packages/core" },
     { name = "resume-kit-schemas", editable = "packages/schemas" },
+    { name = "resume-kit-scoring", editable = "packages/scoring" },
     { name = "resume-kit-terms", editable = "packages/terms" },
 ]
 
@@ -1717,6 +1722,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pydantic", specifier = ">=2" }]
+
+[[package]]
+name = "resume-kit-scoring"
+version = "0.0.0"
+source = { editable = "packages/scoring" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "resume-kit-schemas" },
+    { name = "resume-kit-terms" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "resume-kit-schemas", editable = "packages/schemas" },
+    { name = "resume-kit-terms", editable = "packages/terms" },
+]
 
 [[package]]
 name = "resume-kit-terms"

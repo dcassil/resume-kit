@@ -24,7 +24,10 @@ from resume_kit_facade.models import (
     AddEvidenceRequest,
     AlignResumeRequest,
     AlignTerminologyRequest,
+    AnalyzeBestPracticesRequest,
+    BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildStandardRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -516,6 +519,20 @@ _SURFACE_CASES = (
         mcp_name="resume_check_ats_structure",
         mcp_args=lambda ctx: {"resume": _resume(ctx)},
         api_path="/check-structure",
+        api_body=lambda ctx: {"resume": _resume(ctx)},
+    ),
+    SurfaceCase(
+        name="analyze-best-practices",
+        capability="analyze-best-practices",
+        request=lambda ctx: AnalyzeBestPracticesRequest(resume=ctx.data.resume),
+        cli_args=lambda ctx: [
+            "analyze-best-practices",
+            "--resume",
+            str(ctx.paths.resume),
+        ],
+        mcp_name="resume_analyze_best_practices",
+        mcp_args=lambda ctx: {"resume": _resume(ctx)},
+        api_path="/analyze-best-practices",
         api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(
@@ -1186,6 +1203,94 @@ def test_review_edits_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
     cli = _cli_session_lifecycle(roots["cli"])
     mcp = _mcp_session_lifecycle(roots["mcp"])
     api = _api_session_lifecycle(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+
+
+# ---------------------------------------------------------------------------
+# Baselining lifecycle parity (RIT-I-0016): build-base then build-standard
+# ---------------------------------------------------------------------------
+
+
+def _baseline_root(tmp_path: Path, name: str) -> Path:
+    """Scaffold a project with an active original resume needing grooming."""
+    root = tmp_path / name
+    init_project(root)
+    base = working_dir(root)
+    resume = ResumeDocument(
+        personalInfo=PersonalInfo(
+            name="Jordan Lee",
+            title="Senior Backend Engineer",
+            email="jordan@example.com",
+            phone="555-0100",
+            location="Austin, TX",
+        ),
+        summary=(
+            "Responsible for building Python APIs, Docker services, and PostgreSQL analytics."
+        ),
+        workExperience=[
+            Experience(
+                id=1,
+                title="Senior Software Engineer",
+                company="Acme Labs",
+                years="2021-2025",
+                description=[
+                    "Responsible for Python APIs with FastAPI and PostgreSQL.",
+                    "Containerized services with Docker and automated CI pipelines.",
+                ],
+            )
+        ],
+        additional=AdditionalInfo(technicalSkills=["Python", "FastAPI", "PostgreSQL", "Docker"]),
+    )
+    (base / "resumes" / "jordan-original.json").write_text(
+        resume.model_dump_json(), encoding="utf-8"
+    )
+    set_active(root, resume="resumes/jordan-original.json")
+    return root
+
+
+def _direct_baseline_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _direct_json("build-base", BuildBaseRequest(root=root)),
+        _direct_json("build-standard", BuildStandardRequest(root=root)),
+    ]
+
+
+def _cli_baseline_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _cli_json(["build-base", "--root", str(root)]),
+        _cli_json(["build-standard", "--root", str(root)]),
+    ]
+
+
+def _mcp_baseline_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _mcp_json("resume_build_base", {"root": str(root)}),
+        _mcp_json("resume_build_standard", {"root": str(root)}),
+    ]
+
+
+def _api_baseline_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _api_json("/build-base", {"root": str(root)}),
+        _api_json("/build-standard", {"root": str(root)}),
+    ]
+
+
+def test_baseline_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _baseline_root(tmp_path, "direct"),
+        "cli": _baseline_root(tmp_path, "cli"),
+        "mcp": _baseline_root(tmp_path, "mcp"),
+        "api": _baseline_root(tmp_path, "api"),
+    }
+
+    direct = _direct_baseline_lifecycle(roots["direct"])
+    cli = _cli_baseline_lifecycle(roots["cli"])
+    mcp = _mcp_baseline_lifecycle(roots["mcp"])
+    api = _api_baseline_lifecycle(roots["api"])
 
     assert cli == direct
     assert mcp == direct

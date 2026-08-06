@@ -85,17 +85,17 @@ The toolkit should preserve the intended skill and tool surface while implementi
 - `check-resume-ats`
 - `check-resume-job-match`
 - `align-resume`
-- `validate-resume-truth`
+- `validate-facts`
 - `check-resume-consistency`
-- `compare-resume-versions`
-- `select-best-resume`
-- `identify-resume-gaps`
+- `compare-versions`
+- `select-resume`
+- `check-gaps`
 - `score-resume-bullet`
 - `improve-resume-section`
 - `create-job-specific-resume`
 - `check-cover-letter-job-match`
 - `align-cover-letter`
-- `build-candidate-evidence`
+- `extract-evidence`
 - `audit-application-package`
 
 MCP tools should use stable names such as `resume_extract`, `job_description_extract`, `resume_check_ats`, `resume_check_job_match`, `resume_select_best`, `resume_identify_gaps`, `resume_align`, `resume_validate_truth`, `resume_check_consistency`, `resume_compare_versions`, `resume_score_bullet`, `resume_improve_section`, `resume_create_for_job`, `cover_letter_check_job_match`, `cover_letter_align`, `application_package_audit`, and `candidate_evidence_build`.
@@ -385,8 +385,8 @@ Phase 3 - Matching and deterministic analysis:
 - Add explainable scoring dimensions.
 - Implement `check-resume-ats`.
 - Implement `check-resume-job-match`.
-- Implement `select-best-resume`.
-- Implement `compare-resume-versions`.
+- Implement `select-resume`.
+- Implement `compare-versions`.
 
 Phase 4 - Controlled alignment:
 
@@ -396,7 +396,7 @@ Phase 4 - Controlled alignment:
 - Implement verified skill targets.
 - Add candidate evidence and claim provenance.
 - Implement human-in-the-loop review.
-- Implement `validate-resume-truth`.
+- Implement `validate-facts`.
 - Ensure the LLM never directly writes the final document without passing through policy and verification gates.
 
 Phase 5 - Interfaces:

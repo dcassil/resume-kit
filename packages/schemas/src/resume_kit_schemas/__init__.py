@@ -11,8 +11,10 @@ from .analysis import (
     AlignmentViolation,
     AnalysisReport,
     ATSScore,
+    AtsStructureFinding,
     AtsStructureReport,
     ATSSubScores,
+    FixAffordance,
     JobMatchReport,
     KeywordGapAnalysis,
     MatchDimensionScore,
@@ -25,6 +27,15 @@ from .analysis import (
     ResumeVariantScore,
     ScoreDelta,
     TerminologyAlignment,
+)
+from .best_practices import (
+    BEST_PRACTICES_SCHEMA_VERSION,
+    BestPracticesFinding,
+    BestPracticesReport,
+    FindingLocation,
+    FindingSeverity,
+    ProvenanceKind,
+    ResolutionKind,
 )
 from .change import (
     ChangeAction,
@@ -82,10 +93,37 @@ from .resume import (
     Skill,
     normalize_resume_data,
 )
+from .scoredoc import (
+    SCOREDOC_SCHEMA_VERSION,
+    KeywordZone,
+    ScoreDegree,
+    ScoreDoc,
+    ScoreEntities,
+    ScoreRole,
+    ScoreSection,
+    ZonedKeywordIndex,
+)
 
 __version__ = "0.0.0"
 
 __all__ = [
+    # scoredoc (RIT-I-0017)
+    "SCOREDOC_SCHEMA_VERSION",
+    "KeywordZone",
+    "ScoreDegree",
+    "ScoreDoc",
+    "ScoreEntities",
+    "ScoreRole",
+    "ScoreSection",
+    "ZonedKeywordIndex",
+    # best-practices (RIT-I-0016)
+    "BEST_PRACTICES_SCHEMA_VERSION",
+    "BestPracticesFinding",
+    "BestPracticesReport",
+    "FindingLocation",
+    "FindingSeverity",
+    "ProvenanceKind",
+    "ResolutionKind",
     # resume
     "ResumeDocument",
     "ResumeData",
@@ -133,7 +171,9 @@ __all__ = [
     "AnalysisReport",
     "ATSScore",
     "ATSSubScores",
+    "AtsStructureFinding",
     "AtsStructureReport",
+    "FixAffordance",
     "KeywordGapAnalysis",
     "MatchedKeyword",
     "MatchKind",
