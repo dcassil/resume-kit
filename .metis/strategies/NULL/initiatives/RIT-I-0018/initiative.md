@@ -28,11 +28,11 @@ After the current in-flight and already-planned initiatives complete, resume-kit
 
 The user-provided guidance spans five existing capability areas:
 
-- Job-tailoring phase: `check-keyword-match`, `resume_check_job_match`, `identify-resume-gaps`, `inject-keywords`, `resume_align`, and composite ATS checks.
-- Terminology/synonym tools: `manage-synonyms`, `resume_align_terminology`, and `resume_suggest_terminology`.
+- Job-tailoring phase: `check-keywords`, `resume_check_job_match`, `check-gaps`, `update-keywords`, `resume_align`, and composite ATS checks.
+- Terminology/synonym tools: `learn-terminology`, `resume_align_terminology`, and `resume_suggest_terminology`.
 - Export: `export-resume` and `resume_export`.
 - Truth/faithfulness gates: `resume_validate_truth`, `candidate_evidence_build`, and `resume_validate_faithfulness`.
-- Review/version selection: `review-tailored-resume`, `compare-resume-versions`, and `select-best-resume`.
+- Review/version selection: `review-resume`, `compare-versions`, and `select-resume`.
 
 Existing truth and faithfulness capabilities are treated as guardrails to reuse, not as a reason to rebuild the same capability. Existing terminology, review, export, and match tooling should be audited before adding new tools.
 
