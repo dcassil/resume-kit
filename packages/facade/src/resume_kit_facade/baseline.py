@@ -21,7 +21,8 @@ from pathlib import Path
 
 from resume_kit_ats.engine import check_ats_structure
 from resume_kit_core import ErrorCode, ResumeKitError
-from resume_kit_schemas import ResumeDocument
+from resume_kit_document_parser import detect_source_parse_risks
+from resume_kit_schemas import AtsStructureFinding, AtsStructureReport, ResumeDocument
 from resume_kit_scoring import (
     analyze_best_practices,
     apply_auto_fixes,
@@ -84,6 +85,30 @@ def _base_path_for(original_rel: str) -> str:
     return str(p.with_name(base_name))
 
 
+_PARSE_RISK_SUFFIXES = frozenset({".pdf", ".docx"})
+
+
+def _source_parse_risk_findings(
+    root: str | Path, source_rel: str | None
+) -> list[AtsStructureFinding]:
+    """Resolve the active source file and detect its ATS parse risks.
+
+    Returns ``[]`` when no source is configured, the file is missing, or its
+    suffix is not a supported source type. Never raises (the detector is
+    bounded and swallows its own failures).
+    """
+    if not source_rel:
+        return []
+    source_path = Path(source_rel)
+    if not source_path.is_absolute():
+        source_path = working_dir(root) / source_path
+    if not source_path.exists():
+        return []
+    if source_path.suffix.lower() not in _PARSE_RISK_SUFFIXES:
+        return []
+    return detect_source_parse_risks(source_path.read_bytes(), source_path.name)
+
+
 def build_base(root: str | Path, *, mode: str = "auto") -> BuildBaseResult:
     """Produce the ``base`` version from the active original resume.
 
@@ -112,6 +137,18 @@ def build_base(root: str | Path, *, mode: str = "auto") -> BuildBaseResult:
 
     original = ResumeDocument.model_validate(json.loads(original_file.read_text(encoding="utf-8")))
     report = check_ats_structure(original)
+
+    # Merge in bounded, deterministic source parse-risk findings (RIT-T-0122).
+    # These are WARNING / NEEDS_JUDGMENT — they surface in the structural report
+    # and land in ``deferred`` but never gate the write.
+    risk_findings = _source_parse_risk_findings(root, config.active_resume_source)
+    if risk_findings:
+        report = AtsStructureReport(
+            section_completeness=report.section_completeness,
+            findings=[*report.findings, *risk_findings],
+            recommendations=[*report.recommendations, *(f.message for f in risk_findings)],
+        )
+
     fix = apply_auto_fixes(original, report)
 
     # Hard claim-preservation gate (RIT-A-0003).

@@ -156,3 +156,39 @@ def test_build_standard_applies_user_answer(tmp_path: Path) -> None:
         json.loads((working_dir(tmp_path) / result.standard_path).read_text())
     )
     assert any("40%" in b for b in std.workExperience[0].description)
+
+
+def test_build_base_surfaces_source_parse_risk(tmp_path: Path) -> None:
+    """A source .docx with a table surfaces SOURCE_LAYOUT_TABLE in deferred (RIT-T-0122)."""
+    import io
+
+    from docx import Document
+
+    _setup(tmp_path, _resume_with_pii())
+
+    doc = Document()
+    doc.add_paragraph("Jane")
+    doc.add_table(rows=2, cols=2)
+    buf = io.BytesIO()
+    doc.save(buf)
+    source_path = working_dir(tmp_path) / "resumes" / "jane-original.docx"
+    source_path.write_bytes(buf.getvalue())
+
+    set_active(
+        tmp_path,
+        resume="resumes/jane-original.json",
+        resume_source="resumes/jane-original.docx",
+    )
+
+    result = build_base(tmp_path, mode="auto")
+
+    # Warning surfaces as a deferred code but never gates the write.
+    assert "SOURCE_LAYOUT_TABLE" in result.deferred
+    assert (working_dir(tmp_path) / result.base_path).exists()
+
+
+def test_build_base_no_source_has_no_risk_codes(tmp_path: Path) -> None:
+    """With no source file set, build_base behaves exactly as before (RIT-T-0122)."""
+    _setup(tmp_path, _resume_with_pii())
+    result = build_base(tmp_path, mode="auto")
+    assert not any(code.startswith("SOURCE_LAYOUT_") for code in result.deferred)
