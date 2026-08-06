@@ -192,8 +192,9 @@ uv build
 python -m twine upload dist/*
 ```
 
-> Note: `resume-kit` has **not** been published to PyPI yet. The commands above
-> describe how a release would be cut once the project is ready.
+> `resume-kit` is published on PyPI at <https://pypi.org/project/resume-kit/>.
+> Releases are cut by pushing a `vX.Y.Z` tag (Trusted Publishing via GitHub
+> Actions); the `twine` commands above are the manual fallback.
 
 ## Status
 
