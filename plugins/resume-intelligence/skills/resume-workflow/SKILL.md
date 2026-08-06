@@ -2,11 +2,13 @@
 name: resume-workflow
 description: >
   The end-to-end runbook for tailoring a resume to a job with resume-intelligence.
-  Sequences the single-purpose skills in the one obvious order — ingest → check →
-  (optionally) improve → (optionally) second-agent review → validate truth →
-  re-check for deltas → export — and names
-  the gate (what must exist) for each step. This is a GUIDE: it points at the other
-  skills, it does not call tools itself.
+  Sequences the single-purpose skills in the one obvious order — ingest →
+  baseline the resume (base → standard, job-independent, REQUIRED before
+  tailoring) → check against the job → (optionally) improve → (optionally)
+  second-agent review → validate truth → re-check for deltas → export — and names
+  the gate (what must exist) for each step, including that all job tailoring is
+  gated behind a `standard` version (or a recorded override). This is a GUIDE: it
+  points at the other skills, it does not call tools itself.
 ---
 
 # resume-workflow — the canonical tailoring flow
@@ -44,7 +46,27 @@ opt-in and never auto-runs.
    `active_resume` + source via `resume-tool set-active` (never hand-edits
    `config.json`).
 
-2. **Ingest the job** — run **parse-job**.
+2. **Baseline the resume** *(job-independent — REQUIRED before any tailoring)* —
+   get the resume itself into good shape before a job enters the picture. Run in
+   order:
+   - **update-structure** — gate: a faithful `original` (`active_resume`). Runs
+     the structural check + the auto-safe `base` fix behind the claim-preservation
+     gate → writes `<name>-base.json`.
+   - **check-best-practices** — gate: `base` exists. Scores `base` and classifies
+     findings `auto_suggestible` vs `needs_user_input` (read-only).
+   - **update-best-practices** — gate: `base` + the best-practices report.
+     Auto-applies truthful rewrites, elicits the user's real facts for
+     `needs_user_input` items, and writes `<name>-standard.json` behind the
+     claim-preservation gate. **`standard` becomes the default resume for all
+     tailoring below.**
+
+   **Override:** if the user explicitly declines baselining, **record that
+   override** (state it and note it in the session/config) so the tailoring gate
+   below is satisfied; tailoring then runs on the active resume at the user's
+   stated choice. Baselining is job-independent, so it can (and should) run before
+   the job is ingested.
+
+3. **Ingest the job** — run **parse-job**.
    gate: the job posting (text/URL/file). For file inputs it runs
    `resume-tool extract-text <file>`; pasted text / URL content skips extraction.
    A confined interpretation subagent maps the text into `JobDescription` JSON
@@ -54,42 +76,41 @@ opt-in and never auto-runs.
    jobs — job faithfulness is enforced by the skill's prose extraction gates. Writes
    `resume-kit/jobs/<name>-original.json` and sets `active_job`.
 
-3. **Check the resume** — run all three (they are independent):
-   - **check-structure** — gate: `active_resume` JSON.
-   - **check-keywords** — gate: `active_resume` + `active_job` JSON. Uses the
-     synonym alias index (`alias_file`) when present to match variant terms.
-   - **check-gaps** — gate: `active_resume` + `active_job` JSON.
-   Record the baseline scores so step 6 can show deltas.
+4. **Check against the job** *(tailoring — gated on `standard`)* — run:
+   - **check-keywords** — gate: **`standard` present (or a recorded override)** +
+     `active_job`. Runs against the `standard` resume; uses the synonym alias
+     index (`alias_file`) when present to match variant terms.
+   - **check-gaps** — gate: **`standard` (or override)** + `active_job`.
 
-4. **Improve** *(only what steps 3 surfaced)*:
-   - **update-keywords** — gate: `active_resume` + `active_job` + the
+   The structural check already ran in baselining (**update-structure**), so it is
+   not repeated here. Record the baseline scores so the re-check step can show
+   deltas.
+
+5. **Improve** *(tailoring — gated on `standard`; only what step 4 surfaced)*:
+   - **update-keywords** — gate: **`standard` (or override)** + `active_job` + the
      keyword-match/gap findings. Produces `ChangeProposal` records for
      missing-but-true keywords.
-   - **update-terminology** — gate: `active_resume` + `active_job` + the synonym
-     alias index (`alias_file`). Produces `ChangeProposal` records for wording
-     swaps the resume already satisfies.
+   - **update-terminology** — gate: **`standard` (or override)** + `active_job` +
+     the synonym alias index (`alias_file`). Produces `ChangeProposal` records for
+     wording swaps the resume already satisfies.
 
-   The sanctioned write path is the edit-session loop, not direct JSON edits:
-   ask the mode prompt (`interactive`, `review_at_end`, or `auto`) →
-   `resume-tool review-edits open` / `open-edit-session` →
-   `resume-tool review-edits prompt` / `session-prompt` →
-   `resume-tool review-edits decide` / `decide-change` for every change,
-   offering the `EditFeedbackReasonCode` enum on `reject` or `edit` →
-   `resume-tool review-edits commit` / `commit-session` as the hard write gate →
-   **validate-facts**. Direct hand-editing of the working resume is
-   unsupported unless followed by `resume-tool review-edits reconcile` /
+   Both skills build their `ChangeProposal` records and then drive them through
+   the shared change-application runbook
+   [`../_shared/apply-changes.md`](../_shared/apply-changes.md): mode prompt →
+   `open` → `prompt`/`decide` for every change (offering the
+   `EditFeedbackReasonCode` enum on `reject`/`edit`) → `commit-session` hard write
+   gate → **validate-facts** → re-score. Direct hand-editing of the working resume
+   is unsupported unless followed by `resume-tool review-edits reconcile` /
    `reconcile-session`.
 
    When several truthful candidates are available, run **rank-changes** first via
    `rank-edit-candidates` / `edit_candidates_rank` (passing `alias_file`) and
-   present the ranked reasons before opening the session. Once the user decides
-   or edits a proposal, record the outcome through **learn-change** via
-   `record-edit-feedback` / `edit_feedback_record`; this is part of the
-   orchestrated loop's learning path, not a prose-only afterthought. **LLM
+   present the ranked reasons before opening the session. Decision outcomes are
+   logged to **learn-change** automatically by the runbook's decide step. **LLM
    auto-rewrite is disabled — there is no skill path that bulk-runs
    `align-resume`.**
 
-5. **Second-agent review** *(optional — advice-only)* — run
+6. **Second-agent review** *(optional — advice-only)* — run
    **review-resume**.
    gate: the **new** tailored resume JSON + the **original** resume JSON + the
    **job** JSON (all three must exist; this step only makes sense after tailoring).
@@ -99,17 +120,17 @@ opt-in and never auto-runs.
    at most once per session**, guarded by the `resume-kit/.cache/review-offered`
    marker (see above); skipping it does not affect the rest of the flow.
 
-6. **Validate truth** — run **validate-facts**.
+7. **Validate truth** — run **validate-facts**.
    gate: the (improved) resume JSON + `CandidateEvidence` (build it with
    **extract-evidence**, gate: resume JSON). Any unsupported or
    contradicted claim must be fixed before proceeding — never ship fabrications.
 
-7. **Re-check for deltas** — re-run **check-structure**,
-   **check-keywords**, and **check-gaps** on the improved resume.
-   gate: the improved resume JSON + `active_job`. Compare against the step-3
+8. **Re-check for deltas** — re-run **check-keywords** and **check-gaps** on the
+   improved resume.
+   gate: the improved resume JSON + `active_job`. Compare against the step-4
    baseline to confirm the changes actually helped.
 
-8. **Export** — run **export-resume**.
+9. **Export** — run **export-resume**.
    gate: the final resume JSON. Produces the PDF/DOCX artifact to submit.
 
 ## Supporting / maintenance
