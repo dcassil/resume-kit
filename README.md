@@ -65,6 +65,24 @@ not faithful, so an unfaithful conversion never silently reaches disk. The
 their source paths, and `alias_file`) are owned by code via `init` / `set-active`
 — not hand-authored.
 
+### BuildDoc vs. ScoreDoc — the scoring projection
+
+The resume the pipeline edits and exports (`ResumeDocument`, the **BuildDoc**) is
+kept distinct from the representation that scoring reads. Before any scoring or
+matching runs, a deterministic, offline `project_scoredoc` projects the BuildDoc
+into a **ScoreDoc**: a zoned keyword index, segmented sections tagged by zone
+(skills list, experience, summary, …), and extracted entities plus years of
+experience. All scoring and matching read the ScoreDoc — not the raw resume JSON.
+
+This is why a skill listed in a *categorized* custom section (e.g. a
+`stringList` "Cloud Skills" section) now counts as a canonical skill rather than
+incidental body text: the projection maps it into the skills zone, so it earns
+the same keyword-placement credit as `additional.technicalSkills`. The ScoreDoc
+is also what powers the **ats-view** "what the ATS sees" report — the read-only
+view of the sections, entities/YoE, and zoned keywords an ATS is likely to parse
+(`resume-tool ats-view --resume <path>`), identical across the CLI, MCP, API, and
+facade surfaces.
+
 ### Resume baselining (`original → base → standard`)
 
 Before any job-specific tailoring, a resume moves through a fixed, deterministic
@@ -134,6 +152,19 @@ active refutation; each claim carries a machine-readable `reason_code` such as
 `missing_evidence`, `strong_evidence_overlap`, or `refuted_by_evidence`.
 
 ## Release Notes
+
+### Package 0.8.0 / plugin 1.0.0 — ScoreDoc scoring projection + ATS-view report (RIT-I-0017)
+
+- Separates the scoring representation (`ScoreDoc`) from the build representation
+  (`ResumeDocument`) via the deterministic, offline `project_scoredoc`. All
+  scoring and matching now read the zoned ScoreDoc (keyword index + segmented
+  sections + extracted entities/YoE) rather than the raw resume JSON.
+- Fixes the categorized-skills regression: skills in a `stringList` custom
+  section are projected into the skills zone, so they earn the same
+  keyword-placement credit as `additional.technicalSkills` (no placement penalty
+  for categorizing skills).
+- Adds the read-only **ats-view** "what the ATS sees" report, rendered off the
+  ScoreDoc and identical across the CLI, MCP, API, and facade surfaces.
 
 ### Package 0.7.0 / plugin 1.0.0 — resume baselining (RIT-I-0016)
 

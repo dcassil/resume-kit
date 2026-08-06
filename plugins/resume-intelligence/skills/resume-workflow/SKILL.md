@@ -59,6 +59,12 @@ opt-in and never auto-runs.
      `needs_user_input` items, and writes `<name>-standard.json` behind the
      claim-preservation gate. **`standard` becomes the default resume for all
      tailoring below.**
+   - **check-ats-view** *(read-only, optional)* — gate: any `ResumeDocument`
+     (normally `standard`). Shows "what the ATS sees" — detected sections,
+     extracted entities + years-of-experience, and the zoned keyword breakdown —
+     so the user can confirm the parsed view before tailoring. Job-independent;
+     never edits the resume and carries the standing note that a strong ATS match
+     does not guarantee recruiter advancement.
 
    **Override:** if the user explicitly declines baselining, **record that
    override** (state it and note it in the session/config) so the tailoring gate
