@@ -25,6 +25,7 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
@@ -533,6 +534,20 @@ _SURFACE_CASES = (
         mcp_name="resume_analyze_best_practices",
         mcp_args=lambda ctx: {"resume": _resume(ctx)},
         api_path="/analyze-best-practices",
+        api_body=lambda ctx: {"resume": _resume(ctx)},
+    ),
+    SurfaceCase(
+        name="ats-view",
+        capability="ats-view",
+        request=lambda ctx: AtsViewRequest(resume=ctx.data.resume),
+        cli_args=lambda ctx: [
+            "ats-view",
+            "--resume",
+            str(ctx.paths.resume),
+        ],
+        mcp_name="resume_ats_view",
+        mcp_args=lambda ctx: {"resume": _resume(ctx)},
+        api_path="/ats-view",
         api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(

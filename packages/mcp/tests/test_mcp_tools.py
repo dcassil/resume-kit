@@ -122,6 +122,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_build_base",
         "resume_build_standard",
         "resume_analyze_best_practices",
+        "resume_ats_view",
     }
     assert set(TOOL_NAMES) == expected
     assert set(HANDLERS) == expected

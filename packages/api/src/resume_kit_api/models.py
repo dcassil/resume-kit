@@ -367,6 +367,21 @@ class AnalyzeBestPracticesBody(_Options):
     resume: ResumeDocument
 
 
+class AtsViewBody(_Options):
+    """Body for ``POST /ats-view`` — resume only, read-only ATS view.
+
+    Pure and deterministic (RIT-T-0109): returns the read-only
+    ``AtsViewReport`` (sections, entities+YoE, zoned keywords). ``reference_date``
+    is an optional ISO ``YYYY-MM-DD`` used only for years-of-experience.
+    """
+
+    resume: ResumeDocument
+    reference_date: str | None = Field(
+        default=None,
+        description="Optional ISO reference date (YYYY-MM-DD) for years-of-experience.",
+    )
+
+
 class ExportResumeBody(_Options):
     """Body for ``POST /export`` — render a resume to ``pdf`` or ``docx``.
 
