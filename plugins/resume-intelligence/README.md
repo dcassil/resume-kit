@@ -136,7 +136,9 @@ facts, bypass evidence, or create business rules in prompt text.
 3. **Check** *(tailoring — gated on `standard` or a recorded override)* —
    `check-keywords` (resume↔job keyword coverage) and `check-gaps`
    (missing / injectable keywords), both run against `standard`. The structural
-   check already ran in baselining and is not repeated.
+   check already ran in baselining and is not repeated. `check-ats-view` renders
+   the read-only "what the ATS sees" report (sections, entities/YoE, and zoned
+   keywords) off the same deterministic ScoreDoc projection that scoring reads.
 4. **Improve** (no LLM, truth-gated; gated on `standard`) — `update-keywords` and
    `update-terminology` produce truthful `ChangeProposal` records, prompt for
    mode (`interactive`, `review_at_end`, or `auto`), then drive
