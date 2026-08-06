@@ -30,46 +30,46 @@ SKILLS_DIR = PLUGIN_DIR / "skills"
 EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
     [
         # Ingest
-        "resume-to-json",
-        "job-to-json",
+        "parse-resume",
+        "parse-job",
         # Check
-        "check-ats-structure",
-        "check-keyword-match",
-        "identify-resume-gaps",
+        "check-structure",
+        "check-keywords",
+        "check-gaps",
         # Improve
-        "inject-keywords",
+        "update-keywords",
         "update-terminology",
         # Verify / support
-        "validate-resume-truth",
-        "build-candidate-evidence",
-        "compare-resume-versions",
-        "select-best-resume",
+        "validate-facts",
+        "extract-evidence",
+        "compare-versions",
+        "select-resume",
         # Export / maintain / flow
         "export-resume",
-        "manage-synonyms",
+        "learn-terminology",
         "resume-workflow",
         # Review (agent-driven, advice-only)
-        "review-tailored-resume",
+        "review-resume",
         # Preference learning (agent-driven, no CLI/MCP surface)
-        "rank-edits",
-        "log-edit-feedback",
+        "rank-changes",
+        "learn-change",
     ]
 )
 
 # CLI commands and MCP tool names that must appear (one per slug). Workflow /
-# agent-driven skills (resume-to-json, job-to-json, inject-keywords,
-# update-terminology, manage-synonyms, resume-workflow, review-tailored-resume,
-# rank-edits, log-edit-feedback) are intentionally exempt — they orchestrate
+# agent-driven skills (parse-resume, parse-job, update-keywords,
+# update-terminology, learn-terminology, resume-workflow, review-resume,
+# rank-changes, learn-change) are intentionally exempt — they orchestrate
 # other skills/tools (or drive the resume_kit_feedback package, which has no
 # CLI/MCP surface) rather than wrapping a single capability.
 EXPECTED_CLI_OR_MCP: dict[str, list[str]] = {
-    "check-ats-structure": ["resume-tool", "resume_check_ats_structure"],
-    "check-keyword-match": ["resume-tool", "resume_check_job_match"],
-    "select-best-resume": ["resume-tool", "resume_select_best"],
-    "compare-resume-versions": ["resume-tool", "resume_compare_versions"],
-    "identify-resume-gaps": ["resume-tool", "resume_identify_gaps"],
-    "validate-resume-truth": ["resume-tool", "resume_validate_truth"],
-    "build-candidate-evidence": ["resume-tool", "candidate_evidence_build"],
+    "check-structure": ["resume-tool", "resume_check_ats_structure"],
+    "check-keywords": ["resume-tool", "resume_check_job_match"],
+    "select-resume": ["resume-tool", "resume_select_best"],
+    "compare-versions": ["resume-tool", "resume_compare_versions"],
+    "check-gaps": ["resume-tool", "resume_identify_gaps"],
+    "validate-facts": ["resume-tool", "resume_validate_truth"],
+    "extract-evidence": ["resume-tool", "candidate_evidence_build"],
     "export-resume": ["resume-tool", "resume_export"],
 }
 

@@ -1,16 +1,19 @@
 ---
-name: check-ats-structure
+name: check-structure
 description: >
-  Report resume-only structural / parse issues that make an ATS mis-parse,
+  Check resume-only structural / parse issues that make an ATS mis-parse,
   miss, or error on a resume — section completeness plus deterministic
   structural recommendations (contact info, missing sections, dates,
   non-ASCII / formatting risks). Resume-ONLY: needs no job and produces NO
   keyword coverage and NO composite ATS score. Drives the deterministic
-  `check-ats-structure` capability (CLI `check-ats-structure` / MCP
+  `check-structure` capability (CLI `check-structure` / MCP
   `resume_check_ats_structure`). No LLM required.
 ---
 
-# check-ats-structure — resume-only structural / parse check
+> **Renamed:** `check-structure` was `check-ats-structure` before v1.0.0 (see RIT-A-0005).
+
+
+# check-structure — resume-only structural / parse check
 
 ## Prerequisites
 
@@ -23,7 +26,7 @@ Run the shared **Prerequisites gate** first — see
   a `JobDescription`.
 - **If the resume JSON is missing** (no `active_resume`, file absent, or a raw
   PDF/DOCX where a `ResumeDocument` JSON is required): **STOP**. Do not guess and
-  do not run on partial input. Tell the caller: run **`resume-to-json`** first to
+  do not run on partial input. Tell the caller: run **`parse-resume`** first to
   produce the `ResumeDocument` JSON, then re-run this skill.
 
 ## Purpose
@@ -36,7 +39,7 @@ standard sections, malformed dates, and non-ASCII / formatting parse risks.
 This is deliberately **one job: structure only.** It never reports keyword
 coverage, matched/missing job terms, skills coverage, or any composite/overall
 ATS score — those require a job description and belong to
-**`check-keyword-match`**. Keeping this skill structure-only means an agent has
+**`check-keywords`**. Keeping this skill structure-only means an agent has
 exactly one obvious skill to run for "will an ATS parse this resume correctly?"
 
 ## How to invoke
@@ -46,7 +49,7 @@ Prefer the MCP tool in-process; use the CLI when scripting.
 **CLI**
 
 ```
-resume-tool check-ats-structure --resume <resume.json> [--output {json,text,md}] [--strict]
+resume-tool check-structure --resume <resume.json> [--output {json,text,md}] [--strict]
 ```
 
 **MCP tool**: `resume_check_ats_structure`
@@ -65,13 +68,13 @@ is involved.
 Present these two fields as-is. There is intentionally **no** `keyword_match`,
 `skills_coverage`, `matched`/`missing`, or composite `overall_score` here — if
 the caller wants keyword coverage against a specific job, point them at
-**`check-keyword-match`**.
+**`check-keywords`**.
 
 ## Notes
 
 - Fully deterministic. No provider needed; safe with `--no-llm` or no provider.
 - Single responsibility: structure/parse readiness only. For resume↔job keyword
-  coverage run **`check-keyword-match`**; for missing/injectable keywords run
-  **`identify-resume-gaps`**.
+  coverage run **`check-keywords`**; for missing/injectable keywords run
+  **`check-gaps`**.
 - Report the recommendations verbatim; do not augment, re-score, or blend them
   into any other metric.

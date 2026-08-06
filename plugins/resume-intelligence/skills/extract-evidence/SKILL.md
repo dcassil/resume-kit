@@ -1,11 +1,13 @@
 ---
-name: build-candidate-evidence
+name: extract-evidence
 description: >
-  Deterministically build a list of CandidateEvidence records from a resume,
+  Deterministically extract a list of CandidateEvidence records from a resume,
   optionally seeded with pre-approved claims.  No LLM required.
 ---
 
-> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **resume-to-json** skill) and, where a job is involved, a `JobDescription` JSON (build it with **job-to-json** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
+> **Renamed:** `extract-evidence` was `build-candidate-evidence` before v1.0.0 (see RIT-A-0005).
+
+> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **parse-resume** skill) and, where a job is involved, a `JobDescription` JSON (build it with **parse-job** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
 
 ## Prerequisites
 
@@ -14,20 +16,20 @@ Run the shared **Prerequisites gate** first — see
 
 - **Required input:** a resume/master `ResumeDocument` JSON (`config.json`
   `active_resume` or an explicit path).
-- **If missing:** STOP and run **resume-to-json** to produce the `ResumeDocument`
+- **If missing:** STOP and run **parse-resume** to produce the `ResumeDocument`
   JSON before calling this skill.
 
 ## Purpose
 
 Produce structured `CandidateEvidence` records that ground subsequent
-`inject-keywords` / `update-terminology` and `validate-resume-truth` calls.  Evidence records capture
+`update-keywords` / `update-terminology` and `validate-facts` calls.  Evidence records capture
 what the candidate can truthfully claim, preventing the alignment engine from
 fabricating experience.
 
 ## When to use
 
-- Before running `inject-keywords` or `update-terminology` with evidence constraints.
-- Before running `validate-resume-truth` to produce an evidence baseline.
+- Before running `update-keywords` or `update-terminology` with evidence constraints.
+- Before running `validate-facts` to produce an evidence baseline.
 - When the user wants to review and approve their own claims before alignment.
 
 ## Inputs

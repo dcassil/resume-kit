@@ -95,7 +95,7 @@ def test_all_public_exports_importable() -> None:
     assert "validate-faithfulness" in REGISTRY
     assert "extract-resume-text" in REGISTRY
     assert "export-resume" in REGISTRY
-    assert "check-ats-structure" in REGISTRY
+    assert "check-structure" in REGISTRY
     assert "suggest-terminology" in REGISTRY
     assert "align-terminology" in REGISTRY
     assert "init-project" in REGISTRY

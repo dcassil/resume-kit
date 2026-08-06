@@ -248,7 +248,7 @@ class CheckResumeAtsRequest:
 
 @dataclass(frozen=True)
 class CheckAtsStructureRequest:
-    """Inputs for the check-ats-structure capability (RIT-T-0077).
+    """Inputs for the check-structure capability (RIT-T-0077).
 
     Resume-only: runs the deterministic structural ATS check on *resume* alone
     (section presence + structural recommendations). No job description and no
@@ -275,7 +275,7 @@ class CheckResumeJobMatchRequest:
 
 @dataclass(frozen=True)
 class SelectBestResumeRequest:
-    """Inputs for the select-best-resume capability."""
+    """Inputs for the select-resume capability."""
 
     resumes: Sequence[ResumeDocument]
     job: JobDescription
@@ -284,7 +284,7 @@ class SelectBestResumeRequest:
 
 @dataclass(frozen=True)
 class CompareResumeVersionsRequest:
-    """Inputs for the compare-resume-versions capability."""
+    """Inputs for the compare-versions capability."""
 
     base: ResumeDocument
     candidate: ResumeDocument
@@ -295,7 +295,7 @@ class CompareResumeVersionsRequest:
 
 @dataclass(frozen=True)
 class IdentifyResumeGapsRequest:
-    """Inputs for the identify-resume-gaps capability.
+    """Inputs for the check-gaps capability.
 
     ``alias_file`` optionally points at a project alias JSON (RIT-T-0068
     format) to make gap analysis aware of project synonyms for this call;
@@ -319,7 +319,7 @@ class AlignResumeRequest:
 
 @dataclass(frozen=True)
 class ValidateResumeTruthRequest:
-    """Inputs for the validate-resume-truth capability."""
+    """Inputs for the validate-facts capability."""
 
     resume: ResumeDocument
     evidence: list[CandidateEvidence] = field(default_factory=list)
@@ -328,7 +328,7 @@ class ValidateResumeTruthRequest:
 
 @dataclass(frozen=True)
 class BuildCandidateEvidenceRequest:
-    """Inputs for the build-candidate-evidence capability."""
+    """Inputs for the extract-evidence capability."""
 
     resume: ResumeDocument
     approved_claims: list[CandidateEvidence] | list[str] | None = None

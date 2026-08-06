@@ -1,7 +1,7 @@
 ---
-name: resume-to-json
+name: parse-resume
 description: >
-  Convert a resume file (PDF, DOCX, Markdown, or plain text) into the canonical
+  Parse a resume file (PDF, DOCX, Markdown, or plain text) into the canonical
   resume-kit ResumeDocument JSON, faithfully and losslessly. This skill
   ORCHESTRATES a deterministic pipeline: `resume-tool extract-text` pulls the raw
   text (no LLM), a confined interpretation subagent maps that text into the
@@ -12,7 +12,10 @@ description: >
   file.
 ---
 
-# resume-to-json — build a ResumeDocument from a resume file
+> **Renamed:** `parse-resume` was `resume-to-json` before v1.0.0 (see RIT-A-0005).
+
+
+# parse-resume — build a ResumeDocument from a resume file
 
 ## Prerequisites
 
@@ -27,9 +30,9 @@ Run the shared **Prerequisites gate** first — see
 
 ## Purpose
 
-Every resume-intelligence capability that takes a resume (check-ats-structure,
-check-keyword-match, validate-resume-truth, select-best-resume,
-compare-resume-versions, identify-resume-gaps, build-candidate-evidence,
+Every resume-intelligence capability that takes a resume (check-structure,
+check-keywords, validate-facts, select-resume,
+compare-versions, check-gaps, extract-evidence,
 export-resume) operates on a structured **ResumeDocument JSON** — not on a raw
 PDF/DOCX/MD file. This skill turns a document into that JSON.
 
@@ -49,7 +52,7 @@ faithfulness check — the CLI gate is.
 
 ## Before you start: read prior learnings
 
-Read `resume-kit/learning/resume-to-json.md` (if it exists) first — it accumulates
+Read `resume-kit/learning/parse-resume.md` (if it exists) first — it accumulates
 gotchas from earlier runs. When you discover a NEW gotcha, append it there so the
 next agent does not rediscover it.
 
@@ -255,7 +258,7 @@ resume-kit/
 ├── resumes/
 │   └── <orig-basename>-original.json   # THIS skill's output — immutable, faithful
 ├── jobs/
-│   └── <orig-basename>-original.json   # job-to-json's output
+│   └── <orig-basename>-original.json   # parse-job's output
 ├── working/
 │   └── <session-id>/resume.json        # the candidate + the mutable copy being changed/reviewed
 └── learning/
@@ -290,6 +293,6 @@ resume-kit/
 The saved path to a valid `ResumeDocument` JSON at
 `resume-kit/resumes/<orig-basename>-original.json` that **passed
 `validate-faithfulness`**, with `active_resume` and its source path recorded via
-`set-active` — a faithful, lossless representation ready for check-ats-structure,
-check-keyword-match, validate-resume-truth, and the other resume-intelligence
+`set-active` — a faithful, lossless representation ready for check-structure,
+check-keywords, validate-facts, and the other resume-intelligence
 capabilities.

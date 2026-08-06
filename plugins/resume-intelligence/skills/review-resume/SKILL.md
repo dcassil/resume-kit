@@ -1,18 +1,21 @@
 ---
-name: review-tailored-resume
+name: review-resume
 description: >
-  Dispatch a subagent to critique a newly tailored resume against the original
-  resume and the target job, then write STRUCTURED, parseable findings to
+  Dispatch a subagent to review a resume against the original resume and the
+  target job, then write STRUCTURED, parseable findings to
   `resume-kit/review/<session>.md`. The reviewer checks truthfulness (claims not
   supported by the original), missed JD requirements, over/under-claims,
   terminology-mirroring opportunities, and structure/ATS readability, and gives an
   overall verdict. ADVICE-ONLY — it never edits the resume; it points the user at
-  inject-keywords / update-terminology / validate-resume-truth to act on findings.
+  update-keywords / update-terminology / validate-facts to act on findings.
   The shared review step both the optional workflow step and the dev refine loop
   build on. Best run in a subagent.
 ---
 
-# review-tailored-resume — subagent critique → structured findings (advice-only)
+> **Renamed:** `review-resume` was `review-tailored-resume` before v1.0.0 (see RIT-A-0005).
+
+
+# review-resume — subagent critique → structured findings (advice-only)
 
 Take the (NEW tailored resume, ORIGINAL resume, JOB description) triple, hand it
 to a reviewer subagent, and capture that reviewer's critique as a consistent,
@@ -37,10 +40,10 @@ Run the shared **Prerequisites gate** first — see
      `resume-kit/jobs/`).
 - **If any is missing:** STOP. Do not guess or review on partial inputs. Name the
   specific upstream skill to run first:
-  - No original resume JSON → run **resume-to-json**.
-  - No job JSON → run **job-to-json**.
+  - No original resume JSON → run **parse-resume**.
+  - No job JSON → run **parse-job**.
   - No tailored `working/<session>/resume.json` yet → run the tailoring skills
-    first (see **resume-workflow** — `inject-keywords` / `update-terminology`).
+    first (see **resume-workflow** — `update-keywords` / `update-terminology`).
 
 Determine `<session>` from the tailored resume's path
 (`resume-kit/working/<session>/resume.json`); reuse that same `<session>` for the
@@ -50,7 +53,7 @@ review filename so review and working copy stay paired.
 
 This is a self-contained, high-token critique task. The main agent should
 **dispatch it to a subagent** (the Task tool / a general-purpose agent),
-consistent with `resume-to-json`, `job-to-json`, and `manage-synonyms`. Hand the
+consistent with `parse-resume`, `parse-job`, and `learn-terminology`. Hand the
 subagent: the three resolved JSON paths, the rubric below, and this skill. The
 subagent reads the documents, critiques them, writes
 `resume-kit/review/<session>.md`, and returns only a short summary (the overall
@@ -141,9 +144,9 @@ Rules for the file:
   job JSON, `config.json`, or any other resume state.
 - The review does not tailor or fix anything — it produces advice. To ACT on the
   findings, point the user at the right single-purpose skill:
-  - Truthfulness risks / over-claims → **validate-resume-truth** (then remove or
+  - Truthfulness risks / over-claims → **validate-facts** (then remove or
     correct the unsupported claim in the working copy).
-  - Missed JD requirements → **inject-keywords** (surface missing-but-true
+  - Missed JD requirements → **update-keywords** (surface missing-but-true
     keywords into the working copy).
   - Terminology suggestions → **update-terminology** (mirror the employer's exact
     wording for a synonym the resume already satisfies).

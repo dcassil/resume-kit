@@ -1,4 +1,4 @@
-"""API tests for the check-ats-structure route (RIT-T-0077)."""
+"""API tests for the check-structure route (RIT-T-0077)."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _complete_resume() -> dict[str, Any]:
 
 
 def test_check_ats_structure_reports_section_completeness() -> None:
-    resp = client.post("/check-ats-structure", json={"resume": _complete_resume()})
+    resp = client.post("/check-structure", json={"resume": _complete_resume()})
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["errors"] == []
@@ -44,5 +44,5 @@ def test_check_ats_structure_reports_section_completeness() -> None:
 
 
 def test_check_ats_structure_missing_resume_is_422() -> None:
-    resp = client.post("/check-ats-structure", json={})
+    resp = client.post("/check-structure", json={})
     assert resp.status_code == 422

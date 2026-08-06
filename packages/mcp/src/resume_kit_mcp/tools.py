@@ -532,7 +532,7 @@ async def resume_check_ats_structure(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call("check-ats-structure", request, arguments)
+    return await _call("check-structure", request, arguments)
 
 
 async def resume_check_job_match(arguments: ToolArguments) -> ToolResult:
@@ -563,7 +563,7 @@ async def resume_select_best(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call("select-best-resume", request, arguments)
+    return await _call("select-resume", request, arguments)
 
 
 async def resume_compare_versions(arguments: ToolArguments) -> ToolResult:
@@ -584,7 +584,7 @@ async def resume_compare_versions(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call("compare-resume-versions", request, arguments)
+    return await _call("compare-versions", request, arguments)
 
 
 async def resume_identify_gaps(arguments: ToolArguments) -> ToolResult:
@@ -600,7 +600,7 @@ async def resume_identify_gaps(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call("identify-resume-gaps", request, arguments)
+    return await _call("check-gaps", request, arguments)
 
 
 async def resume_align(arguments: ToolArguments) -> ToolResult:
@@ -630,7 +630,7 @@ async def resume_validate_truth(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call("validate-resume-truth", request, arguments)
+    return await _call("validate-facts", request, arguments)
 
 
 async def resume_validate_faithfulness(arguments: ToolArguments) -> ToolResult:
@@ -661,7 +661,7 @@ async def candidate_evidence_build(arguments: ToolArguments) -> ToolResult:
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)
-    return await _call("build-candidate-evidence", request, arguments)
+    return await _call("extract-evidence", request, arguments)
 
 
 async def candidate_evidence_add(arguments: ToolArguments) -> ToolResult:

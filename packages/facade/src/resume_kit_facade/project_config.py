@@ -28,7 +28,7 @@ This module gives the working-directory state contract a code owner:
   writer funnels through.  Saves are atomic (temp file + :func:`os.replace`) so
   a crash can never leave a half-written / corrupt ``config.json``.
 
-The layout constants mirror the ``resume-to-json`` skill's documented tree so
+The layout constants mirror the ``parse-resume`` skill's documented tree so
 existing projects keep working unchanged.
 """
 

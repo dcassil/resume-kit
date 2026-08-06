@@ -508,17 +508,17 @@ _SURFACE_CASES = (
         api_body=lambda ctx: {"resume": _resume(ctx), "job": _job(ctx)},
     ),
     SurfaceCase(
-        name="check-ats-structure",
-        capability="check-ats-structure",
+        name="check-structure",
+        capability="check-structure",
         request=lambda ctx: CheckAtsStructureRequest(resume=ctx.data.resume),
         cli_args=lambda ctx: [
-            "check-ats-structure",
+            "check-structure",
             "--resume",
             str(ctx.paths.resume),
         ],
         mcp_name="resume_check_ats_structure",
         mcp_args=lambda ctx: {"resume": _resume(ctx)},
-        api_path="/check-ats-structure",
+        api_path="/check-structure",
         api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(
@@ -536,8 +536,8 @@ _SURFACE_CASES = (
         api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(
-        name="identify-resume-gaps",
-        capability="identify-resume-gaps",
+        name="check-gaps",
+        capability="check-gaps",
         request=lambda ctx: IdentifyResumeGapsRequest(
             job=ctx.data.job,
             tailored=ctx.data.resume,
@@ -625,8 +625,8 @@ _SURFACE_CASES = (
         },
     ),
     SurfaceCase(
-        name="validate-resume-truth",
-        capability="validate-resume-truth",
+        name="validate-facts",
+        capability="validate-facts",
         request=lambda ctx: ValidateResumeTruthRequest(
             resume=ctx.data.resume, evidence=ctx.data.evidence
         ),
@@ -643,8 +643,8 @@ _SURFACE_CASES = (
         api_body=lambda ctx: {"resume": _resume(ctx), "evidence": _evidence(ctx)},
     ),
     SurfaceCase(
-        name="build-candidate-evidence",
-        capability="build-candidate-evidence",
+        name="extract-evidence",
+        capability="extract-evidence",
         request=lambda ctx: BuildCandidateEvidenceRequest(resume=ctx.data.resume),
         cli_args=lambda ctx: ["build-evidence", "--resume", str(ctx.paths.resume)],
         mcp_name="candidate_evidence_build",
@@ -653,8 +653,8 @@ _SURFACE_CASES = (
         api_body=lambda ctx: {"resume": _resume(ctx)},
     ),
     SurfaceCase(
-        name="build-candidate-evidence-approved-claims",
-        capability="build-candidate-evidence",
+        name="extract-evidence-approved-claims",
+        capability="extract-evidence",
         request=lambda ctx: BuildCandidateEvidenceRequest(
             resume=ctx.data.resume, approved_claims=["Confirmed Docker work"]
         ),

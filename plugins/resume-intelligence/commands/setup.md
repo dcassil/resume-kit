@@ -34,8 +34,8 @@ and `uv`/`pip` are available and that PyPI is reachable.
 The base `resume-kit[all]` install already bundles `markitdown`, `pdfminer.six`,
 and `python-docx`. The `resume-tool extract --no-llm <file>` CLI can extract
 text from PDF, DOCX, Markdown, and plain-text files without any optional extras.
-Use this as the primary extraction path in the **resume-to-json** and
-**job-to-json** skills.
+Use this as the primary extraction path in the **parse-resume** and
+**parse-job** skills.
 
 The `markitdown[pdf]` optional extra is not required for extraction and does not
 need to be installed as part of normal setup.

@@ -1,7 +1,7 @@
 """End-to-end integration test for the preference-learning loop (RIT-I-0013).
 
 Drives the deterministic, offline loop the plugin skills orchestrate
-(``rank-edits`` + ``log-edit-feedback``) directly over the
+(``rank-changes`` + ``learn-change``) directly over the
 ``resume_kit_feedback`` package:
 
     fixed synthetic feedback log

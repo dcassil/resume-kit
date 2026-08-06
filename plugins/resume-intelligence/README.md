@@ -21,16 +21,51 @@ uv tool install "resume-kit[all]"      # or: pip install "resume-kit[all]"
 Without it the skill *docs* still load, but the `resume-tool` CLI and the
 `resume-kit` MCP tools won't launch.
 
+## Skill renames in v1.0.0 (RIT-A-0005)
+
+v1.0.0 renames 14 skills to a uniform `verb-noun` lexicon so behavior class is
+inferable from the name (`check-*` = safe read-only report, `validate-*` = a
+hard gate, `update-*` = gated mutation, `learn-*` = future-run learning). This is
+a **breaking change** (hence the major bump). If you referenced an old skill
+name, update it:
+
+| Old skill | New skill |
+|-----------|-----------|
+| `resume-to-json` | `parse-resume` |
+| `job-to-json` | `parse-job` |
+| `build-candidate-evidence` | `extract-evidence` |
+| `check-ats-structure` | `check-structure` |
+| `check-keyword-match` | `check-keywords` |
+| `identify-resume-gaps` | `check-gaps` |
+| `compare-resume-versions` | `compare-versions` |
+| `select-best-resume` | `select-resume` |
+| `validate-resume-truth` | `validate-facts` |
+| `inject-keywords` | `update-keywords` |
+| `rank-edits` | `rank-changes` |
+| `review-tailored-resume` | `review-resume` |
+| `log-edit-feedback` | `learn-change` |
+| `manage-synonyms` | `learn-terminology` |
+
+Six of these names were also the string identifier of a `resume-tool` CLI
+command / facade capability, so those code identifiers were renamed to match in
+the same release: the CLI command `check-ats-structure` → `check-structure`, and
+the capability keys `check-ats-structure` → `check-structure`,
+`identify-resume-gaps` → `check-gaps`, `compare-resume-versions` →
+`compare-versions`, `select-best-resume` → `select-resume`,
+`validate-resume-truth` → `validate-facts`, `build-candidate-evidence` →
+`extract-evidence` (each carries a `Renamed to … from …` comment at its
+definition). The MCP tool names (`resume_check_ats_structure`, …) are unchanged.
+
 ## Turning documents into JSON (agent-driven, no LLM provider)
 
 The analysis/alignment capabilities operate on canonical JSON, not raw files.
 Two conversion skills let the agent produce that JSON directly (best run as
 **subagents** — they are confined, high-token tasks):
 
-- **`resume-to-json`** — a PDF/DOCX/MD/text resume → faithful `ResumeDocument`
+- **`parse-resume`** — a PDF/DOCX/MD/text resume → faithful `ResumeDocument`
   JSON, under strict no-alteration gates. Saved to
   `resume-kit/resumes/<name>-original.json`.
-- **`job-to-json`** — a job posting → structured `JobDescription` JSON with
+- **`parse-job`** — a job posting → structured `JobDescription` JSON with
   `requirements` + `keywords`, so deterministic **skills-coverage** scoring works
   without an LLM provider. Saved to `resume-kit/jobs/<name>-original.json`.
 
@@ -69,7 +104,7 @@ skills must not hand-edit it. Keyword-scoring surfaces also accept an explicit
 `identify-gaps --alias-file <path>` on the CLI, an `alias_file` field on the
 `resume_check_job_match` / `resume_identify_gaps` MCP tools, and an `alias_file`
 body field on the corresponding API routes. Keyword matching uses the alias
-index; `check-ats-structure` is structure-only and takes no alias file. When the
+index; `check-structure` is structure-only and takes no alias file. When the
 pointer is absent the surfaces run seed-only, identical to prior behaviour.
 
 These skills describe how an agent drives the `resume-tool` CLI or the MCP
@@ -84,66 +119,66 @@ facts, bypass evidence, or create business rules in prompt text.
 
 `resume-workflow` is the entry-point guide; it runs the skills in order:
 
-1. **Ingest** — `resume-to-json`, `job-to-json` (no LLM; the agent converts the
+1. **Ingest** — `parse-resume`, `parse-job` (no LLM; the agent converts the
    files/posting into canonical JSON).
-2. **Check** — `check-ats-structure` (structural/parse issues, resume-only),
-   `check-keyword-match` (resume↔job keyword coverage), `identify-resume-gaps`
+2. **Check** — `check-structure` (structural/parse issues, resume-only),
+   `check-keywords` (resume↔job keyword coverage), `check-gaps`
    (missing / injectable keywords).
-3. **Improve** (no LLM, truth-gated) — `inject-keywords` and
+3. **Improve** (no LLM, truth-gated) — `update-keywords` and
    `update-terminology` produce truthful `ChangeProposal` records, prompt for
    mode (`interactive`, `review_at_end`, or `auto`), then drive
    `resume-tool review-edits open` → `resume-tool review-edits prompt` →
    `resume-tool review-edits decide` → `resume-tool review-edits commit` →
-   `validate-resume-truth`. When several truthful candidates exist,
-   `rank-edits` calls `resume-tool rank-edit-candidates` first; after a
-   decision, `log-edit-feedback` calls `resume-tool record-edit-feedback` and
+   `validate-facts`. When several truthful candidates exist,
+   `rank-changes` calls `resume-tool rank-edit-candidates` first; after a
+   decision, `learn-change` calls `resume-tool record-edit-feedback` and
    refreshes preferences with `resume-tool refresh-preferences --now <iso>`.
    Confirmed user evidence is persisted with
-   `resume-tool add-evidence --confirmed --content ...`; `validate-resume-truth`
+   `resume-tool add-evidence --confirmed --content ...`; `validate-facts`
    reports near-match confirmed claims as `USER_CONFIRMED`, reserves
    `CONTRADICTED` for structural conflicts or active refutations, and uses
    `UNSUPPORTED` for missing evidence. Every claim includes a stable
    `reason_code`.
-4. **Verify** — `validate-resume-truth`; then re-run the checks to see the delta.
-5. **Review** (optional, no LLM provider) — `review-tailored-resume` dispatches a
+4. **Verify** — `validate-facts`; then re-run the checks to see the delta.
+5. **Review** (optional, no LLM provider) — `review-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes
    parseable, advice-only findings to `resume-kit/review/<session>.md` (it never
-   edits the resume; act on findings via `inject-keywords` /
-   `update-terminology` / `validate-resume-truth`).
+   edits the resume; act on findings via `update-keywords` /
+   `update-terminology` / `validate-facts`).
 6. **Export** — `export-resume` (PDF/DOCX).
 
-Supporting: `build-candidate-evidence`, `compare-resume-versions`,
-`select-best-resume`, and `manage-synonyms` (grows the project alias index used
+Supporting: `extract-evidence`, `compare-versions`,
+`select-resume`, and `learn-terminology` (grows the project alias index used
 by keyword matching + terminology).
 
 ## Capability Map
 
 | Skill directory | CLI command | MCP tool name | LLM required? |
 |---|---|---|---|
-| `resume-to-json` | (agent-driven) | — | No (agent converts) |
-| `job-to-json` | (agent-driven) | — | No (agent converts) |
-| `check-ats-structure` | `resume-tool check-ats-structure` | `resume_check_ats_structure` | No (deterministic) |
-| `check-keyword-match` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
-| `identify-resume-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |
-| `inject-keywords` | `resume-tool review-edits open`; `resume-tool review-edits prompt`; `resume-tool review-edits decide`; `resume-tool review-edits commit`; `resume-tool review-edits status`; `resume-tool review-edits reconcile` | `edit_session_open` / `edit_session_prompt` / `edit_session_decide` / `edit_session_commit` / `edit_session_status` / `edit_session_reconcile` | No (deterministic gate) |
+| `parse-resume` | (agent-driven) | — | No (agent converts) |
+| `parse-job` | (agent-driven) | — | No (agent converts) |
+| `check-structure` | `resume-tool check-structure` | `resume_check_ats_structure` | No (deterministic) |
+| `check-keywords` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
+| `check-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |
+| `update-keywords` | `resume-tool review-edits open`; `resume-tool review-edits prompt`; `resume-tool review-edits decide`; `resume-tool review-edits commit`; `resume-tool review-edits status`; `resume-tool review-edits reconcile` | `edit_session_open` / `edit_session_prompt` / `edit_session_decide` / `edit_session_commit` / `edit_session_status` / `edit_session_reconcile` | No (deterministic gate) |
 | `update-terminology` | `resume-tool suggest-terminology` + `resume-tool review-edits open`; `resume-tool review-edits prompt`; `resume-tool review-edits decide`; `resume-tool review-edits commit`; `resume-tool review-edits status`; `resume-tool review-edits reconcile` | `resume_suggest_terminology` + `edit_session_open` / `edit_session_prompt` / `edit_session_decide` / `edit_session_commit` / `edit_session_status` / `edit_session_reconcile` | No (deterministic gate) |
-| `validate-resume-truth` | `resume-tool validate-truth` | `resume_validate_truth` | No (deterministic) |
-| `build-candidate-evidence` | `resume-tool build-evidence` | `candidate_evidence_build` | No (deterministic) |
-| `compare-resume-versions` | `resume-tool compare` | `resume_compare_versions` | No (deterministic) |
-| `select-best-resume` | `resume-tool select` | `resume_select_best` | No (deterministic) |
+| `validate-facts` | `resume-tool validate-truth` | `resume_validate_truth` | No (deterministic) |
+| `extract-evidence` | `resume-tool build-evidence` | `candidate_evidence_build` | No (deterministic) |
+| `compare-versions` | `resume-tool compare` | `resume_compare_versions` | No (deterministic) |
+| `select-resume` | `resume-tool select` | `resume_select_best` | No (deterministic) |
 | `export-resume` | `resume-tool export` | `resume_export` | No (deterministic) |
 | `add-evidence` | `resume-tool add-evidence --confirmed` | `candidate_evidence_add` | No (deterministic) |
-| `manage-synonyms` | (agent-driven) | — | No (grows alias index) |
-| `review-tailored-resume` | (agent-driven, advice-only) | — | No (subagent) |
-| `rank-edits` | `resume-tool rank-edit-candidates` | `edit_candidates_rank` | No (deterministic ranking) |
-| `log-edit-feedback` | `resume-tool record-edit-feedback` / `resume-tool refresh-preferences` | `edit_feedback_record` / `preferences_refresh` | No (records outcome) |
+| `learn-terminology` | (agent-driven) | — | No (grows alias index) |
+| `review-resume` | (agent-driven, advice-only) | — | No (subagent) |
+| `rank-changes` | `resume-tool rank-edit-candidates` | `edit_candidates_rank` | No (deterministic ranking) |
+| `learn-change` | `resume-tool record-edit-feedback` / `resume-tool refresh-preferences` | `edit_feedback_record` / `preferences_refresh` | No (records outcome) |
 | `resume-workflow` | (guide) | — | No (orchestration) |
 
 **Disabled / not surfaced as skills:** LLM auto-rewrite (`align-resume`) is
-disabled for now — the no-LLM `inject-keywords` + `update-terminology` cover
+disabled for now — the no-LLM `update-keywords` + `update-terminology` cover
 truthful tailoring. The raw LLM extract tools (`resume_extract`,
 `job_description_extract`) remain callable via CLI/MCP but are not surfaced as
-skills; prefer the agent-driven `resume-to-json` / `job-to-json`, which need no
+skills; prefer the agent-driven `parse-resume` / `parse-job`, which need no
 provider.
 
 ## Architecture Note

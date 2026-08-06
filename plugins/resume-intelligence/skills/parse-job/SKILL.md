@@ -1,7 +1,7 @@
 ---
-name: job-to-json
+name: parse-job
 description: >
-  Convert a job posting (pasted text, URL content, or a PDF/DOCX/MD/text file)
+  Parse a job posting (pasted text, URL content, or a PDF/DOCX/MD/text file)
   into the canonical resume-kit JobDescription JSON, with structured requirements
   and skill keywords. This skill ORCHESTRATES a pipeline: for file inputs,
   `resume-tool extract-text <file>` pulls the raw text deterministically (no LLM);
@@ -12,7 +12,10 @@ description: >
   you only have a posting.
 ---
 
-# job-to-json — build a JobDescription from a posting
+> **Renamed:** `parse-job` was `job-to-json` before v1.0.0 (see RIT-A-0005).
+
+
+# parse-job — build a JobDescription from a posting
 
 ## Prerequisites
 
@@ -27,21 +30,21 @@ Run the shared **Prerequisites gate** first — see
 
 ## Purpose
 
-`check-ats-structure`, `check-keyword-match`, and `identify-resume-gaps` score a
+`check-structure`, `check-keywords`, and `check-gaps` score a
 resume **against a JobDescription**. Deterministic text extraction only captures
 the raw text — it does NOT populate the structured `requirements` and `keywords`,
 so `skills_coverage` comes back `0`. This skill fixes that: a confined
 interpretation subagent extracts the structured skills/requirements from the
 posting so scoring is meaningful — no LLM provider required.
 
-Same shape as `resume-to-json`: extraction is deterministic, interpretation is
+Same shape as `parse-resume`: extraction is deterministic, interpretation is
 confined to a subagent, and the pointer is recorded by code (`set-active`), not by
 hand-editing `config.json`.
 
 ## Which gate applies
 
 `resume-tool validate-faithfulness` targets a **`ResumeDocument`** — it is the
-authoritative machine gate for `resume-to-json`, **not** for job postings. Do NOT
+authoritative machine gate for `parse-resume`, **not** for job postings. Do NOT
 force the resume faithfulness gate on a `JobDescription`. For jobs, the
 faithfulness discipline is enforced by the **prose Extraction gates below**, which
 the interpretation subagent must follow (chiefly: `raw_text` is verbatim and no
@@ -51,7 +54,7 @@ the resume faithfulness gate.
 
 ## Before you start: read prior learnings
 
-Read `resume-kit/learning/job-to-json.md` (if present) first, and append any new
+Read `resume-kit/learning/parse-job.md` (if present) first, and append any new
 gotcha you hit so future runs benefit.
 
 ## Steps (orchestration spine)
@@ -181,7 +184,7 @@ State lives under `resume-kit/` in the current project. Create it with
 ```
 resume-kit/
 ├── config.json          # pointers + preferences (active_resume, active_job, ...) — CODE-OWNED, use set-active
-├── resumes/<orig-basename>-original.json   # resume-to-json output
+├── resumes/<orig-basename>-original.json   # parse-resume output
 ├── jobs/
 │   └── <orig-basename>-original.json        # THIS skill's output
 ├── working/<session-id>/resume.json         # resume currently being changed/reviewed
@@ -213,5 +216,5 @@ apply here — see "Which gate applies".
 
 The saved path to a valid `JobDescription` JSON with populated `requirements`,
 `qualifications`, and `keywords`, recorded as `active_job` via `set-active` —
-ready for `check-ats-structure`, `check-keyword-match`, and `identify-resume-gaps`
+ready for `check-structure`, `check-keywords`, and `check-gaps`
 to produce meaningful keyword-match AND skills-coverage scores.
