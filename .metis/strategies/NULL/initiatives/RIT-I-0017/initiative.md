@@ -4,14 +4,14 @@ level: initiative
 title: "Separate scoring representation (ScoreDoc) from build representation (BuildDoc) via deterministic projection"
 short_code: "RIT-I-0017"
 created_at: 2026-08-05T17:00:00+00:00
-updated_at: 2026-08-05T19:19:44.075857+00:00
+updated_at: 2026-08-06T23:37:49.319119+00:00
 parent: RIT-V-0001
 blocked_by: [RIT-I-0015]
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -21,6 +21,19 @@ initiative_id: separate-scoring-representation
 ---
 
 # Separate scoring representation (ScoreDoc) from build representation (BuildDoc) via deterministic projection Initiative
+
+## Completion Note — 2026-08-06
+
+**Completed.** `ScoreDoc` + the deterministic `project_scoredoc` projection are the scoring representation; the build representation (`ResumeDocument`) is unchanged (purely additive). All eight tasks done:
+
+- **Substrate (RIT-T-0104–0106):** ScoreDoc schema + projection home + `project_scoredoc` (segmentation, entity/YoE extraction, customSections→zone, zoned keyword index).
+- **Repoints (RIT-T-0107–0108):** matching's high-value/**placement** path repointed to ScoreDoc zones — the real **85.8→75.8 fix** (categorized custom-section skills now count as canonical). RIT-T-0108 was **reduced (codex-reviewed)**: the ATS composite path (`engine.py`) intentionally keeps reading BuildDoc field names (full zone-weighted ATS repoint deferred); only the projection zoning tests were added.
+- **ATS-view (RIT-T-0109–0110):** the read-only "what the ATS sees" report across facade + CLI + MCP + API with parity, plus the `check-ats-view` plugin skill wired into `resume-workflow` — the most user-visible payoff of the split. Carries the standing "a score does not guarantee recruiter advancement" disclaimer (the RIT-A-0004 / RIT-I-0018 note).
+- **Close-out (RIT-T-0111):** E2E regression test (placement fix proven by equivalence; composite pinned at 87.7), structure/match coherence, ats-view parity, export byte-determinism (additive-invariant guard), and a scoped grep guard. README "BuildDoc vs. ScoreDoc" section; version 0.7.0 → 0.8.0.
+
+**Deferred (not blocking closure):** the full zone-weighted ATS composite repoint (RIT-T-0108's reduced portion) remains for a future reviewed pass; the E2E documents the intentional residual `ats_contribution` BuildDoc read.
+
+Gate at closure: full suite **3451 passed / 1 skipped**; `ruff` + `mypy packages/` clean (101 files); `uv lock --check` passes.
 
 ## Context **[REQUIRED]**
 
