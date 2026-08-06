@@ -20,6 +20,7 @@ from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
     AddEvidenceRequest,
     AlignResumeRequest,
+    AtsViewRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -37,12 +38,15 @@ from resume_kit_facade.models import (
 )
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_schemas import (
+    AdditionalInfo,
     AlignmentResult,
     ATSScore,
+    AtsViewReport,
     CandidateEvidence,
     EditFeedback,
     EditFeedbackReasonCode,
     EvidenceKind,
+    Experience,
     JobDescription,
     JobMatchReport,
     KeywordGapAnalysis,
@@ -114,6 +118,7 @@ def test_registry_contains_all_capabilities() -> None:
         "build-base",
         "build-standard",
         "analyze-best-practices",
+        "ats-view",
     }
 
 
@@ -124,6 +129,73 @@ async def test_registry_dispatch_is_uniform_and_awaitable() -> None:
     )
     assert response.ok
     assert isinstance(response.data, JobMatchReport)
+
+
+# --- ATS view (RIT-T-0109) ------------------------------------------------
+
+
+def _ongoing_resume() -> ResumeDocument:
+    """Resume with an open-ended ('Present') role so YoE tracks the ref date."""
+    return ResumeDocument(
+        summary="Backend engineer with Python and Docker experience.",
+        workExperience=[
+            Experience(
+                id=1,
+                title="Senior Engineer",
+                company="Acme",
+                years="2015 - Present",
+                description=["Built Python APIs."],
+            )
+        ],
+        additional=AdditionalInfo(technicalSkills=["Python", "Docker"]),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ats_view_returns_report_envelope() -> None:
+    response = await caps.ats_view_capability(
+        AtsViewRequest(resume=_resume()), _DETERMINISTIC
+    )
+    assert response.ok
+    assert isinstance(response.data, AtsViewReport)
+
+
+@pytest.mark.asyncio
+async def test_ats_view_rejects_wrong_request_type() -> None:
+    response = await caps.ats_view_capability(object(), _DETERMINISTIC)
+    assert not response.ok
+    assert response.errors
+
+
+@pytest.mark.asyncio
+async def test_ats_view_reference_date_changes_years_experience() -> None:
+    early = await caps.ats_view_capability(
+        AtsViewRequest(resume=_ongoing_resume(), reference_date="2018-01-01"),
+        _DETERMINISTIC,
+    )
+    late = await caps.ats_view_capability(
+        AtsViewRequest(resume=_ongoing_resume(), reference_date="2025-01-01"),
+        _DETERMINISTIC,
+    )
+    assert isinstance(early.data, AtsViewReport)
+    assert isinstance(late.data, AtsViewReport)
+    assert (
+        late.data.entities.total_years_experience
+        > early.data.entities.total_years_experience
+    )
+
+
+@pytest.mark.asyncio
+async def test_ats_view_needs_no_provider_and_ignores_no_llm() -> None:
+    provider = FakeStructuredCompletionProvider([])
+    with_provider = await caps.ats_view_capability(
+        AtsViewRequest(resume=_resume()),
+        CapabilityOptions(no_llm=False, provider=provider),
+    )
+    assert with_provider.ok
+    assert isinstance(with_provider.data, AtsViewReport)
+    # The deterministic path never consumed a queued provider response.
+    assert provider.calls == []
 
 
 # --- Extract resume -------------------------------------------------------

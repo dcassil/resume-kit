@@ -83,6 +83,7 @@ from resume_kit_schemas import (
     AlignmentResult,
     ATSScore,
     AtsStructureReport,
+    AtsViewReport,
     BestPracticesReport,
     CandidateEvidence,
     EvidenceKind,
@@ -97,6 +98,7 @@ from resume_kit_schemas import (
     TruthReport,
 )
 from resume_kit_scoring import analyze_best_practices as _analyze_best_practices
+from resume_kit_scoring import build_ats_view as _build_ats_view
 from resume_kit_scoring import project_scoredoc as _project_scoredoc
 
 from resume_kit_facade import edit_session as _edit_session
@@ -110,6 +112,7 @@ from resume_kit_facade.models import (
     AlignTerminologyRequest,
     AlignTerminologyResult,
     AnalyzeBestPracticesRequest,
+    AtsViewRequest,
     BaseBuildResult,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
@@ -1077,6 +1080,10 @@ async def set_active_capability(
 #: at a fixed reference date so the report is byte-identical across surfaces.
 _BEST_PRACTICES_REF_DATE = date(2000, 1, 1)
 
+#: Fixed default placement reference date for the ATS view when the caller
+#: supplies none, so the report is byte-identical across surfaces (NFR-001).
+_ATS_VIEW_REF_DATE = date(2000, 1, 1)
+
 
 async def build_base_capability(
     request: object,
@@ -1158,6 +1165,35 @@ async def analyze_best_practices_capability(
     return build_success(report, strict=options.strict)
 
 
+async def ats_view_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Render the read-only "what the ATS sees" report (RIT-T-0109).
+
+    Pure and deterministic: never requires a provider and ignores ``no_llm``.
+    Projects a ScoreDoc for the resume (using the caller-supplied
+    ``reference_date`` for YoE, or a fixed default when omitted) and returns the
+    :class:`~resume_kit_schemas.AtsViewReport` — sections, entities+YoE, and the
+    zoned keyword breakdown. Introduces no per-item LLM calls (NFR-001).
+    """
+    if not isinstance(request, AtsViewRequest):
+        return from_resume_kit_error(_bad_request(request, "AtsViewRequest"))
+    try:
+        ref = (
+            date.fromisoformat(request.reference_date)
+            if request.reference_date
+            else _ATS_VIEW_REF_DATE
+        )
+        scoredoc = _project_scoredoc(request.resume, reference_date=ref)
+        report: AtsViewReport = _build_ats_view(scoredoc)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
 # ---------------------------------------------------------------------------
 # Capability registry
 # ---------------------------------------------------------------------------
@@ -1201,4 +1237,5 @@ REGISTRY: dict[str, Capability] = {
     "build-base": build_base_capability,
     "build-standard": build_standard_capability,
     "analyze-best-practices": analyze_best_practices_capability,
+    "ats-view": ats_view_capability,
 }

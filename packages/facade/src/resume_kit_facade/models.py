@@ -170,6 +170,25 @@ class AnalyzeBestPracticesRequest:
     resume: ResumeDocument
 
 
+@dataclass(frozen=True)
+class AtsViewRequest:
+    """Inputs for the ats-view capability (RIT-I-0016, RIT-T-0109).
+
+    Pure and deterministic: projects a ScoreDoc for ``resume`` and returns the
+    read-only :class:`~resume_kit_schemas.AtsViewReport` (what the ATS is likely
+    to parse — sections, entities+YoE, zoned keywords). Never requires a provider
+    and ignores ``no_llm``; introduces no per-item LLM calls (NFR-001).
+
+    ``reference_date`` is a caller-supplied ISO ``YYYY-MM-DD`` used only for the
+    years-of-experience computation on open-ended roles. When ``None`` the
+    capability uses a fixed default so the report is byte-identical across
+    surfaces that do not supply one.
+    """
+
+    resume: ResumeDocument
+    reference_date: str | None = None
+
+
 class BaseBuildResult(BaseModel):
     """Serializable outcome of the ``original -> base`` build (RIT-T-0115).
 

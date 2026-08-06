@@ -22,6 +22,7 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
@@ -95,6 +96,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_build_base",
     "resume_build_standard",
     "resume_analyze_best_practices",
+    "resume_ats_view",
 )
 
 _OPTIONS = frozenset({"no_llm", "strict", "human_in_loop", "provider"})
@@ -910,6 +912,20 @@ async def resume_analyze_best_practices(arguments: ToolArguments) -> ToolResult:
     return await _call("analyze-best-practices", request, arguments)
 
 
+async def resume_ats_view(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            AtsViewRequest,
+            {
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+                "reference_date": _optional_str(arguments, "reference_date"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("ats-view", request, arguments)
+
+
 async def edit_session_open(arguments: ToolArguments) -> ToolResult:
     try:
         changes = [_change(item, "changes") for item in _object_list(arguments, "changes")]
@@ -1044,4 +1060,5 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_build_base": resume_build_base,
     "resume_build_standard": resume_build_standard,
     "resume_analyze_best_practices": resume_analyze_best_practices,
+    "resume_ats_view": resume_ats_view,
 }

@@ -12,6 +12,7 @@ def test_all_public_exports_importable() -> None:
         AlignTerminologyRequest,
         AlignTerminologyResult,
         AnalyzeBestPracticesRequest,
+        AtsViewRequest,
         BaseBuildResult,
         BuildBaseRequest,
         BuildCandidateEvidenceRequest,
@@ -54,6 +55,7 @@ def test_all_public_exports_importable() -> None:
         align_resume,
         align_terminology,
         analyze_best_practices_capability,
+        ats_view_capability,
         build_base_capability,
         build_candidate_evidence_capability,
         build_standard_capability,
@@ -88,7 +90,8 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 31
+    assert len(REGISTRY) == 32
+    assert "ats-view" in REGISTRY
     assert "build-base" in REGISTRY
     assert "build-standard" in REGISTRY
     assert "analyze-best-practices" in REGISTRY
@@ -155,9 +158,11 @@ def test_all_public_exports_importable() -> None:
     assert callable(build_base_capability)
     assert callable(build_standard_capability)
     assert callable(analyze_best_practices_capability)
+    assert callable(ats_view_capability)
     assert BuildBaseRequest is not None
     assert BuildStandardRequest is not None
     assert AnalyzeBestPracticesRequest is not None
+    assert AtsViewRequest is not None
     assert BaseBuildResult is not None
     assert StandardBuildResult is not None
 

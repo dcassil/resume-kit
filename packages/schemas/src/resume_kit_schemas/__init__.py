@@ -28,6 +28,11 @@ from .analysis import (
     ScoreDelta,
     TerminologyAlignment,
 )
+from .ats_view import (
+    ATS_VIEW_DISCLAIMER,
+    ATS_VIEW_SCHEMA_VERSION,
+    AtsViewReport,
+)
 from .best_practices import (
     BEST_PRACTICES_SCHEMA_VERSION,
     BestPracticesFinding,
@@ -116,6 +121,10 @@ __all__ = [
     "ScoreRole",
     "ScoreSection",
     "ZonedKeywordIndex",
+    # ats-view (RIT-T-0109)
+    "ATS_VIEW_DISCLAIMER",
+    "ATS_VIEW_SCHEMA_VERSION",
+    "AtsViewReport",
     # best-practices (RIT-I-0016)
     "BEST_PRACTICES_SCHEMA_VERSION",
     "BestPracticesFinding",

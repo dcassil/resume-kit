@@ -47,6 +47,7 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
@@ -82,6 +83,7 @@ from resume_kit_api.models import (
     AlignResumeBody,
     AlignTerminologyBody,
     AnalyzeBestPracticesBody,
+    AtsViewBody,
     BuildBaseBody,
     BuildCandidateEvidenceBody,
     BuildStandardBody,
@@ -443,6 +445,11 @@ def register_routes(app: FastAPI) -> None:
     async def analyze_best_practices(body: AnalyzeBestPracticesBody) -> Response:
         request = AnalyzeBestPracticesRequest(resume=body.resume)
         return _render(await REGISTRY["analyze-best-practices"](request, _options(body)))
+
+    @app.post("/ats-view")
+    async def ats_view(body: AtsViewBody) -> Response:
+        request = AtsViewRequest(resume=body.resume, reference_date=body.reference_date)
+        return _render(await REGISTRY["ats-view"](request, _options(body)))
 
     @app.post("/export")
     async def export(body: ExportResumeBody) -> Response:

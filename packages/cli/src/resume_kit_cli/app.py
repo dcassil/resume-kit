@@ -32,6 +32,7 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
@@ -783,6 +784,20 @@ def analyze_best_practices(
     request = AnalyzeBestPracticesRequest(resume=io.load_resume(resume))
     options = _options(False, strict, False)
     _run(caps.analyze_best_practices_capability(request, options), output)
+
+
+@app.command(name="ats-view")
+def ats_view(
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    now: str | None = typer.Option(
+        None, "--now", help="Caller-supplied ISO reference date (YYYY-MM-DD) for YoE."
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Render the read-only 'what the ATS sees' report (sections, entities+YoE, zoned keywords)."""
+    request = AtsViewRequest(resume=io.load_resume(resume), reference_date=now)
+    _run(caps.ats_view_capability(request, _options(False, strict, False)), output)
 
 
 @review_edits_app.command(name="open")

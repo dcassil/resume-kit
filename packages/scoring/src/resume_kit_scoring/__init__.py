@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from resume_kit_scoring.ats_view import build_ats_view
 from resume_kit_scoring.base_fix import (
     BaseFixResult,
     apply_auto_fixes,
@@ -22,6 +23,7 @@ __all__ = [
     "analyze_best_practices",
     "apply_auto_fixes",
     "apply_best_practices_edits",
+    "build_ats_view",
     "claim_diff",
     "claims_preserved",
     "finding_key",
