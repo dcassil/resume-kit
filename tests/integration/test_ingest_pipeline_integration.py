@@ -4,7 +4,7 @@ Exercises the deterministic rails through the real CLI transport, proving the
 redesigned ingest boundary works as a chain:
 
     init -> extract-text -> (faithful ResumeDocument) -> validate-faithfulness
-         -> set-active -> downstream check-ats-structure
+         -> set-active -> downstream check-structure
 
 plus the negative path (a lossy conversion is rejected with a non-zero exit),
 the job pointer path, and deterministic docx extraction (no optional extras).
@@ -129,7 +129,7 @@ def test_happy_path_ingest_chain(tmp_path: Path) -> None:
 
     # 4) downstream deterministic analysis still runs clean on the ingested resume
     structure = runner.invoke(
-        app, ["check-ats-structure", "--resume", str(resume_json)]
+        app, ["check-structure", "--resume", str(resume_json)]
     )
     assert structure.exit_code == 0, structure.stdout
     assert json.loads(structure.stdout)["errors"] == []

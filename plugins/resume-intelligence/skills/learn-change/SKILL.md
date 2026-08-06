@@ -1,14 +1,17 @@
 ---
-name: log-edit-feedback
+name: learn-change
 description: >
-  Record the user's outcome for an in-flight edit suggestion through the
+  Learn the user's outcome for an in-flight edit suggestion through the
   record-edit-feedback surface, then refresh preferences. Uses the structured
   EditFeedbackReasonCode enum plus an optional note, and records a PreferencePair
   when the outcome implies a preferred-vs-rejected comparison. No LLM required.
   Best run in a subagent.
 ---
 
-# log-edit-feedback - record outcome -> preference pair -> refresh preferences
+> **Renamed:** `learn-change` was `log-edit-feedback` before v1.0.0 (see RIT-A-0005).
+
+
+# learn-change - record outcome -> preference pair -> refresh preferences
 
 ## Purpose
 
@@ -17,8 +20,8 @@ one `EditFeedback` record for one real edit suggestion the user saw, optionally
 writes the `PreferencePair` implied by that outcome, then refreshes
 `resume-kit/learning/preferences.json`.
 
-Use this for outcomes from `rank-edits` recommendations or edit-session
-decisions from **inject-keywords** / **update-terminology**. Do not log
+Use this for outcomes from `rank-changes` recommendations or edit-session
+decisions from **update-keywords** / **update-terminology**. Do not log
 speculative edits the user never saw.
 
 ## Prerequisites Gate
@@ -34,7 +37,7 @@ Run the shared prerequisites gate in
   terms, matched job requirements, predicted ATS gain, confidence, and timestamp.
 
 If there is no real suggestion and no user outcome, stop. Route the user to
-**rank-edits** or the edit-session loop first.
+**rank-changes** or the edit-session loop first.
 
 ## Reason Codes
 

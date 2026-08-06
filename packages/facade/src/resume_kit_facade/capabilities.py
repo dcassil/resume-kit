@@ -1067,15 +1067,22 @@ REGISTRY: dict[str, Capability] = {
     "extract-resume-text": extract_resume_text_capability,
     "extract-job-description": extract_job_description,
     "check-resume-ats": check_resume_ats,
-    "check-ats-structure": check_ats_structure,
+    # Renamed in v1.0.0 (RIT-A-0005) to match the resume-intelligence skill lexicon:
+    #   "check-structure"  was "check-ats-structure"
+    #   "select-resume"    was "select-best-resume"
+    #   "compare-versions" was "compare-resume-versions"
+    #   "check-gaps"       was "identify-resume-gaps"
+    #   "validate-facts"   was "validate-resume-truth"
+    #   "extract-evidence" was "build-candidate-evidence"
+    "check-structure": check_ats_structure,
     "check-resume-job-match": check_resume_job_match,
-    "select-best-resume": select_best_resume,
-    "compare-resume-versions": compare_resume_versions,
-    "identify-resume-gaps": identify_resume_gaps,
+    "select-resume": select_best_resume,
+    "compare-versions": compare_resume_versions,
+    "check-gaps": identify_resume_gaps,
     "align-resume": align_resume,
-    "validate-resume-truth": validate_resume_truth_capability,
+    "validate-facts": validate_resume_truth_capability,
     "validate-faithfulness": validate_faithfulness_capability,
-    "build-candidate-evidence": build_candidate_evidence_capability,
+    "extract-evidence": build_candidate_evidence_capability,
     "record-edit-feedback": record_edit_feedback_capability,
     "rank-edit-candidates": rank_edit_candidates_capability,
     "refresh-preferences": refresh_preferences_capability,

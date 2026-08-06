@@ -348,7 +348,8 @@ def check_ats(
     _run(caps.check_resume_ats(request, options), output)
 
 
-@app.command(name="check-ats-structure")
+# Renamed to "check-structure" from "check-ats-structure" in v1.0.0 (RIT-A-0005).
+@app.command(name="check-structure")
 def check_ats_structure(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
     output: OutputFormat = _Output,

@@ -1,12 +1,15 @@
 ---
-name: identify-resume-gaps
+name: check-gaps
 description: >
-  Deterministically produce ONLY the missing / injectable keyword list between a
+  Check and produce ONLY the missing / injectable keyword list between a
   tailored resume, a master resume, and a job description — which job keywords
   are missing from the tailored resume, which can be injected from the master
   (injectable), and which are absent from both (non-injectable). No coverage
   percentage focus, no composite score. No LLM required.
 ---
+
+> **Renamed:** `check-gaps` was `identify-resume-gaps` before v1.0.0 (see RIT-A-0005).
+
 
 ## Prerequisites
 
@@ -25,8 +28,8 @@ Run the shared **Prerequisites gate** first — see
 - **If any required input is missing** (no pointer, file absent, or a raw file
   where a canonical JSON is required): **STOP**. Do not guess and do not run on
   partial input. Name the upstream skill for the missing one:
-  - Missing/unconverted resume (tailored or master) → run **`resume-to-json`**.
-  - Missing/unconverted job → run **`job-to-json`**.
+  - Missing/unconverted resume (tailored or master) → run **`parse-resume`**.
+  - Missing/unconverted job → run **`parse-job`**.
 
 Conversions are best run in **subagents** (large intermediate text stays out of
 the main context); pass the saved JSON paths back here — they live under
@@ -99,14 +102,14 @@ deterministic (no LLM).
 
 After you report the gap analysis, for each missing job keyword that the resume
 plausibly satisfies under a DIFFERENT surface term, run the shared
-**`manage-synonyms`** workflow: it applies the truthfulness gate (genuine
+**`learn-terminology`** workflow: it applies the truthfulness gate (genuine
 same-skill synonym only — NetSuite↔SuiteCommerce yes, React≈Vue never; never
 alias to make an ABSENT skill score as present), asks the user to confirm, and
 only then appends a justified `{canonical, alias, why}` entry to the alias file
 so the next deterministic run matches it. Do not confuse this with
 `non_injectable_keywords`: a genuinely absent skill is a real gap and must NOT be
 aliased away. Never append silently; always report exactly what was added. See
-the `manage-synonyms` skill for the full workflow and file format.
+the `learn-terminology` skill for the full workflow and file format.
 
 ## Gaps vs. terminology mirrors
 

@@ -1,4 +1,4 @@
-"""CLI tests for the check-ats-structure command (RIT-T-0077)."""
+"""CLI tests for the check-structure command (RIT-T-0077)."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def _write(path: Path, model: ResumeDocument) -> str:
 
 def test_check_ats_structure_reports_section_completeness(tmp_path: Path) -> None:
     resume = _write(tmp_path / "r.json", _complete_resume())
-    result = runner.invoke(app, ["check-ats-structure", "--resume", resume])
+    result = runner.invoke(app, ["check-structure", "--resume", resume])
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["errors"] == []
@@ -65,7 +65,7 @@ def test_check_ats_structure_reports_section_completeness(tmp_path: Path) -> Non
 
 def test_check_ats_structure_flags_missing_sections(tmp_path: Path) -> None:
     resume = _write(tmp_path / "r.json", _sparse_resume())
-    result = runner.invoke(app, ["check-ats-structure", "--resume", resume])
+    result = runner.invoke(app, ["check-structure", "--resume", resume])
     assert result.exit_code == 0, result.stdout
     data = json.loads(result.stdout)["data"]
     assert data["section_completeness"] == 0.0

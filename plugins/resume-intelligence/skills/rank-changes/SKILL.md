@@ -1,7 +1,7 @@
 ---
-name: rank-edits
+name: rank-changes
 description: >
-  Rank truthful improvement candidates for a pending edit with the deterministic
+  Rank truthful improvement candidates for a pending change with the deterministic
   rank-edit-candidates surface. The skill passes candidates, FeatureContext,
   optional preferences, and alias_file to the CLI/MCP/facade surface, then
   presents the ranked candidates and reasons. It never edits the resume; chosen
@@ -9,14 +9,16 @@ description: >
   commit gate. Best run in a subagent.
 ---
 
-# rank-edits - candidates -> rank-edit-candidates -> present
+> **Renamed:** `rank-changes` was `rank-edits` before v1.0.0 (see RIT-A-0005).
+
+# rank-changes - candidates -> rank-edit-candidates -> present
 
 ## Purpose
 
 The improve skills can produce several truthful candidate changes. This skill's
 job is to rank those candidates with the deterministic preference-aware ranker
 and present the best option(s) with reasons. It is the recommend half of the
-preference-learning loop; `log-edit-feedback` records the outcome.
+preference-learning loop; `learn-change` records the outcome.
 
 This skill does not edit a resume and does not bypass review. Any chosen
 candidate must be represented as a `ChangeProposal` and sent through
@@ -35,7 +37,7 @@ Run the shared prerequisites gate in
 - The project `alias_file` from `resume-kit/config.json`, defaulting to
   `resume-kit/learning/synonyms.json` when present.
 
-If candidates are missing, produce them first through **inject-keywords** or
+If candidates are missing, produce them first through **update-keywords** or
 **update-terminology**. Do not invent candidates in this skill.
 
 ## Run Me In A Subagent
@@ -72,7 +74,7 @@ Input fields are `candidates`, `context`, optional `profile`, optional
 ## Steps
 
 1. **Confirm candidates are truthful.** Candidate generation belongs to
-   **inject-keywords** or **update-terminology**. Non-injectable gaps and
+   **update-keywords** or **update-terminology**. Non-injectable gaps and
    unsupported claims are never ranked.
 2. **Resolve `alias_file`.** Read `resume-kit/config.json`; if it contains an
    `alias_file`, pass that path through. If absent, run seed-only.
@@ -85,7 +87,7 @@ Input fields are `candidates`, `context`, optional `profile`, optional
    convert it to the appropriate `ChangeProposal` and continue through the
    improve skill's edit-session flow. Do not write resume JSON here.
 6. **Record the decision path.** After the user accepts, edits, rejects, skips,
-   or later undoes the suggestion, run **log-edit-feedback** so future rankings
+   or later undoes the suggestion, run **learn-change** so future rankings
    learn from the outcome.
 
 ## Determinism

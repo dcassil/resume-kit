@@ -1,21 +1,24 @@
 ---
-name: manage-synonyms
+name: learn-terminology
 description: >
   The shared truth-gated growth loop for the project synonym index. When a
   deterministic ATS/match/gap run reports a job keyword as "missing" that the
   resume plausibly satisfies under a DIFFERENT surface term, this workflow
   proposes an alias, runs the truthfulness gate, asks the user to confirm, and
   ONLY THEN appends a justified entry to `resume-kit/learning/synonyms.json` so
-  future deterministic runs match it automatically. The agent writes DATA;
+  future deterministic runs learn it automatically. The agent writes DATA;
   scoring stays deterministic and provider-free. Referenced by
-  check-keyword-match and identify-resume-gaps. Best run in a subagent.
+  check-keywords and check-gaps. Best run in a subagent.
 ---
 
-# manage-synonyms — propose → truth-gate → confirm → append aliases
+> **Renamed:** `learn-terminology` was `manage-synonyms` before v1.0.0 (see RIT-A-0005).
+
+
+# learn-terminology — propose → truth-gate → confirm → append aliases
 
 ## Purpose
 
-`check-keyword-match` and `identify-resume-gaps` score a
+`check-keywords` and `check-gaps` score a
 resume against a job **deterministically** — no LLM at scoring time. Matching
 uses a packaged seed lexicon UNIONed with an optional **project alias file**
 (`resume-kit/learning/synonyms.json`, RIT-T-0068 format). When a scoring run
@@ -51,7 +54,7 @@ explicit user confirmation before writing.
 
 This is a self-contained, file-mutating task. The main agent should **dispatch it
 to a subagent** (e.g. the Task tool / a general-purpose agent), consistent with
-`resume-to-json` and `job-to-json`. Hand the subagent: the list of candidate
+`parse-resume` and `parse-job`. Hand the subagent: the list of candidate
 `(missing job keyword, resume term it may equal)` pairs, the path to
 `resume-kit/config.json`, and this skill. The subagent runs the gate, gets user
 confirmation, appends → and returns only **what it added** (canonical, alias,
@@ -60,7 +63,7 @@ into the main context.
 
 ## Before you start: read prior learnings
 
-Read `resume-kit/learning/manage-synonyms.md` (if it exists) first — it
+Read `resume-kit/learning/learn-terminology.md` (if it exists) first — it
 accumulates gotchas from earlier runs (terms you previously rejected, house
 rules the user set). When you learn something new (a pair the user rejected, a
 recurring false candidate), append it there so the next run does not re-propose
@@ -120,7 +123,7 @@ it.
    below), creating the file if needed.
 5. **Report exactly what you added** (canonical, alias, why for each), plus what
    you rejected/deferred and why. Never grow the file silently.
-6. **Append any new learning** to `resume-kit/learning/manage-synonyms.md`.
+6. **Append any new learning** to `resume-kit/learning/learn-terminology.md`.
 
 ## Truthfulness gate — LOAD-BEARING PRODUCT POLICY (do not weaken)
 
@@ -225,7 +228,7 @@ resume-kit/
 ├── working/<session-id>/resume.json
 └── learning/
     ├── synonyms.json     # THIS workflow's append target (RIT-T-0068 format)
-    └── manage-synonyms.md # accumulated hints (read first, append when you learn)
+    └── learn-terminology.md # accumulated hints (read first, append when you learn)
 ```
 
 ## Output

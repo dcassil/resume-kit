@@ -222,10 +222,10 @@ def register_routes(app: FastAPI) -> None:
         )
         return _render(await REGISTRY["check-resume-ats"](request, _options(body)))
 
-    @app.post("/check-ats-structure")
+    @app.post("/check-structure")
     async def check_ats_structure(body: CheckAtsStructureBody) -> Response:
         request = CheckAtsStructureRequest(resume=body.resume)
-        return _render(await REGISTRY["check-ats-structure"](request, _options(body)))
+        return _render(await REGISTRY["check-structure"](request, _options(body)))
 
     @app.post("/match")
     async def match(body: CheckResumeJobMatchBody) -> Response:
@@ -237,7 +237,7 @@ def register_routes(app: FastAPI) -> None:
     @app.post("/select")
     async def select(body: SelectBestResumeBody) -> Response:
         request = SelectBestResumeRequest(resumes=body.resumes, job=body.job, labels=body.labels)
-        return _render(await REGISTRY["select-best-resume"](request, _options(body)))
+        return _render(await REGISTRY["select-resume"](request, _options(body)))
 
     @app.post("/compare")
     async def compare(body: CompareResumeVersionsBody) -> Response:
@@ -248,7 +248,7 @@ def register_routes(app: FastAPI) -> None:
             base_label=body.base_label,
             candidate_label=body.candidate_label,
         )
-        return _render(await REGISTRY["compare-resume-versions"](request, _options(body)))
+        return _render(await REGISTRY["compare-versions"](request, _options(body)))
 
     @app.post("/identify-gaps")
     async def identify_gaps(body: IdentifyResumeGapsBody) -> Response:
@@ -258,7 +258,7 @@ def register_routes(app: FastAPI) -> None:
             master=body.master,
             alias_file=body.alias_file,
         )
-        return _render(await REGISTRY["identify-resume-gaps"](request, _options(body)))
+        return _render(await REGISTRY["check-gaps"](request, _options(body)))
 
     @app.post("/suggest-terminology")
     async def suggest_terminology(body: SuggestTerminologyBody) -> Response:
@@ -293,7 +293,7 @@ def register_routes(app: FastAPI) -> None:
         request = ValidateResumeTruthRequest(
             resume=body.resume, evidence=evidence, alias_file=body.alias_file
         )
-        return _render(await REGISTRY["validate-resume-truth"](request, _options(body)))
+        return _render(await REGISTRY["validate-facts"](request, _options(body)))
 
     @app.post("/validate-faithfulness")
     async def validate_faithfulness(body: ValidateFaithfulnessBody) -> Response:
@@ -312,7 +312,7 @@ def register_routes(app: FastAPI) -> None:
         request = BuildCandidateEvidenceRequest(
             resume=body.resume, approved_claims=body.approved_claims
         )
-        return _render(await REGISTRY["build-candidate-evidence"](request, _options(body)))
+        return _render(await REGISTRY["extract-evidence"](request, _options(body)))
 
     @app.post("/add-evidence")
     async def add_evidence(body: AddEvidenceBody) -> Response:

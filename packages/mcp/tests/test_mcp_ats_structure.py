@@ -1,4 +1,4 @@
-"""MCP tool tests for check-ats-structure (RIT-T-0077)."""
+"""MCP tool tests for check-structure (RIT-T-0077)."""
 
 from __future__ import annotations
 

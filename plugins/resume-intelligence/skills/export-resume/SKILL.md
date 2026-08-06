@@ -7,7 +7,7 @@ description: >
   Chromium or upstream frontend involved.
 ---
 
-> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **resume-to-json** skill) and, where a job is involved, a `JobDescription` JSON (build it with **job-to-json** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
+> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **parse-resume** skill) and, where a job is involved, a `JobDescription` JSON (build it with **parse-job** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Run the shared **Prerequisites gate** first — see
 
 - **Required input:** a `ResumeDocument` JSON (`config.json` `active_resume`, a
   `resume-kit/working/<session>/resume.json`, or an explicit path).
-- **If missing:** STOP and run **resume-to-json** to produce the `ResumeDocument`
+- **If missing:** STOP and run **parse-resume** to produce the `ResumeDocument`
   JSON before exporting.
 
 ## Purpose
@@ -32,7 +32,7 @@ values).
 ## When to use
 
 - When the user wants a finished, downloadable resume file (PDF or DOCX).
-- After `inject-keywords`, `update-terminology`, or any editing step, to produce the final artifact.
+- After `update-keywords`, `update-terminology`, or any editing step, to produce the final artifact.
 - When a downstream system requires a binary file rather than a JSON document.
 
 ## Inputs

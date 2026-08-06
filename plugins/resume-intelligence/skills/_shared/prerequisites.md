@@ -18,13 +18,13 @@ to; each skill then names its own specific inputs and upstream skills.
    e.g. a raw PDF where a `ResumeDocument` JSON is required): **STOP**. Do not
    guess, do not fabricate, do not run on partial inputs. Tell the caller exactly
    which input is missing and name the **specific upstream skill** to run first:
-   - Need a `ResumeDocument` JSON but only have a resume file → run **resume-to-json**.
-   - Need a `JobDescription` JSON but only have posting text/URL/file → run **job-to-json**.
-   - Need `CandidateEvidence` → run **build-candidate-evidence**.
-   - Need gap analysis → run **identify-resume-gaps**.
+   - Need a `ResumeDocument` JSON but only have a resume file → run **parse-resume**.
+   - Need a `JobDescription` JSON but only have posting text/URL/file → run **parse-job**.
+   - Need `CandidateEvidence` → run **extract-evidence**.
+   - Need gap analysis → run **check-gaps**.
 4. **Only when all required inputs resolve to valid JSON** do you proceed to the
    skill's own steps.
 
-Conversions (resume-to-json / job-to-json) are best run in **subagents** so the
+Conversions (parse-resume / parse-job) are best run in **subagents** so the
 large intermediate text stays out of the main context; pass the saved JSON paths
 back to this skill.

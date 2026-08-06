@@ -1,21 +1,23 @@
 ---
-name: inject-keywords
+name: update-keywords
 description: >
-  Surface MISSING-BUT-TRUE keywords into the resume, truth-gated, no LLM. When a
-  deterministic gap run (identify-resume-gaps) reports a JD keyword as missing
+  Update MISSING-BUT-TRUE keywords into the resume, truth-gated, no LLM. When a
+  deterministic gap run (check-gaps) reports a JD keyword as missing
   from THIS resume but the candidate's MASTER resume proves they genuinely have
   it, this workflow creates targeted ChangeProposal records and drives the
   code-owned edit-session loop: mode prompt, per-change prompt/decision,
-  commit-session hard gate, then validate-resume-truth. Direct hand-editing the
+  commit-session hard gate, then validate-facts. Direct hand-editing the
   working JSON is unsupported unless followed by reconcile-session. Best run in
   a subagent.
 ---
 
-# inject-keywords - injectable gaps -> edit session -> commit gate -> truth
+> **Renamed:** `update-keywords` was `inject-keywords` before v1.0.0 (see RIT-A-0005).
+
+# update-keywords - injectable gaps -> edit session -> commit gate -> truth
 
 ## Purpose
 
-`identify-resume-gaps` scores a resume against a job deterministically. It splits
+`check-gaps` scores a resume against a job deterministically. It splits
 missing JD keywords into two buckets:
 
 - **Injectable** - missing from this resume, but proven by the master resume or
@@ -42,16 +44,16 @@ Run the shared prerequisites gate in
   explicit path.
 - A `JobDescription` JSON: active job from `resume-kit/config.json`, or an
   explicit path.
-- A gap result from **identify-resume-gaps**, including the injectable and
+- A gap result from **check-gaps**, including the injectable and
   non-injectable split.
 - The master resume/evidence used to prove each injectable keyword.
 
 If any required input is missing, stop and name the upstream skill:
 
-- Need a resume JSON -> run **resume-to-json**.
-- Need a job JSON -> run **job-to-json**.
-- Need the injectable split -> run **identify-resume-gaps**.
-- Need evidence records -> run **build-candidate-evidence** or persist a user
+- Need a resume JSON -> run **parse-resume**.
+- Need a job JSON -> run **parse-job**.
+- Need the injectable split -> run **check-gaps**.
+- Need evidence records -> run **extract-evidence** or persist a user
   confirmed statement with `resume-tool add-evidence --confirmed --content ...`.
 
 ## Run Me In A Subagent
@@ -91,7 +93,7 @@ session gate.
 ## Surfaces This Skill Drives
 
 - Gap analysis: CLI `resume-tool identify-gaps`, MCP `resume_identify_gaps`,
-  facade capability `identify-resume-gaps`.
+  facade capability `check-gaps`.
 - Edit session:
   - CLI `resume-tool review-edits open --mode <interactive|review_at_end|auto>`
   - CLI `resume-tool review-edits prompt`
@@ -104,7 +106,7 @@ session gate.
   - Facade capabilities `open-edit-session`, `session-prompt`, `decide-change`,
     `commit-session`, `session-status`, `reconcile-session`
 - Truth validation: CLI `resume-tool validate-truth`, MCP
-  `resume_validate_truth`, facade capability `validate-resume-truth`.
+  `resume_validate_truth`, facade capability `validate-facts`.
 - Re-score: CLI `resume-tool match`, MCP `resume_check_job_match`, facade
   capability `check-resume-job-match`.
 
@@ -137,7 +139,7 @@ replaces the enum. For `edit`, pass the user's final wording with
 ## Steps
 
 1. **Read injectable gaps.** Use only the `injectable` keywords from
-   **identify-resume-gaps**. Non-injectable keywords are reported as gaps and
+   **check-gaps**. Non-injectable keywords are reported as gaps and
    never become edit proposals.
 2. **Prove each keyword.** For every injectable keyword, identify the master
    resume line or `CandidateEvidence` record proving the candidate has it. If you
@@ -170,10 +172,10 @@ replaces the enum. For `edit`, pass the user's final wording with
    tampered with, stop and report the gate failure. Do not patch around it. If
    the user made an intentional out-of-band edit, run `reconcile-session` and
    then continue.
-7. **Validate truth.** Run **validate-resume-truth** on the committed
+7. **Validate truth.** Run **validate-facts** on the committed
    `working_path` with the evidence list. Any unsupported or contradicted claim
    must be resolved before export.
-8. **Re-score.** Run **check-keyword-match** via `resume-tool match` /
+8. **Re-score.** Run **check-keywords** via `resume-tool match` /
    `resume_check_job_match`, honoring `alias_file`, and report before/after
    keyword and ATS deltas from the commit result or re-score.
 
@@ -183,7 +185,7 @@ replaces the enum. For `edit`, pass the user's final wording with
 - Never turn a non-injectable gap into a resume claim.
 - Never edit identity, employer, title-of-record, or date fields.
 - Never bulk-apply a change list or write the working JSON directly.
-- Never keep a change blocked by `commit-session` or `validate-resume-truth`.
+- Never keep a change blocked by `commit-session` or `validate-facts`.
 - When in doubt, skip and explain what evidence is missing.
 
 ## Output

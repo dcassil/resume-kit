@@ -6,7 +6,7 @@ description: >
   satisfies under a different surface form, this skill uses suggest-terminology
   to enumerate truthful wording swaps, converts accepted candidates into
   ChangeProposal records, then drives review-edits open/prompt/decide/commit and
-  validate-resume-truth. Direct hand-editing is unsupported unless followed by
+  validate-facts. Direct hand-editing is unsupported unless followed by
   reconcile-session. Best run in a subagent.
 ---
 
@@ -14,7 +14,7 @@ description: >
 
 ## Purpose
 
-`check-keyword-match` and `identify-resume-gaps` score a resume against a job
+`check-keywords` and `check-gaps` score a resume against a job
 deterministically. When the resume already demonstrates a required skill under a
 different surface form, the employer's exact wording can be mirrored without
 inventing a new claim.
@@ -22,10 +22,10 @@ inventing a new claim.
 This skill handles those wording swaps. It does not directly edit the resume and
 does not call an apply command to bypass review. It creates targeted
 `ChangeProposal` records and sends them through the same edit-session loop used
-by **inject-keywords**.
+by **update-keywords**.
 
 To add a keyword the resume was missing but the master proves, use
-**inject-keywords**. To surface a keyword absent from both this resume and the
+**update-keywords**. To surface a keyword absent from both this resume and the
 master/evidence, report a gap; never rewrite it in.
 
 ## Prerequisites Gate
@@ -38,8 +38,8 @@ Run the shared prerequisites gate in
 - The project `alias_file` from `resume-kit/config.json`, defaulting to
   `resume-kit/learning/synonyms.json` when present.
 
-If the resume or job JSON is missing, stop and run **resume-to-json** or
-**job-to-json** first.
+If the resume or job JSON is missing, stop and run **parse-resume** or
+**parse-job** first.
 
 ## Run Me In A Subagent
 
@@ -82,7 +82,7 @@ user intentionally edits it out of band, run `resume-tool review-edits reconcile
   - Facade capabilities `open-edit-session`, `session-prompt`, `decide-change`,
     `commit-session`, `session-status`, `reconcile-session`
 - Truth validation: CLI `resume-tool validate-truth`, MCP
-  `resume_validate_truth`, facade capability `validate-resume-truth`.
+  `resume_validate_truth`, facade capability `validate-facts`.
 - Re-score: CLI `resume-tool match`, MCP `resume_check_job_match`, facade
   capability `check-resume-job-match`.
 
@@ -105,7 +105,7 @@ belongs in `--note` / `note`. For `edit`, pass final wording as
 ## Steps
 
 1. **Resolve and pass `alias_file`.** Use the same alias index that
-   **check-keyword-match** uses.
+   **check-keywords** uses.
 2. **Analyze suggestions.** Run `suggest-terminology` with the resume, job, and
    alias file. It returns wording suggestions for skills the resume already
    satisfies under another term.
@@ -122,7 +122,7 @@ belongs in `--note` / `note`. For `edit`, pass final wording as
 6. **Commit through the hard gate.** Call `commit-session`. Stop on missing
    decisions, policy rejections, contradicted claims, or tamper detection. Do not
    apply changes manually.
-7. **Validate truth.** Run **validate-resume-truth** on the committed
+7. **Validate truth.** Run **validate-facts** on the committed
    `working_path`.
 8. **Report deltas.** Use the commit result or rerun `resume-tool match` /
    `resume_check_job_match` to report before/after keyword and ATS deltas. Note
@@ -136,7 +136,7 @@ belongs in `--note` / `note`. For `edit`, pass final wording as
 - Never auto-apply or bulk-write suggestions outside `commit-session`.
 - Never keep a change blocked by the commit gate or truth validation.
 - When in doubt, skip and route durable synonym questions through
-  **manage-synonyms**.
+  **learn-terminology**.
 
 ## Output
 

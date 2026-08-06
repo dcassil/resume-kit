@@ -24,7 +24,7 @@ in **subagents** so large document text stays out of the main context.
 
 **Once-per-session review offer.** When a session starts in an initialized
 `resume-kit/` working dir, the SessionStart hook reminds the agent that the
-optional, advice-only **review-tailored-resume** step (step 5 below) is available.
+optional, advice-only **review-resume** step (step 5 below) is available.
 **Offer it at most once per session** — and only after a tailored resume exists.
 The guard is a presence marker at `resume-kit/.cache/review-offered`: once you have
 offered the review (whether the user accepts or declines), write that marker; before
@@ -33,7 +33,7 @@ opt-in and never auto-runs.
 
 ## Steps
 
-1. **Ingest the resume** — run **resume-to-json**.
+1. **Ingest the resume** — run **parse-resume**.
    gate: a source resume file (PDF/DOCX/MD/text). It orchestrates the gated
    pipeline: `resume-tool init` (if needed) → `resume-tool extract-text <source>`
    (deterministic, no LLM) → a confined interpretation subagent maps the extracted
@@ -44,7 +44,7 @@ opt-in and never auto-runs.
    `active_resume` + source via `resume-tool set-active` (never hand-edits
    `config.json`).
 
-2. **Ingest the job** — run **job-to-json**.
+2. **Ingest the job** — run **parse-job**.
    gate: the job posting (text/URL/file). For file inputs it runs
    `resume-tool extract-text <file>`; pasted text / URL content skips extraction.
    A confined interpretation subagent maps the text into `JobDescription` JSON
@@ -55,14 +55,14 @@ opt-in and never auto-runs.
    `resume-kit/jobs/<name>-original.json` and sets `active_job`.
 
 3. **Check the resume** — run all three (they are independent):
-   - **check-ats-structure** — gate: `active_resume` JSON.
-   - **check-keyword-match** — gate: `active_resume` + `active_job` JSON. Uses the
+   - **check-structure** — gate: `active_resume` JSON.
+   - **check-keywords** — gate: `active_resume` + `active_job` JSON. Uses the
      synonym alias index (`alias_file`) when present to match variant terms.
-   - **identify-resume-gaps** — gate: `active_resume` + `active_job` JSON.
+   - **check-gaps** — gate: `active_resume` + `active_job` JSON.
    Record the baseline scores so step 6 can show deltas.
 
 4. **Improve** *(only what steps 3 surfaced)*:
-   - **inject-keywords** — gate: `active_resume` + `active_job` + the
+   - **update-keywords** — gate: `active_resume` + `active_job` + the
      keyword-match/gap findings. Produces `ChangeProposal` records for
      missing-but-true keywords.
    - **update-terminology** — gate: `active_resume` + `active_job` + the synonym
@@ -76,21 +76,21 @@ opt-in and never auto-runs.
    `resume-tool review-edits decide` / `decide-change` for every change,
    offering the `EditFeedbackReasonCode` enum on `reject` or `edit` →
    `resume-tool review-edits commit` / `commit-session` as the hard write gate →
-   **validate-resume-truth**. Direct hand-editing of the working resume is
+   **validate-facts**. Direct hand-editing of the working resume is
    unsupported unless followed by `resume-tool review-edits reconcile` /
    `reconcile-session`.
 
-   When several truthful candidates are available, run **rank-edits** first via
+   When several truthful candidates are available, run **rank-changes** first via
    `rank-edit-candidates` / `edit_candidates_rank` (passing `alias_file`) and
    present the ranked reasons before opening the session. Once the user decides
-   or edits a proposal, record the outcome through **log-edit-feedback** via
+   or edits a proposal, record the outcome through **learn-change** via
    `record-edit-feedback` / `edit_feedback_record`; this is part of the
    orchestrated loop's learning path, not a prose-only afterthought. **LLM
    auto-rewrite is disabled — there is no skill path that bulk-runs
    `align-resume`.**
 
 5. **Second-agent review** *(optional — advice-only)* — run
-   **review-tailored-resume**.
+   **review-resume**.
    gate: the **new** tailored resume JSON + the **original** resume JSON + the
    **job** JSON (all three must exist; this step only makes sense after tailoring).
    Dispatches a subagent to critique the tailored-vs-original-vs-job triple and
@@ -99,13 +99,13 @@ opt-in and never auto-runs.
    at most once per session**, guarded by the `resume-kit/.cache/review-offered`
    marker (see above); skipping it does not affect the rest of the flow.
 
-6. **Validate truth** — run **validate-resume-truth**.
+6. **Validate truth** — run **validate-facts**.
    gate: the (improved) resume JSON + `CandidateEvidence` (build it with
-   **build-candidate-evidence**, gate: resume JSON). Any unsupported or
+   **extract-evidence**, gate: resume JSON). Any unsupported or
    contradicted claim must be fixed before proceeding — never ship fabrications.
 
-7. **Re-check for deltas** — re-run **check-ats-structure**,
-   **check-keyword-match**, and **identify-resume-gaps** on the improved resume.
+7. **Re-check for deltas** — re-run **check-structure**,
+   **check-keywords**, and **check-gaps** on the improved resume.
    gate: the improved resume JSON + `active_job`. Compare against the step-3
    baseline to confirm the changes actually helped.
 
@@ -114,9 +114,9 @@ opt-in and never auto-runs.
 
 ## Supporting / maintenance
 
-- **manage-synonyms** *(as needed)* — grows the alias index consumed by
-  **check-keyword-match** and **update-terminology** via `alias_file`. Run it when
+- **learn-terminology** *(as needed)* — grows the alias index consumed by
+  **check-keywords** and **update-terminology** via `alias_file`. Run it when
   a legitimate term is being missed because of naming variants.
-- **compare-resume-versions** / **select-best-resume** *(optional)* — when you
+- **compare-versions** / **select-resume** *(optional)* — when you
   maintain multiple variants: compare two versions, or pick the best of several,
   against `active_job`.

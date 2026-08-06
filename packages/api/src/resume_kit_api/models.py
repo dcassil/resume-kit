@@ -83,7 +83,7 @@ class CheckResumeAtsBody(_Options):
 
 
 class CheckAtsStructureBody(_Options):
-    """Body for ``POST /check-ats-structure`` — resume only, no job."""
+    """Body for ``POST /check-structure`` — resume only, no job."""
 
     resume: ResumeDocument
 

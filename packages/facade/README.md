@@ -29,12 +29,12 @@ transports can enumerate and dispatch uniformly.
 | `extract-job-description` | `parse_job_description` / `parse_job_description_text_only` | yes / no_llm |
 | `check-resume-ats` | `analyze_keyword_gaps` + `compute_ats_score` | no |
 | `check-resume-job-match` | `check_job_match` | no |
-| `select-best-resume` | `select_best` | no |
-| `compare-resume-versions` | `compare_versions` | no |
-| `identify-resume-gaps` | `analyze_keyword_gaps` | no |
+| `select-resume` | `select_best` | no |
+| `compare-versions` | `compare_versions` | no |
+| `check-gaps` | `analyze_keyword_gaps` | no |
 | `align-resume` | `align_resume` (async) | yes / no_llm no-change |
-| `validate-resume-truth` | `validate_resume_truth` | no |
-| `build-candidate-evidence` | `build_candidate_evidence` | no |
+| `validate-facts` | `validate_resume_truth` | no |
+| `extract-evidence` | `build_candidate_evidence` | no |
 
 ## Options
 

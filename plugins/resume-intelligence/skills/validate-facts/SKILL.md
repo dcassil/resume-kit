@@ -1,12 +1,14 @@
 ---
-name: validate-resume-truth
+name: validate-facts
 description: >
-  Deterministically validate resume claims against candidate evidence records.
+  Deterministically validate resume facts against candidate evidence records.
   Returns a TruthReport flagging unsupported or contradicted claims.
   No LLM required.
 ---
 
-> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **resume-to-json** skill) and, where a job is involved, a `JobDescription` JSON (build it with **job-to-json** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
+> **Renamed:** `validate-facts` was `validate-resume-truth` before v1.0.0 (see RIT-A-0005).
+
+> **Inputs must be canonical JSON.** This capability consumes a resume as a `ResumeDocument` JSON (build it from a PDF/DOCX/MD/text file with the **parse-resume** skill) and, where a job is involved, a `JobDescription` JSON (build it with **parse-job** so skills-coverage scoring works). Run those conversions in **subagents**, then pass the saved JSON paths here — they live under `resume-kit/resumes/` and `resume-kit/jobs/`.
 
 ## Prerequisites
 
@@ -16,7 +18,7 @@ Run the shared **Prerequisites gate** first — see
 - **Required inputs:** a `ResumeDocument` JSON (`config.json` `active_resume` or an
   explicit path) **and** a list of `CandidateEvidence` records.
 - **If missing:** STOP and name the upstream skill — no resume JSON → run
-  **resume-to-json**; no evidence → run **build-candidate-evidence**.
+  **parse-resume**; no evidence → run **extract-evidence**.
 
 ## Purpose
 
@@ -26,7 +28,7 @@ supported, unsupported, or contradicted by evidence.
 
 ## When to use
 
-- Before running `inject-keywords` or `update-terminology` to ensure only truthful content is present.
+- Before running `update-keywords` or `update-terminology` to ensure only truthful content is present.
 - After alignment to verify the aligned resume does not contain fabricated
   claims.
 - When the user wants an evidence-backed audit of a resume.
@@ -77,5 +79,5 @@ Input fields: `resume`, `evidence` (optional list), `strict`.
 - An empty `evidence` list is valid; all claims will be marked unsupported.
 - Do not suppress or ignore `contradicted` claims in agent output.  Present
   the full report to the user.
-- Use `build-candidate-evidence` to produce the evidence list from a resume
+- Use `extract-evidence` to produce the evidence list from a resume
   before running validation.
