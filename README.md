@@ -65,6 +65,39 @@ not faithful, so an unfaithful conversion never silently reaches disk. The
 their source paths, and `alias_file`) are owned by code via `init` / `set-active`
 — not hand-authored.
 
+### Resume baselining (`original → base → standard`)
+
+Before any job-specific tailoring, a resume moves through a fixed, deterministic
+baselining lineage that produces three tracked versions:
+
+```bash
+resume-tool build-base                              # original → base (auto): strips PII, normalizes
+                                                    #   presentation, behind the claim-preservation gate
+resume-tool analyze-best-practices \                # job-independent best-practices report; each finding
+  --resume resumes/resume-base.json                 #   is auto_suggestible or needs_user_input
+resume-tool build-standard --answers answers.json   # base → standard: applies auto-suggestible rewrites
+                                                    #   + user-supplied facts, behind the same gate
+```
+
+- **`original`** — the faithful, code-owned ingest of the source file (produced by
+  the pipeline above; never edited in place).
+- **`base`** — `original` with only *auto-safe* structural fixes applied (PII
+  removed, formatting/date presentation normalized). `build-base` runs the
+  structural check and writes `<name>-base.json` **only if the
+  claim-preservation gate holds** — no employer/title/degree/skill claim may be
+  added, dropped, or altered. Findings that need judgment are deferred to the
+  walkthrough.
+- **`standard`** — `base` after the generic best-practices walkthrough: every
+  finding is classified `auto_suggestible` (a truthful rewrite is applied now) or
+  `needs_user_input` (the user supplies real facts, e.g. a metric). Applied
+  behind the same claim-preservation gate.
+
+**All job-specific tailoring runs off `standard`, not `original`.** The active
+resume resolves as `standard ?? base ?? original`, so once baselining has run,
+downstream tailoring and edit sessions operate on the best-practices-improved
+`standard` version by default. The lineage is fully deterministic and offline:
+no LLM or network is touched on the baselining path.
+
 ### Project aliases and accepted terminology edits
 
 The deterministic matcher loads the packaged seed alias lexicon plus an optional
@@ -101,6 +134,19 @@ active refutation; each claim carries a machine-readable `reason_code` such as
 `missing_evidence`, `strong_evidence_overlap`, or `refuted_by_evidence`.
 
 ## Release Notes
+
+### Package 0.7.0 / plugin 1.0.0 — resume baselining (RIT-I-0016)
+
+- Adds the `original → base → standard` baselining lineage as the mandatory
+  pre-tailoring phase: `build-base` (auto structural fixes behind the
+  claim-preservation gate), `analyze-best-practices` (job-independent report
+  classifying each finding `auto_suggestible` vs `needs_user_input`), and
+  `build-standard` (best-practices walkthrough behind the same gate).
+- Makes `standard` the default tailoring input — active resolution is
+  `standard ?? base ?? original`, so tailoring and edit sessions operate on the
+  best-practices-improved version rather than the raw ingest.
+- The entire baselining path is deterministic and offline (no LLM, no network),
+  proven end-to-end by the `original → base → standard` lineage integration test.
 
 ### Package 0.6.0 / plugin 0.7.0 — enforced edit loop (RIT-I-0015)
 

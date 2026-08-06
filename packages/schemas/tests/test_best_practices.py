@@ -32,7 +32,10 @@ def _auto(rule: str = "BUZZWORD", severity: FindingSeverity = FindingSeverity.WA
     )
 
 
-def _needs(rule: str = "MISSING_QUANTIFICATION", severity: FindingSeverity = FindingSeverity.RECOMMENDATION):
+def _needs(
+    rule: str = "MISSING_QUANTIFICATION",
+    severity: FindingSeverity = FindingSeverity.RECOMMENDATION,
+):
     return BestPracticesFinding(
         rule_code=rule,
         message="msg",

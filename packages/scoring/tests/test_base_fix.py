@@ -58,7 +58,9 @@ def test_needs_judgment_findings_are_deferred_not_applied() -> None:
         {
             "personalInfo": {"name": "J", "phone": "5"},  # missing email -> needs_judgment
             "summary": "E.",
-            "workExperience": [{"title": "A", "company": "X", "years": "2020-2022", "description": []}],
+            "workExperience": [
+                {"title": "A", "company": "X", "years": "2020-2022", "description": []}
+            ],
             "education": [{"institution": "M", "degree": "BS", "years": "2015"}],
             "additional": {"technicalSkills": ["Python"]},
             "customSections": {"My Superpowers": {"sectionType": "text", "text": "x"}},
@@ -75,7 +77,9 @@ def test_deterministic_and_idempotent() -> None:
         {
             "personalInfo": {"name": "J", "email": "j@x.com", "phone": "5"},
             "summary": "E. SSN 123-45-6789.",
-            "workExperience": [{"title": "A", "company": "X", "years": "2020-2022", "description": []}],
+            "workExperience": [
+                {"title": "A", "company": "X", "years": "2020-2022", "description": []}
+            ],
             "education": [{"institution": "M", "degree": "BS", "years": "2015"}],
             "additional": {"technicalSkills": ["Python"]},
         }
@@ -91,7 +95,9 @@ def test_clean_resume_no_fixes() -> None:
         {
             "personalInfo": {"name": "J", "email": "j@x.com", "phone": "5"},
             "summary": "Engineer.",
-            "workExperience": [{"title": "A", "company": "X", "years": "2020-2022", "description": ["Built."]}],
+            "workExperience": [
+                {"title": "A", "company": "X", "years": "2020-2022", "description": ["Built."]}
+            ],
             "education": [{"institution": "M", "degree": "BS", "years": "2015"}],
             "additional": {"technicalSkills": ["Python"]},
         }

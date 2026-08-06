@@ -422,7 +422,10 @@ _PLACEHOLDER_PATTERNS: list[
     tuple[re.Pattern[str], str, str, FindingSeverity, FixAffordance]
 ] = [
     (
-        re.compile(r"lorem ipsum|\bTODO\b|\[[^\]]*(placeholder|your name|insert)[^\]]*\]", re.IGNORECASE),
+        re.compile(
+            r"lorem ipsum|\bTODO\b|\[[^\]]*(placeholder|your name|insert)[^\]]*\]",
+            re.IGNORECASE,
+        ),
         "Placeholder/template text detected — remove all placeholder text before"
         " submitting.",
         "PLACEHOLDER_TEXT",

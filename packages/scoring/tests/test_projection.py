@@ -42,8 +42,12 @@ def _resume() -> ResumeDocument:
                 description=["Shipped the API."],
             ),
         ],
-        education=[Education(institution="State U", degree="BS Computer Science", years="2012 - 2016")],
-        personalProjects=[Project(name="OSS Tool", role="Author", years="2020", description=["A CLI."])],
+        education=[
+            Education(institution="State U", degree="BS Computer Science", years="2012 - 2016")
+        ],
+        personalProjects=[
+            Project(name="OSS Tool", role="Author", years="2020", description=["A CLI."])
+        ],
         additional=AdditionalInfo(technicalSkills=["Python", "FastAPI", "Kubernetes"]),
     )
 

@@ -105,15 +105,21 @@ class FindingLocation(BaseModel):
     )
     entity_id: str | None = Field(
         default=None,
-        description="Identifier of the entity (e.g. a specific experience/role) the finding targets.",
+        description=(
+            "Identifier of the entity (e.g. a specific experience/role) the finding targets."
+        ),
     )
     bullet_index: int | None = Field(
         default=None,
-        description="Zero-based bullet index within the located entity, when the finding is bullet-scoped.",
+        description=(
+            "Zero-based bullet index within the located entity, when the finding is bullet-scoped."
+        ),
     )
     json_path: str | None = Field(
         default=None,
-        description="Optional canonical JSON path into the resume document for precise application.",
+        description=(
+            "Optional canonical JSON path into the resume document for precise application."
+        ),
     )
 
 
@@ -129,7 +135,9 @@ class BestPracticesFinding(BaseModel):
     """
 
     rule_code: str = Field(
-        description="Stable rule identifier, e.g. 'WEAK_OPENER', 'BUZZWORD', 'MISSING_QUANTIFICATION'.",
+        description=(
+            "Stable rule identifier, e.g. 'WEAK_OPENER', 'BUZZWORD', 'MISSING_QUANTIFICATION'."
+        ),
     )
     message: str = Field(description="Human-readable explanation of the finding.")
     location: FindingLocation = Field(
@@ -146,15 +154,22 @@ class BestPracticesFinding(BaseModel):
     )
     suggested_change: str | None = Field(
         default=None,
-        description="Concrete truthful rewrite (present iff resolution_kind is auto_suggestible).",
+        description=(
+            "Concrete truthful rewrite (present iff resolution_kind is auto_suggestible)."
+        ),
     )
     elicitation_prompt: str | None = Field(
         default=None,
-        description="Targeted question for the user (present iff resolution_kind is needs_user_input).",
+        description=(
+            "Targeted question for the user (present iff resolution_kind is needs_user_input)."
+        ),
     )
     severity_justification: str | None = Field(
         default=None,
-        description="Required, non-empty rationale when severity is hard-gate (reserved for truth-class failures).",
+        description=(
+            "Required, non-empty rationale when severity is hard-gate"
+            " (reserved for truth-class failures)."
+        ),
     )
 
     @model_validator(mode="after")
@@ -200,11 +215,16 @@ class BestPracticesReport(BaseModel):
     )
     resume_version: str | None = Field(
         default=None,
-        description="Identity of the resume version scored (e.g. the base/standard pointer or a document id).",
+        description=(
+            "Identity of the resume version scored"
+            " (e.g. the base/standard pointer or a document id)."
+        ),
     )
     report_provenance: ProvenanceKind = Field(
         default=ProvenanceKind.DETERMINISTIC,
-        description="Deterministic if every finding is deterministic; assisted if any finding is assisted.",
+        description=(
+            "Deterministic if every finding is deterministic; assisted if any finding is assisted."
+        ),
     )
     findings: list[BestPracticesFinding] = Field(
         default_factory=list,

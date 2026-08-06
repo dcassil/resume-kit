@@ -33,7 +33,9 @@ def test_keyword_zone_values_pinned() -> None:
 def _doc() -> ScoreDoc:
     return ScoreDoc(
         sections=[
-            ScoreSection(name="Experience", zone=KeywordZone.EXPERIENCE, text="Built Python services."),
+            ScoreSection(
+                name="Experience", zone=KeywordZone.EXPERIENCE, text="Built Python services."
+            ),
             ScoreSection(name="Skills", zone=KeywordZone.SKILLS_LIST, text="Python, FastAPI"),
         ],
         entities=ScoreEntities(

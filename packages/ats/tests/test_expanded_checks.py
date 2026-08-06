@@ -295,7 +295,10 @@ def test_references_available_flagged() -> None:
 def test_street_address_flagged() -> None:
     resume = {
         **_COMPLETE_RESUME,
-        "personalInfo": {**_COMPLETE_RESUME["personalInfo"], "location": "123 Main Street, Springfield"},
+        "personalInfo": {
+            **_COMPLETE_RESUME["personalInfo"],
+            "location": "123 Main Street, Springfield",
+        },
     }
     assert _has_tip(_expanded_recommendations(resume), "street address")
 

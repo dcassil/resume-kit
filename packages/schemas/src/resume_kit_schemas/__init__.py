@@ -37,16 +37,6 @@ from .best_practices import (
     ProvenanceKind,
     ResolutionKind,
 )
-from .scoredoc import (
-    SCOREDOC_SCHEMA_VERSION,
-    KeywordZone,
-    ScoreDegree,
-    ScoreDoc,
-    ScoreEntities,
-    ScoreRole,
-    ScoreSection,
-    ZonedKeywordIndex,
-)
 from .change import (
     ChangeAction,
     ChangeProposal,
@@ -102,6 +92,16 @@ from .resume import (
     SectionType,
     Skill,
     normalize_resume_data,
+)
+from .scoredoc import (
+    SCOREDOC_SCHEMA_VERSION,
+    KeywordZone,
+    ScoreDegree,
+    ScoreDoc,
+    ScoreEntities,
+    ScoreRole,
+    ScoreSection,
+    ZonedKeywordIndex,
 )
 
 __version__ = "0.0.0"

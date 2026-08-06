@@ -112,14 +112,19 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
     findings: list[BestPracticesFinding] = []
 
     for entity_id, idx, bullet in _bullets(resume):
-        loc = FindingLocation(section="experience", zone="experience", entity_id=entity_id, bullet_index=idx)
+        loc = FindingLocation(
+            section="experience", zone="experience", entity_id=entity_id, bullet_index=idx
+        )
 
         opener = _weak_opener(bullet)
         if opener:
             findings.append(
                 BestPracticesFinding(
                     rule_code="WEAK_OPENER",
-                    message=f"Bullet opens with the weak phrase '{opener}'; lead with a strong action verb.",
+                    message=(
+                        f"Bullet opens with the weak phrase '{opener}';"
+                        " lead with a strong action verb."
+                    ),
                     location=loc,
                     severity=FindingSeverity.WARNING,
                     resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
@@ -160,7 +165,10 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             findings.append(
                 BestPracticesFinding(
                     rule_code="MISSING_QUANTIFICATION",
-                    message="Bullet has no quantified outcome; quantify the impact where a real number exists.",
+                    message=(
+                        "Bullet has no quantified outcome;"
+                        " quantify the impact where a real number exists."
+                    ),
                     location=loc,
                     severity=FindingSeverity.RECOMMENDATION,
                     resolution_kind=ResolutionKind.NEEDS_USER_INPUT,
@@ -195,8 +203,8 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
                 BestPracticesFinding(
                     rule_code="SUMMARY_TOO_LONG",
                     message=(
-                        f"Summary is longer than ~{_SUMMARY_WORD_LIMIT} words; tighten to 2-4 lines of "
-                        "identity, specialization, scale, and value."
+                        f"Summary is longer than ~{_SUMMARY_WORD_LIMIT} words; tighten to 2-4 "
+                        "lines of identity, specialization, scale, and value."
                     ),
                     location=loc,
                     severity=FindingSeverity.REVIEW_NOTE,
@@ -214,7 +222,10 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             findings.append(
                 BestPracticesFinding(
                     rule_code="FOUNDATIONAL_SKILL",
-                    message=f"'{skill}' is a foundational tool that weakens the skills section; remove it.",
+                    message=(
+                        f"'{skill}' is a foundational tool that weakens the skills section;"
+                        " remove it."
+                    ),
                     location=FindingLocation(section="skills", zone="skills_list"),
                     severity=FindingSeverity.RECOMMENDATION,
                     resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,

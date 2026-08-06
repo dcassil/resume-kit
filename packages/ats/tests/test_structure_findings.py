@@ -8,7 +8,9 @@ from resume_kit_schemas import FindingSeverity, FixAffordance
 _COMPLETE = {
     "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "555"},
     "summary": "Engineer.",
-    "workExperience": [{"title": "E", "company": "X", "years": "2020-2022", "description": ["Built."]}],
+    "workExperience": [
+        {"title": "E", "company": "X", "years": "2020-2022", "description": ["Built."]}
+    ],
     "education": [{"institution": "MIT", "degree": "BS", "years": "2016"}],
     "additional": {"technicalSkills": ["Python"]},
     "customSections": {},
