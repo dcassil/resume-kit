@@ -25,11 +25,10 @@ missing JD keywords into two buckets:
 - **Non-injectable** - absent from both this resume and the master/evidence. This
   is a real gap, not an edit candidate.
 
-This skill's job is to turn injectable keywords into targeted `ChangeProposal`
-records, then drive those records through the edit-session orchestrator. The
-skill does not bulk-edit resume JSON. The orchestrator owns review state,
-decision logging, tamper detection, policy application, preference feedback, and
-the hard write gate.
+This skill's job is the **create-change** step: turn injectable keywords into
+targeted `ChangeProposal` records. It then hands those records to the shared
+change-application runbook, which owns the decide → commit-gate → validate → learn
+spine. The skill does not bulk-edit resume JSON.
 
 Distinct from **update-terminology**, which only swaps wording for a keyword the
 resume already satisfies under an alias. Here we add a true, missing keyword to
@@ -64,79 +63,15 @@ master/evidence path, gap result, `resume-kit/config.json`, and this skill. The
 subagent returns only the proposed/applied change summary, skipped gaps, gate
 results, and before/after score deltas.
 
-## Working Directory
-
-All project state lives under `resume-kit/`:
-
-```
-resume-kit/
-├── config.json
-├── resumes/<name>-original.json
-├── jobs/<name>-original.json
-├── working/edit-session.json
-├── working/<name>.tailored.json
-└── learning/
-```
-
-The edit-session orchestrator writes the tailored resume to the `working_path`
-reported by `commit-session` / `resume-tool review-edits commit`. Do not create
-or overwrite that file yourself. After the session is fully committed,
-downstream skills may use the committed `working_path` explicitly, or the caller
-may make it active via `resume-tool set-active --resume <working_path>`.
-
-Direct hand-editing of the working resume is unsupported because it trips tamper
-detection. If the user intentionally edits the working file outside the session,
-the sanctioned recovery path is `resume-tool review-edits reconcile` /
-`edit_session_reconcile` / `reconcile-session`; then continue through the
-session gate.
-
-## Surfaces This Skill Drives
+## Surface This Skill Drives (create-change input)
 
 - Gap analysis: CLI `resume-tool identify-gaps`, MCP `resume_identify_gaps`,
   facade capability `check-gaps`.
-- Edit session:
-  - CLI `resume-tool review-edits open --mode <interactive|review_at_end|auto>`
-  - CLI `resume-tool review-edits prompt`
-  - CLI `resume-tool review-edits decide --path <path> --action <approve|reject|edit|skip>`
-  - CLI `resume-tool review-edits commit`
-  - CLI `resume-tool review-edits status`
-  - CLI `resume-tool review-edits reconcile`
-  - MCP `edit_session_open`, `edit_session_prompt`, `edit_session_decide`,
-    `edit_session_commit`, `edit_session_status`, `edit_session_reconcile`
-  - Facade capabilities `open-edit-session`, `session-prompt`, `decide-change`,
-    `commit-session`, `session-status`, `reconcile-session`
-- Truth validation: CLI `resume-tool validate-truth`, MCP
-  `resume_validate_truth`, facade capability `validate-facts`.
-- Re-score: CLI `resume-tool match`, MCP `resume_check_job_match`, facade
-  capability `check-resume-job-match`.
 
-## Mode Prompt
+The edit-session, truth-validation, and re-score surfaces are owned by the shared
+runbook (see below).
 
-Before opening the session, ask the user which review mode they want:
-
-- `interactive` - prompt and decide each change before moving on.
-- `review_at_end` - collect proposals first, then review them at the end. Use
-  this exact underscore spelling in CLI/MCP/capability payloads.
-- `auto` - let the orchestrator auto-approve only changes its policy can safely
-  apply; unsupported/deferred changes are not silently applied.
-
-Do not choose a mode silently. If the user does not answer, use `interactive`.
-
-## Reason Codes
-
-On every `reject` or `edit` decision, offer the `EditFeedbackReasonCode` enum,
-not open-ended free text:
-
-`fabrication`, `overclaim`, `unsupported`, `grammar`, `formatting`,
-`not_my_voice`, `too_verbose`, `too_vague`, `wrong_emphasis`, `duplicate`,
-`other`.
-
-Use `--reason-code <value>` for CLI decisions or `reason_code` for MCP/facade
-calls. A short optional note is allowed through `--note` / `note`, but it never
-replaces the enum. For `edit`, pass the user's final wording with
-`--edited-content` / `edited_content`.
-
-## Steps
+## Steps (create-change)
 
 1. **Read injectable gaps.** Use only the `injectable` keywords from
    **check-gaps**. Non-injectable keywords are reported as gaps and
@@ -149,49 +84,28 @@ replaces the enum. For `edit`, pass the user's final wording with
    Include the current `original` value when replacing text, the proposed
    `value`, and a `reason` that names the keyword and evidence. Never target
    identity, employer, title-of-record, or date fields.
-4. **Open the edit session.** After the mode prompt, call `open-edit-session`
-   with the change list, evidence, claim provenance, and expected score deltas
-   where available. CLI example:
 
-   ```bash
-   resume-tool review-edits open \
-     --mode interactive \
-     --changes <changes.json> \
-     --evidence <evidence.json>
-   ```
+## Apply the changes
 
-5. **Present and decide through the orchestrator.** Repeatedly call
-   `session-prompt` / `resume-tool review-edits prompt`, show the prompt, then
-   record the user's decision with `decide-change` /
-   `resume-tool review-edits decide`. Decisions must be path-correlated. Use
-   `approve`, `reject`, `edit`, or `skip`; offer reason codes for `reject` and
-   `edit`.
-6. **Commit through the hard gate.** Call `commit-session` /
-   `resume-tool review-edits commit`. If it fails because decisions are missing,
-   claims are contradicted, policy rejects paths, or the working file was
-   tampered with, stop and report the gate failure. Do not patch around it. If
-   the user made an intentional out-of-band edit, run `reconcile-session` and
-   then continue.
-7. **Validate truth.** Run **validate-facts** on the committed
-   `working_path` with the evidence list. Any unsupported or contradicted claim
-   must be resolved before export.
-8. **Re-score.** Run **check-keywords** via `resume-tool match` /
-   `resume_check_job_match`, honoring `alias_file`, and report before/after
-   keyword and ATS deltas from the commit result or re-score.
+Hand the `ChangeProposal` records to the shared change-application runbook and
+follow it end to end:
+[`../_shared/apply-changes.md`](../_shared/apply-changes.md). It owns mode
+selection, the open/prompt/decide loop and reason codes, the `commit-session`
+hard gate, `validate-facts`, the automatic learn tail, and the re-score. Pass the
+evidence list so `validate-facts` can confirm each injected keyword; re-score with
+**check-keywords**.
 
 ## Truth Posture
 
+Follow the shared truth posture in the runbook, plus:
+
 - Only surface a keyword the candidate genuinely has and can prove.
 - Never turn a non-injectable gap into a resume claim.
-- Never edit identity, employer, title-of-record, or date fields.
-- Never bulk-apply a change list or write the working JSON directly.
-- Never keep a change blocked by `commit-session` or `validate-facts`.
-- When in doubt, skip and explain what evidence is missing.
 
 ## Output
 
-Return the committed `working_path`, the session id, every approved/edited
-change `{path, keyword, evidence}`, every rejected/skipped keyword with its
-reason code when supplied, every hard-gate rejection, and the before/after match
-delta. State explicitly that non-injectable gaps were not written into the
-resume.
+Return the runbook's standard output (committed `working_path`, session id,
+decided changes, gate rejections, before/after match delta) with each approved/
+edited change carrying its `{path, keyword, evidence}`, and every rejected/skipped
+keyword with its reason code when supplied. State explicitly that non-injectable
+gaps were not written into the resume.
