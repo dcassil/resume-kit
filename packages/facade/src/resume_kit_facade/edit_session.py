@@ -704,6 +704,7 @@ def _assembled_contradicted_paths(
         provenance.field_path
         for provenance in report.claims
         if provenance.status is ProvenanceStatus.CONTRADICTED
+        and provenance.field_path is not None
     ]
 
 

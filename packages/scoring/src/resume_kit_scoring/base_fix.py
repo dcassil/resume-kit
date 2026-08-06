@@ -64,7 +64,7 @@ def _strip_span(data: dict[str, Any], span: str) -> dict[str, Any]:
     def clean(text: str) -> str:
         return re.sub(r"\s{2,}", " ", pattern.sub("", text)).strip()
 
-    return _walk_strings(data, clean)
+    return {key: _walk_strings(value, clean) for key, value in data.items()}
 
 
 def _normalize_formatting(data: dict[str, Any]) -> dict[str, Any]:
@@ -76,7 +76,7 @@ def _normalize_formatting(data: dict[str, Any]) -> dict[str, Any]:
         text = _NON_ASCII_RE.sub("", text)
         return re.sub(r"\s{2,}", " ", text)
 
-    return _walk_strings(data, clean)
+    return {key: _walk_strings(value, clean) for key, value in data.items()}
 
 
 def _normalize_dates(data: dict[str, Any]) -> dict[str, Any]:

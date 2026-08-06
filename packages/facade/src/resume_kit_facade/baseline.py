@@ -20,7 +20,7 @@ from datetime import date
 from pathlib import Path
 
 from resume_kit_ats.engine import check_ats_structure
-from resume_kit_core import CoreError, ErrorCode
+from resume_kit_core import ErrorCode, ResumeKitError
 from resume_kit_schemas import ResumeDocument
 from resume_kit_scoring import (
     analyze_best_practices,
@@ -90,23 +90,25 @@ def build_base(root: str | Path, *, mode: str = "auto") -> BuildBaseResult:
     ``mode='auto'`` applies only auto-safe fixes and defers ``needs_judgment``
     findings (reported back for the interactive walkthrough). Writes
     ``<name>-base.json`` behind the claim-preservation gate and points the config
-    ``base`` at it. Raises :class:`CoreError` (VALIDATION_ERROR) if the gate
+    ``base`` at it. Raises :class:`ResumeKitError` (VALIDATION_FAILED) if the gate
     fails — which, for the deterministic auto pass, indicates a bug rather than
     user data.
     """
     if mode != "auto":
-        raise CoreError(
+        raise ResumeKitError.from_code(
             ErrorCode.VALIDATION_FAILED,
             f"build_base mode {mode!r} not supported yet (only 'auto').",
         )
     config = load_config(root)
     original_rel = config.active_resume
     if not original_rel:
-        raise CoreError(ErrorCode.VALIDATION_FAILED, "No active_resume set.")
+        raise ResumeKitError.from_code(ErrorCode.VALIDATION_FAILED, "No active_resume set.")
 
     original_file = working_dir(root) / original_rel
     if not original_file.exists():
-        raise CoreError(ErrorCode.VALIDATION_FAILED, f"Active resume not found: {original_rel}.")
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, f"Active resume not found: {original_rel}."
+        )
 
     original = ResumeDocument.model_validate(json.loads(original_file.read_text(encoding="utf-8")))
     report = check_ats_structure(original)
@@ -114,7 +116,7 @@ def build_base(root: str | Path, *, mode: str = "auto") -> BuildBaseResult:
 
     # Hard claim-preservation gate (RIT-A-0003).
     if not claims_preserved(original, fix.resume):
-        raise CoreError(
+        raise ResumeKitError.from_code(
             ErrorCode.VALIDATION_FAILED,
             "base build refused: claim-preservation gate failed "
             f"(altered claims: {claim_diff(original, fix.resume)}).",
@@ -146,11 +148,13 @@ def build_standard(
     config = load_config(root)
     source_rel = config.base_resume or config.active_resume
     if not source_rel:
-        raise CoreError(ErrorCode.VALIDATION_FAILED, "No base or active_resume set.")
+        raise ResumeKitError.from_code(ErrorCode.VALIDATION_FAILED, "No base or active_resume set.")
 
     source_file = working_dir(root) / source_rel
     if not source_file.exists():
-        raise CoreError(ErrorCode.VALIDATION_FAILED, f"Source resume not found: {source_rel}.")
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, f"Source resume not found: {source_rel}."
+        )
 
     source = ResumeDocument.model_validate(json.loads(source_file.read_text(encoding="utf-8")))
     scoredoc = project_scoredoc(source, reference_date=_PLACEMENT_REF_DATE)
@@ -158,7 +162,7 @@ def build_standard(
     edit = apply_best_practices_edits(source, report, answers or {})
 
     if not claims_preserved(source, edit.resume):
-        raise CoreError(
+        raise ResumeKitError.from_code(
             ErrorCode.VALIDATION_FAILED,
             "standard build refused: claim-preservation gate failed "
             f"(altered claims: {claim_diff(source, edit.resume)}).",

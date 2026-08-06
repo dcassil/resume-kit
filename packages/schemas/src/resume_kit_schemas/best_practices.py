@@ -12,7 +12,7 @@ Two framework decisions are embodied here:
   resume-baselining decision) and ADOPTED by RIT-A-0004 / RIT-I-0018 (the
   industry-guidance audit). No second severity enum may exist elsewhere; any
   grooming/guidance finding across the system uses this vocabulary so findings
-  from the best-practices engine and the guidance audit can be merged and
+  produced by the best-practices engine and the guidance audit can be merged and
   surfaced together.
 
 * **Per-item resolution classification** — :class:`ResolutionKind` — separates

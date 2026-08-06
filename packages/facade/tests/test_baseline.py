@@ -31,7 +31,12 @@ def _resume_with_pii() -> dict:
         "workExperience": [
             {"title": "Staff Engineer", "company": "Acme", "years": "Jan 2020 - Present",
              "description": ["Built billing."]},
-            {"title": "Engineer", "company": "Beta", "years": "2016 - 2019", "description": ["Shipped API."]},
+            {
+                "title": "Engineer",
+                "company": "Beta",
+                "years": "2016 - 2019",
+                "description": ["Shipped API."],
+            },
         ],
         "education": [{"institution": "MIT", "degree": "BS CS", "years": "2016"}],
         "additional": {"technicalSkills": ["Python"]},
@@ -75,7 +80,9 @@ def test_clean_resume_base_equals_original_content(tmp_path: Path) -> None:
     clean = {
         "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "555"},
         "summary": "Engineer.",
-        "workExperience": [{"title": "A", "company": "X", "years": "2020 - 2022", "description": ["Built."]}],
+        "workExperience": [
+            {"title": "A", "company": "X", "years": "2020 - 2022", "description": ["Built."]}
+        ],
         "education": [{"institution": "M", "degree": "BS", "years": "2016"}],
         "additional": {"technicalSkills": ["Python"]},
     }
@@ -125,20 +132,22 @@ def test_build_standard_writes_standard_and_sets_pointer(tmp_path: Path) -> None
 
 
 def test_build_standard_applies_user_answer(tmp_path: Path) -> None:
+    from datetime import date
+
     from resume_kit_facade.baseline import build_standard
     from resume_kit_scoring import (
         analyze_best_practices,
         finding_key,
         project_scoredoc,
     )
-    from datetime import date
 
     _setup(tmp_path, _resume_for_standard())
     base = build_base(tmp_path, mode="auto")
     base_doc = ResumeDocument.model_validate(
         json.loads((working_dir(tmp_path) / base.base_path).read_text())
     )
-    report = analyze_best_practices(base_doc, project_scoredoc(base_doc, reference_date=date(2025, 1, 1)))
+    scoredoc = project_scoredoc(base_doc, reference_date=date(2025, 1, 1))
+    report = analyze_best_practices(base_doc, scoredoc)
     mq = next(f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION")
     answers = {finding_key(mq): "Cut billing incidents 40% over two quarters."}
 

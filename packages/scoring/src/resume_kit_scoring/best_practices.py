@@ -25,6 +25,7 @@ deferred to follow-up increments and are intentionally not silently claimed here
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 
 from resume_kit_schemas import (
     BestPracticesFinding,
@@ -94,7 +95,7 @@ def _weak_opener(text: str) -> str | None:
     return None
 
 
-def _bullets(resume: ResumeDocument):
+def _bullets(resume: ResumeDocument) -> Iterator[tuple[str, int, str]]:
     """Yield (entity_id, bullet_index, text) for every experience bullet."""
     for exp in resume.workExperience:
         for idx, bullet in enumerate(exp.description):
