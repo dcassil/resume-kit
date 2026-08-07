@@ -74,7 +74,7 @@ def test_build_base_defers_needs_judgment(tmp_path: Path) -> None:
     _setup(tmp_path, resume)
     result = build_base(tmp_path, mode="auto")
     assert "MISSING_EMAIL" in result.deferred
-    assert "NONSTANDARD_SECTION" in result.deferred
+    assert "NONSTANDARD_SECTION" not in result.deferred
 
 
 def test_clean_resume_base_equals_original_content(tmp_path: Path) -> None:

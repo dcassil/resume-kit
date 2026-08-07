@@ -39,13 +39,12 @@ def test_ssn_finding_is_auto_safe_strip_with_metadata():
     assert f.metadata["match"] == "123-45-6789"
 
 
-def test_nonstandard_section_needs_judgment():
+def test_custom_section_classification_is_not_an_ats_finding():
     report = check_ats_structure(
         {**_COMPLETE, "customSections": {"My Superpowers": {"sectionType": "text", "text": "x"}}}
     )
-    f = _find(report, "NONSTANDARD_SECTION")
-    assert f.fix_affordance is FixAffordance.NEEDS_JUDGMENT
-    assert "My Superpowers" in f.metadata["sections"]
+    assert "NONSTANDARD_SECTION" not in _codes(report)
+    assert report.recommendations == []
 
 
 def test_inconsistent_dates_auto_safe_normalize():

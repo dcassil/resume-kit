@@ -11,10 +11,10 @@ archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
-exit_criteria_met: false
+exit_criteria_met: true
 estimated_complexity: L
 strategy_id: NULL
 initiative_id: canonical-structure-pass-original
