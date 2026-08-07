@@ -10,7 +10,7 @@ Running with `--cd` at the repo worktree root. Paths below are relative to it.
 ## REQUIRED READING
 1. `.metis/strategies/NULL/initiatives/RIT-I-0019/tasks/RIT-T-0134.md` — your task + acceptance criteria + file claims.
 2. `.metis/strategies/NULL/initiatives/RIT-I-0019/initiative.md` — Detailed Design → "Shape policy (REQ-002)" is authoritative.
-3. `packages/schemas/src/resume_kit_schemas/` — the canonical schema landed by RIT-T-0133. IMPORT the `CanonicalSection` enum from here (it is the single source of truth; do NOT redefine it). Read its exact members and import path.
+3. `packages/schemas/src/resume_kit_schemas/canonical.py` — the canonical schema landed by RIT-T-0133. IMPORT the `CanonicalSection` enum via `from resume_kit_schemas.canonical import CanonicalSection` (canonical/shape models are exposed on the `.canonical` / `.shape` SUBMODULES, NOT re-exported at package top level — do not `from resume_kit_schemas import CanonicalSection`). It is the single source of truth; do NOT redefine it. Read its exact members.
 4. `packages/policy/src/resume_kit_policy/` — read `path_policy.py` and `skill_targets.py` to mirror how policies are structured, defaulted, and overlaid from `config.json`.
 5. `packages/ats/src/resume_kit_ats/engine.py` — find `_CONVENTIONAL_SECTION_KEYWORDS`; SEED your keyword→canonical alias table from it (promote the flat set into a `dict[str, CanonicalSection]`). Do NOT modify engine.py. If you copy the seed, add a comment noting the origin.
 6. Existing tests: `packages/policy/tests/`.
@@ -24,7 +24,7 @@ Implement RIT-T-0134's acceptance criteria:
   summary length) with NO trim/delete/rank affordance.
 - A `default_shape_policy()` constructor and a project-overlay path that applies `config.json`
   overrides, mirroring the existing policy load/override pattern.
-- Import `CanonicalSection` from `resume_kit_schemas` (do not define a second copy).
+- Import `CanonicalSection` from `resume_kit_schemas.canonical` (do not define a second copy).
 - Export the new public types from the package exports as existing policies are exported.
 - Unit tests under `packages/policy/tests/`: default policy loads; alias table maps known
   headings (e.g. "Technical Skills" → skills, "Certifications" → certifications); unknown
