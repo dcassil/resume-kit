@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from resume_kit_policy import default_shape_policy
 from resume_kit_schemas import (
     AdditionalInfo,
     Education,
@@ -13,7 +14,12 @@ from resume_kit_schemas import (
     Project,
     ResumeDocument,
 )
-from resume_kit_scoring import project_scoredoc
+from resume_kit_scoring import (
+    analyze_resume_shape,
+    apply_shape_transforms,
+    project_builddoc_from_canonical,
+    project_scoredoc,
+)
 from resume_kit_terms import normalize
 
 _REF = date(2025, 1, 1)
@@ -149,3 +155,60 @@ def test_custom_experience_section_maps_to_experience_zone() -> None:
     doc = project_scoredoc(resume, reference_date=_REF)
     zones = {s.zone for s in doc.sections}
     assert KeywordZone.EXPERIENCE in zones
+
+
+def test_project_builddoc_from_canonical_round_trips_redundant_sections() -> None:
+    source = ResumeDocument.model_validate(
+        {
+            "personalInfo": {
+                "name": "Jane Engineer",
+                "email": "jane@example.com",
+                "phone": "555-0100",
+                "title": "Staff Engineer",
+            },
+            "summary": "Builds reliable product platforms.",
+            "workExperience": [
+                {
+                    "id": 1,
+                    "title": "Staff Engineer",
+                    "company": "Acme",
+                    "years": "2020-2024",
+                    "description": ["Built reliable APIs."],
+                }
+            ],
+            "education": [
+                {
+                    "institution": "State University",
+                    "degree": "BS Computer Science",
+                    "years": "2016",
+                }
+            ],
+            "additional": {"technicalSkills": ["Python", "TypeScript"]},
+            "customSections": {
+                "Core Skills": {
+                    "sectionType": "stringList",
+                    "strings": ["Python", "React", "AWS"],
+                },
+                "Technical Skills": {
+                    "sectionType": "stringList",
+                    "strings": [
+                        "Technical Skills",
+                        "Python",
+                        "TypeScript",
+                        "React",
+                        "AWS",
+                    ],
+                },
+            },
+        }
+    )
+    report = analyze_resume_shape(source, default_shape_policy())
+    canonical = apply_shape_transforms(source, report).resume
+
+    builddoc = project_builddoc_from_canonical(canonical)
+
+    assert isinstance(builddoc, ResumeDocument)
+    assert builddoc.personalInfo.name == "Jane Engineer"
+    assert builddoc.workExperience[0].description == ["Built reliable APIs."]
+    assert builddoc.workExperience[0].years == "2020 - 2024"
+    assert builddoc.additional.technicalSkills == ["Python", "TypeScript", "React", "AWS"]

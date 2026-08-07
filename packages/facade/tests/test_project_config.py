@@ -222,10 +222,19 @@ def test_resolve_active_resume_precedence_and_fallbacks() -> None:
     )
     assert resolve_active_resume(with_base) == "resumes/x-base.json"
 
-    # standard present -> standard wins over base and original
+    # structure present -> structure wins over base and original
+    with_structure = ProjectConfig(
+        active_resume="resumes/x-original.json",
+        base_resume="resumes/x-base.json",
+        structure_resume="resumes/x-structure.json",
+    )
+    assert resolve_active_resume(with_structure) == "resumes/x-structure.json"
+
+    # standard present -> standard wins over structure, base, and original
     with_standard = ProjectConfig(
         active_resume="resumes/x-original.json",
         base_resume="resumes/x-base.json",
+        structure_resume="resumes/x-structure.json",
         standard_resume="resumes/x-standard.json",
     )
     assert resolve_active_resume(with_standard) == "resumes/x-standard.json"
@@ -251,13 +260,25 @@ def test_set_version_records_pointers_and_lineage(tmp_path: Path) -> None:
 
     cfg = set_version(
         tmp_path,
-        standard="resumes/x-standard.json",
-        standard_derived_from="resumes/x-base.json",
+        structure="resumes/x-structure.json",
+        structure_derived_from="resumes/x-base.json",
     )
-    # base pointer preserved across a second version write
+    # base pointer preserved across structure write
     assert cfg.base_resume == "resumes/x-base.json"
+    assert cfg.structure_resume == "resumes/x-structure.json"
+    assert cfg.structure_derived_from == "resumes/x-base.json"
+    assert resolve_active_resume(cfg) == "resumes/x-structure.json"
+
+    cfg = set_version(
+        tmp_path,
+        standard="resumes/x-standard.json",
+        standard_derived_from="resumes/x-structure.json",
+    )
+    # earlier pointers preserved across a later version write
+    assert cfg.base_resume == "resumes/x-base.json"
+    assert cfg.structure_resume == "resumes/x-structure.json"
     assert cfg.standard_resume == "resumes/x-standard.json"
-    assert cfg.standard_derived_from == "resumes/x-base.json"
+    assert cfg.standard_derived_from == "resumes/x-structure.json"
     assert resolve_active_resume(cfg) == "resumes/x-standard.json"
 
 
@@ -268,6 +289,8 @@ def test_set_version_requires_a_pointer_and_guards_lineage(tmp_path: Path) -> No
         set_version(tmp_path)
     with pytest.raises(ValueError):
         set_version(tmp_path, base_derived_from="resumes/x-original.json")
+    with pytest.raises(ValueError):
+        set_version(tmp_path, structure_derived_from="resumes/x-base.json")
     with pytest.raises(ValueError):
         set_version(tmp_path, standard_derived_from="resumes/x-base.json")
 
@@ -288,4 +311,6 @@ def test_version_pointers_round_trip_and_preserve_unknown_keys(tmp_path: Path) -
     assert reloaded.model_dump()["preference_state"] == {"weight": 3}
     # backward-compat: a config with no base/standard loads with None defaults
     legacy = ProjectConfig.model_validate({"active_resume": "resumes/y-original.json"})
-    assert legacy.base_resume is None and legacy.standard_resume is None
+    assert legacy.base_resume is None
+    assert legacy.structure_resume is None
+    assert legacy.standard_resume is None
