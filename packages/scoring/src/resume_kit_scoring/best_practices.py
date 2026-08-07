@@ -17,16 +17,15 @@ dropping a buzzword or a weak opener), ``needs_user_input`` when the fix require
 facts the system does not have (e.g. a real metric to quantify an accomplishment).
 
 Implemented wording rules (deterministic): WEAK_OPENER, FIRST_PERSON_OPENER,
-BUZZWORD, MISSING_QUANTIFICATION, MISSING_QUANTIFICATION_MORE. Further rules
-(duplicate-bullet, equal-detail-per-job, tense/punctuation consistency) are
-deferred to follow-up increments and are intentionally not silently claimed here.
+BUZZWORD, MISSING_QUANTIFICATION. Further rules (duplicate-bullet,
+equal-detail-per-job, tense/punctuation consistency) are deferred to follow-up
+increments and are intentionally not silently claimed here.
 
-``MISSING_QUANTIFICATION`` is capped and prioritized (RIT-T-0130): rather than
-one prompt per unquantified bullet (a low-density "wall"), at most
-:data:`_MISSING_QUANT_CAP` per-bullet findings are surfaced, chosen where a
-metric adds the most (bullets with an impact/achievement verb first, then resume
-order). When more bullets lack a number, a single ``MISSING_QUANTIFICATION_MORE``
-advisory names the remaining count so the cap is never a silent truncation.
+``MISSING_QUANTIFICATION`` emits one needs-input finding for each unquantified
+experience bullet, with its exact bullet location and per-bullet elicitation
+prompt. Findings are prioritized where a metric adds the most (bullets with an
+impact/achievement verb first, then resume order) without truncating the
+whole-resume list.
 """
 
 from __future__ import annotations
@@ -79,7 +78,7 @@ _SUMMARY_WORD_LIMIT = 60
 
 #: Impact / achievement verbs. A bullet that claims an outcome with one of these
 #: but carries no number is the highest-value place to ask for a metric, so such
-#: bullets are prioritized when the MISSING_QUANTIFICATION list is capped.
+#: bullets are prioritized in the MISSING_QUANTIFICATION list.
 _IMPACT_VERBS = frozenset(
     {
         "improved", "reduced", "increased", "grew", "cut", "accelerated", "drove",
@@ -88,10 +87,6 @@ _IMPACT_VERBS = frozenset(
         "tripled", "eliminated", "generated", "achieved", "won", "led",
     }
 )
-#: Maximum per-bullet MISSING_QUANTIFICATION findings surfaced per report. Extra
-#: unquantified bullets are summarized by a single MISSING_QUANTIFICATION_MORE
-#: advisory. Tunable UX knob (see RIT-T-0130).
-_MISSING_QUANT_CAP = 3
 
 
 def _has_impact_verb(bullet: str) -> bool:
@@ -171,8 +166,7 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
     """
     findings: list[BestPracticesFinding] = []
     # (order_index, has_impact_verb, location) for each unquantified bullet, so
-    # the MISSING_QUANTIFICATION list can be prioritized and capped after the
-    # scan rather than emitting one prompt per bullet (RIT-T-0130).
+    # the MISSING_QUANTIFICATION list can be prioritized after the scan.
     quant_candidates: list[tuple[int, bool, FindingLocation]] = []
 
     for order_index, (entity_id, idx, bullet) in enumerate(_bullets(resume)):
@@ -229,10 +223,9 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             quant_candidates.append((order_index, _has_impact_verb(bullet), loc))
 
     # Prioritize where a metric adds the most (impact-verb bullets first), then
-    # by resume order (recency); surface only the top few, and summarize the rest
-    # so the cap is never a silent truncation (RIT-T-0130).
+    # by resume order (recency).
     quant_candidates.sort(key=lambda c: (not c[1], c[0]))
-    for _order_index, _has_impact, loc in quant_candidates[:_MISSING_QUANT_CAP]:
+    for _order_index, _has_impact, loc in quant_candidates:
         findings.append(
             BestPracticesFinding(
                 rule_code="MISSING_QUANTIFICATION",
@@ -246,26 +239,6 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
                 elicitation_prompt=(
                     "What changed because of this work, and by roughly how much "
                     "(percent, time, money, scale)? Use a real or credibly-approximate number."
-                ),
-            )
-        )
-    remaining = len(quant_candidates) - _MISSING_QUANT_CAP
-    if remaining > 0:
-        findings.append(
-            BestPracticesFinding(
-                rule_code="MISSING_QUANTIFICATION_MORE",
-                message=(
-                    f"{remaining} more experience bullet(s) also lack a quantified"
-                    " outcome. Add real numbers where they exist; re-run to surface"
-                    " the next batch as targeted prompts."
-                ),
-                location=FindingLocation(section="experience", zone="experience"),
-                severity=FindingSeverity.REVIEW_NOTE,
-                resolution_kind=ResolutionKind.NEEDS_USER_INPUT,
-                elicitation_prompt=(
-                    "Across your remaining bullets, which achievements had a"
-                    " measurable result (percent, time, money, scale)? Add a real"
-                    " number to each where one exists."
                 ),
             )
         )
