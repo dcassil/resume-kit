@@ -32,10 +32,12 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AnalyzeShapeRequest,
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
+    BuildStructureRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -58,6 +60,7 @@ from resume_kit_facade.models import (
     SessionPromptRequest,
     SessionStatusRequest,
     SetActiveRequest,
+    StructureBuildResult,
     SuggestTerminologyRequest,
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
@@ -182,17 +185,21 @@ def _run_gate(
 ) -> None:
     """Await a gate ``coro``, render it, and exit non-zero when the gate fails.
 
-    A faithfulness report is carried as ``data`` on an otherwise-ok envelope, so
-    ``exit_code_for`` alone would return 0 even when the report failed. This
-    HARD GATE maps ``report.passed is False`` to a non-zero exit (``INVALID_INPUT``)
-    while still printing the full report, so callers can both read the findings
-    and branch on the exit code.
+    Some gates are carried as ``data`` on an otherwise-ok envelope, so
+    ``exit_code_for`` alone would return 0 even when the gate failed. This HARD
+    GATE maps failed faithfulness or structure build gates to a non-zero exit
+    (``INVALID_INPUT``) while still printing the full report, so callers can
+    both read the findings and branch on the exit code.
     """
     response = asyncio.run(coro)
     typer.echo(render(response, output))
     code = exit_code_for(response)
     data = response.data
     if isinstance(data, FaithfulnessReport) and not data.passed:
+        code = code or int(ExitCode.INVALID_INPUT)
+    if isinstance(data, StructureBuildResult) and (
+        not data.ledger_ok or not data.claims_ok
+    ):
         code = code or int(ExitCode.INVALID_INPUT)
     raise typer.Exit(code=code)
 
@@ -784,6 +791,36 @@ def build_standard(
     request = BuildStandardRequest(root=root, answers=io.load_answers(answers))
     options = _options(False, strict, False)
     _run(caps.build_standard_capability(request, options), output)
+
+
+@app.command(name="analyze-shape")
+def analyze_shape(
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the read-only deterministic shape analysis on a resume."""
+    request = AnalyzeShapeRequest(resume=io.load_resume(resume), root=root)
+    options = _options(False, strict, False)
+    _run(caps.analyze_shape_capability(request, options), output)
+
+
+@app.command(name="build-structure")
+def build_structure(
+    root: str = _Root,
+    answers: str | None = typer.Option(
+        None,
+        "--answers",
+        help="Optional JSON path mapping source section names to canonical targets.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the base->structure canonical shape write path behind hard gates."""
+    request = BuildStructureRequest(root=root, answers=io.load_answers(answers))
+    options = _options(False, strict, False)
+    _run_gate(caps.build_structure_capability(request, options), output)
 
 
 @app.command(name="analyze-best-practices")

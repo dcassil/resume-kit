@@ -79,6 +79,7 @@ from resume_kit_matching import (
     compare_versions,
     select_best,
 )
+from resume_kit_policy import load_shape_policy
 from resume_kit_schemas import (
     AlignmentResult,
     ATSScore,
@@ -98,6 +99,7 @@ from resume_kit_schemas import (
     TruthReport,
 )
 from resume_kit_scoring import analyze_best_practices as _analyze_best_practices
+from resume_kit_scoring import analyze_resume_shape as _analyze_resume_shape
 from resume_kit_scoring import build_ats_view as _build_ats_view
 from resume_kit_scoring import project_scoredoc as _project_scoredoc
 
@@ -105,6 +107,7 @@ from resume_kit_facade import edit_session as _edit_session
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.baseline import build_base as _build_base
 from resume_kit_facade.baseline import build_standard as _build_standard
+from resume_kit_facade.baseline import build_structure as _build_structure
 from resume_kit_facade.models import (
     AddEvidenceRequest,
     AddEvidenceResult,
@@ -112,11 +115,13 @@ from resume_kit_facade.models import (
     AlignTerminologyRequest,
     AlignTerminologyResult,
     AnalyzeBestPracticesRequest,
+    AnalyzeShapeRequest,
     AtsViewRequest,
     BaseBuildResult,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
+    BuildStructureRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -142,6 +147,7 @@ from resume_kit_facade.models import (
     SessionStatusRequest,
     SetActiveRequest,
     StandardBuildResult,
+    StructureBuildResult,
     SuggestTerminologyRequest,
     TerminologyAlignmentDelta,
     ValidateFaithfulnessRequest,
@@ -1142,6 +1148,59 @@ async def build_standard_capability(
     return build_success(response, strict=options.strict)
 
 
+async def analyze_shape_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the read-only resume shape analysis (RIT-T-0138).
+
+    Pure and deterministic: never requires a provider and ignores ``no_llm``.
+    Loads the project shape policy for ``root`` and delegates directly to
+    :func:`resume_kit_scoring.analyze_resume_shape`.
+    """
+    if not isinstance(request, AnalyzeShapeRequest):
+        return from_resume_kit_error(_bad_request(request, "AnalyzeShapeRequest"))
+    try:
+        report = _analyze_resume_shape(request.resume, load_shape_policy(request.root))
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
+        return from_exception(exc)
+    return build_success(report, strict=options.strict)
+
+
+async def build_structure_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the ``base -> structure`` canonical shape write path (RIT-T-0138).
+
+    Deterministic and filesystem-local: never requires a provider and ignores
+    ``no_llm``. Delegates to :func:`resume_kit_facade.baseline.build_structure`,
+    which applies report-driven shape transforms, enforces the content ledger
+    and cross-section claim gates, writes ``<name>-structure.json`` on success,
+    and records structure lineage.
+    """
+    if not isinstance(request, BuildStructureRequest):
+        return from_resume_kit_error(_bad_request(request, "BuildStructureRequest"))
+    try:
+        result = _build_structure(request.root, answers=request.answers)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
+        return from_exception(exc)
+    response = StructureBuildResult(
+        structure_path=result.structure_path,
+        report=result.report,
+        ledger=result.ledger,
+        ledger_ok=result.ledger_ok,
+        claims_ok=result.claims_ok,
+        applied=list(result.applied),
+        deferred=list(result.deferred),
+    )
+    return build_success(response, strict=options.strict)
+
+
 async def analyze_best_practices_capability(
     request: object,
     options: CapabilityOptions,
@@ -1235,6 +1294,8 @@ REGISTRY: dict[str, Capability] = {
     "init-project": init_project_capability,
     "set-active": set_active_capability,
     "build-base": build_base_capability,
+    "analyze-shape": analyze_shape_capability,
+    "build-structure": build_structure_capability,
     "build-standard": build_standard_capability,
     "analyze-best-practices": analyze_best_practices_capability,
     "ats-view": ats_view_capability,

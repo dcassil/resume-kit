@@ -32,7 +32,6 @@ import socket
 from pathlib import Path
 
 import pytest
-
 from resume_kit_ats.engine import check_ats_structure
 from resume_kit_cli.app import app
 from resume_kit_schemas import ResumeDocument

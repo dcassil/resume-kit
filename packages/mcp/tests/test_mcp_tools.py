@@ -120,6 +120,8 @@ def test_registers_exactly_the_stable_tools() -> None:
         "project_init",
         "project_set_active",
         "resume_build_base",
+        "resume_analyze_shape",
+        "resume_build_structure",
         "resume_build_standard",
         "resume_analyze_best_practices",
         "resume_ats_view",
@@ -157,6 +159,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         ),
         ("resume_align", {"resume": _resume(), "job": _job()}, dict),
         ("resume_validate_truth", {"resume": _resume(), "evidence": []}, dict),
+        ("resume_analyze_shape", {"resume": _resume()}, dict),
         ("candidate_evidence_build", {"resume": _resume()}, list),
     ],
 )

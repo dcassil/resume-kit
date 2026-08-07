@@ -47,10 +47,12 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AnalyzeShapeRequest,
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
+    BuildStructureRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -83,10 +85,12 @@ from resume_kit_api.models import (
     AlignResumeBody,
     AlignTerminologyBody,
     AnalyzeBestPracticesBody,
+    AnalyzeShapeBody,
     AtsViewBody,
     BuildBaseBody,
     BuildCandidateEvidenceBody,
     BuildStandardBody,
+    BuildStructureBody,
     CheckAtsStructureBody,
     CheckResumeAtsBody,
     CheckResumeJobMatchBody,
@@ -440,6 +444,16 @@ def register_routes(app: FastAPI) -> None:
     async def build_standard(body: BuildStandardBody) -> Response:
         request = BuildStandardRequest(root=body.root, answers=body.answers)
         return _render(await REGISTRY["build-standard"](request, _options(body)))
+
+    @app.post("/analyze-shape")
+    async def analyze_shape(body: AnalyzeShapeBody) -> Response:
+        request = AnalyzeShapeRequest(resume=body.resume, root=body.root)
+        return _render(await REGISTRY["analyze-shape"](request, _options(body)))
+
+    @app.post("/build-structure")
+    async def build_structure(body: BuildStructureBody) -> Response:
+        request = BuildStructureRequest(root=body.root, answers=body.answers)
+        return _render(await REGISTRY["build-structure"](request, _options(body)))
 
     @app.post("/analyze-best-practices")
     async def analyze_best_practices(body: AnalyzeBestPracticesBody) -> Response:

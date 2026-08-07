@@ -12,11 +12,13 @@ def test_all_public_exports_importable() -> None:
         AlignTerminologyRequest,
         AlignTerminologyResult,
         AnalyzeBestPracticesRequest,
+        AnalyzeShapeRequest,
         AtsViewRequest,
         BaseBuildResult,
         BuildBaseRequest,
         BuildCandidateEvidenceRequest,
         BuildStandardRequest,
+        BuildStructureRequest,
         CapabilityOptions,
         CheckAtsStructureRequest,
         CheckResumeAtsRequest,
@@ -47,6 +49,7 @@ def test_all_public_exports_importable() -> None:
         SessionStatusRequest,
         SetActiveRequest,
         StandardBuildResult,
+        StructureBuildResult,
         SuggestTerminologyRequest,
         TerminologyAlignmentDelta,
         ValidateFaithfulnessRequest,
@@ -55,10 +58,12 @@ def test_all_public_exports_importable() -> None:
         align_resume,
         align_terminology,
         analyze_best_practices_capability,
+        analyze_shape_capability,
         ats_view_capability,
         build_base_capability,
         build_candidate_evidence_capability,
         build_standard_capability,
+        build_structure_capability,
         check_ats_structure,
         check_resume_ats,
         check_resume_job_match,
@@ -90,9 +95,11 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 32
+    assert len(REGISTRY) == 34
     assert "ats-view" in REGISTRY
     assert "build-base" in REGISTRY
+    assert "analyze-shape" in REGISTRY
+    assert "build-structure" in REGISTRY
     assert "build-standard" in REGISTRY
     assert "analyze-best-practices" in REGISTRY
     assert "validate-faithfulness" in REGISTRY
@@ -156,14 +163,19 @@ def test_all_public_exports_importable() -> None:
     assert TerminologyAlignmentDelta is not None
 
     assert callable(build_base_capability)
+    assert callable(analyze_shape_capability)
+    assert callable(build_structure_capability)
     assert callable(build_standard_capability)
     assert callable(analyze_best_practices_capability)
     assert callable(ats_view_capability)
     assert BuildBaseRequest is not None
+    assert AnalyzeShapeRequest is not None
+    assert BuildStructureRequest is not None
     assert BuildStandardRequest is not None
     assert AnalyzeBestPracticesRequest is not None
     assert AtsViewRequest is not None
     assert BaseBuildResult is not None
+    assert StructureBuildResult is not None
     assert StandardBuildResult is not None
 
     assert callable(align_resume)

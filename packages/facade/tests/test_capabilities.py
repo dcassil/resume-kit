@@ -116,6 +116,8 @@ def test_registry_contains_all_capabilities() -> None:
         "init-project",
         "set-active",
         "build-base",
+        "analyze-shape",
+        "build-structure",
         "build-standard",
         "analyze-best-practices",
         "ats-view",

@@ -357,6 +357,32 @@ class BuildStandardBody(_Options):
     )
 
 
+class AnalyzeShapeBody(_Options):
+    """Body for ``POST /analyze-shape`` — resume shape report, no writes.
+
+    Pure and deterministic (RIT-T-0138): loads the shape policy for ``root`` and
+    returns a read-only shape report for the supplied resume.
+    """
+
+    resume: ResumeDocument
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+
+
+class BuildStructureBody(_Options):
+    """Body for ``POST /build-structure`` — run the base->structure shape path.
+
+    Filesystem-local (RIT-T-0138): applies report-driven, non-destructive shape
+    transforms under ``root`` behind content-ledger and cross-section claim
+    gates, writes the ``structure`` version on success, and records lineage.
+    """
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    answers: dict[str, str] | None = Field(
+        default=None,
+        description="Optional map of source section names to canonical targets.",
+    )
+
+
 class AnalyzeBestPracticesBody(_Options):
     """Body for ``POST /analyze-best-practices`` — resume only, no job.
 
