@@ -217,6 +217,30 @@ def init_project(root: str | Path) -> ProjectConfig:
     return config
 
 
+def _normalize_pointer(value: str | None) -> str | None:
+    """Normalize a user-supplied pointer to the working-dir-relative form.
+
+    Config pointers are ALWAYS resolved downstream as
+    ``working_dir(root) / pointer`` (see :func:`build_base` /
+    :func:`build_standard`). Users, mirroring the cwd-relative direct-path
+    commands, often type ``resume-kit/resumes/x.json``; stored verbatim that
+    doubles the working-dir prefix (``resume-kit/resume-kit/...``) and fails
+    downstream. This strips a single leading ``resume-kit`` component so the
+    cwd-relative form resolves identically to the wd-relative form. Purely
+    lexical (no filesystem access): absolute paths pass through unchanged
+    (``wd / abs == abs``), and already-wd-relative paths are left untouched.
+    """
+    if value is None:
+        return None
+    p = Path(value)
+    if p.is_absolute():
+        return value
+    parts = p.parts
+    if len(parts) > 1 and parts[0] == WORKING_DIR_NAME:
+        return str(Path(*parts[1:]))
+    return value
+
+
 def set_active(
     root: str | Path,
     *,
@@ -243,11 +267,11 @@ def set_active(
         raise ValueError("job_source given without a job.")
     config = load_config(root)
     if resume is not None:
-        config.active_resume = resume
-        config.active_resume_source = resume_source
+        config.active_resume = _normalize_pointer(resume)
+        config.active_resume_source = _normalize_pointer(resume_source)
     if job is not None:
-        config.active_job = job
-        config.active_job_source = job_source
+        config.active_job = _normalize_pointer(job)
+        config.active_job_source = _normalize_pointer(job_source)
     save_config(root, config)
     return config
 
@@ -291,10 +315,10 @@ def set_version(
         raise ValueError("standard_derived_from given without a standard.")
     config = load_config(root)
     if base is not None:
-        config.base_resume = base
-        config.base_derived_from = base_derived_from
+        config.base_resume = _normalize_pointer(base)
+        config.base_derived_from = _normalize_pointer(base_derived_from)
     if standard is not None:
-        config.standard_resume = standard
-        config.standard_derived_from = standard_derived_from
+        config.standard_resume = _normalize_pointer(standard)
+        config.standard_derived_from = _normalize_pointer(standard_derived_from)
     save_config(root, config)
     return config

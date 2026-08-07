@@ -123,6 +123,10 @@ next agent does not rediscover it.
      resume-tool set-active --resume resume-kit/resumes/<orig-basename>-original.json --source <source>
      ```
 
+     `set-active` normalizes the path, so either the cwd-relative form shown
+     above (`resume-kit/resumes/...`) or the working-dir-relative form
+     (`resumes/...`) is accepted and stored as the same pointer.
+
    **Do NOT hand-edit `config.json`.** `set-active` is code-owned and preserves
    unknown keys; always use it to record pointers and source paths.
 

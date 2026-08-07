@@ -136,6 +136,12 @@ of the main context.
 - **Keywords are concrete tokens** (e.g. `React`, `TypeScript`, `PostgreSQL`,
   `CI/CD`, `multi-tenant`), matching how they appear on resumes. Normalize
   trivial variants (e.g. `Node`/`Node.js`) but do not drop distinct skills.
+  **Never put a full requirement sentence in `keywords` or in a
+  `requirements[].keywords` list.** A requirement's `text` may be a whole
+  sentence (that is fine — it is for display), but its `keywords` must be the
+  concrete tokens extracted from that sentence. A deterministic hygiene gate
+  drops sentence-shaped entries from the scored keyword set, so prose there is
+  silently discarded — extract the tokens yourself so nothing matchable is lost.
 - Leave `title`/`company`/`location` from the posting; empty string / `null` if
   absent — do not guess.
 

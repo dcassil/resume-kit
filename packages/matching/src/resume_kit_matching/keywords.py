@@ -24,7 +24,12 @@ from pathlib import Path
 from typing import Any
 
 import resume_kit_schemas
-from resume_kit_schemas import KeywordGapAnalysis, MatchedKeyword, ResumeDocument
+from resume_kit_schemas import (
+    KeywordGapAnalysis,
+    MatchedKeyword,
+    ResumeDocument,
+    sanitize_keywords,
+)
 from resume_kit_terms import (
     AliasIndex,
     MatchResult,
@@ -248,6 +253,27 @@ def _extract_all_text(data: dict[str, Any]) -> str:
     return _extract_all_text_cached(data_json)
 
 
+def _texts_near_identical(text_a: str, text_b: str) -> bool:
+    """Return True when two resume texts are effectively the same source.
+
+    Deterministic and cheap: exact string equality first, then a token-set
+    Jaccard >= 0.98 fallback so trivial reordering/whitespace still counts as
+    "no distinct master". Used to flag the degenerate check-gaps case where
+    injectable classification is meaningless (RIT-T-0126).
+    """
+    if text_a == text_b:
+        return True
+    tokens_a = set(text_a.split())
+    tokens_b = set(text_b.split())
+    if not tokens_a and not tokens_b:
+        return True
+    union = tokens_a | tokens_b
+    if not union:
+        return True
+    jaccard = len(tokens_a & tokens_b) / len(union)
+    return jaccard >= 0.98
+
+
 def _to_resume_dict(resume: _ResumeInput) -> dict[str, Any]:
     """Normalise a ResumeDocument or plain dict to a plain dict."""
     if isinstance(resume, ResumeDocument):
@@ -265,19 +291,26 @@ def _to_jd_keywords_dict(jd: _JdKeywordsInput) -> dict[str, Any]:
     """
     if isinstance(jd, dict):
         return jd
-    # JobDescription model → upstream keyword dict shape
-    required_skills: list[str] = []
+    # JobDescription model → upstream keyword dict shape.
+    #
+    # RIT-T-0128: run every candidate through the keyword hygiene gate so full
+    # requirement sentences (prose the parse step misclassified as a "skill")
+    # never enter the scored denominator. A requirement's ``text`` is included
+    # only when it is itself a concrete token; its prose stays on the model for
+    # display but is dropped here. Fixes match, check-gaps, and check-keywords in
+    # one place, since they all funnel through this boundary.
+    required_raw: list[str] = []
     for req in jd.requirements:
-        required_skills.append(req.text)
-        required_skills.extend(req.keywords)
-    preferred_skills: list[str] = []
+        required_raw.append(req.text)
+        required_raw.extend(req.keywords)
+    preferred_raw: list[str] = []
     for qual in jd.qualifications:
-        preferred_skills.append(qual.text)
-        preferred_skills.extend(qual.keywords)
+        preferred_raw.append(qual.text)
+        preferred_raw.extend(qual.keywords)
     return {
-        "required_skills": required_skills,
-        "preferred_skills": preferred_skills,
-        "keywords": list(jd.keywords),
+        "required_skills": sanitize_keywords(required_raw),
+        "preferred_skills": sanitize_keywords(preferred_raw),
+        "keywords": sanitize_keywords(jd.keywords),
     }
 
 
@@ -349,6 +382,20 @@ def analyze_keyword_gaps(
     tailored_text = _extract_all_text(tailored_dict).lower()
     master_text = _extract_all_text(master_dict).lower()
 
+    # REQ (RIT-T-0126): when tailored and master resolve to near-identical text
+    # there is no distinct source to inject from, so `injectable_keywords` is
+    # always empty and every miss is (misleadingly) classified non-injectable.
+    # Surface that degeneracy explicitly rather than presenting it as hard gaps.
+    # Deterministic: exact equality OR token-set Jaccard >= 0.98.
+    warnings: list[str] = []
+    if _texts_near_identical(tailored_text, master_text):
+        warnings.append(
+            "Tailored and master resolve to near-identical content; the "
+            "injectable/non-injectable split is unreliable and missing "
+            "keywords may not be true gaps. Supply a distinct master resume "
+            "to classify which missing keywords are injectable."
+        )
+
     all_jd_keywords: set[str] = set()
     all_jd_keywords.update(jd_dict.get("required_skills", []))
     all_jd_keywords.update(jd_dict.get("preferred_skills", []))
@@ -391,4 +438,5 @@ def analyze_keyword_gaps(
         current_match_percentage=current_match,
         potential_match_percentage=potential_match,
         matched_keywords=matched_keywords,
+        warnings=warnings,
     )

@@ -194,6 +194,48 @@ class TestAnalyzeKeywordGaps:
         # python is injectable → 0 non-injectable → potential = 100 %
         assert result.potential_match_percentage == pytest.approx(100.0)
 
+    def test_near_identical_inputs_emit_warning(self) -> None:
+        """Identical tailored/master → degeneracy warning (RIT-T-0126)."""
+        tailored = _resume_dict(summary="java sql")
+        master = _resume_dict(summary="java sql")
+        jd = _jd_keywords(required=["python", "java", "sql"])
+        result = analyze_keyword_gaps(jd, tailored, master)
+        assert len(result.warnings) == 1
+        assert "near-identical" in result.warnings[0].lower()
+
+    def test_distinct_inputs_emit_no_warning(self) -> None:
+        """Clearly distinct tailored/master → no false-positive warning."""
+        tailored = _resume_dict(summary="java sql")
+        master = _resume_dict(summary="python golang rust kubernetes docker")
+        jd = _jd_keywords(required=["python", "java", "sql"])
+        result = analyze_keyword_gaps(jd, tailored, master)
+        assert result.warnings == []
+
+    def test_sentence_requirement_excluded_from_denominator(self) -> None:
+        """RIT-T-0128: prose requirement text must not depress the match score.
+
+        A JobDescription whose only requirements are one concrete skill and one
+        full sentence should score against the single concrete token, not two.
+        """
+        from resume_kit_schemas import JobDescription, Requirement, RequirementKind
+
+        jd = JobDescription(
+            title="Engineer",
+            requirements=[
+                Requirement(text="Python", kind=RequirementKind.REQUIRED),
+                Requirement(
+                    text=(
+                        "4-6+ years of professional experience building modern, "
+                        "large-scale web applications"
+                    ),
+                    kind=RequirementKind.REQUIRED,
+                ),
+            ],
+        )
+        resume = _resume_dict(summary="python")
+        # Only the concrete "Python" token is scored → full coverage, not 50%.
+        assert calculate_keyword_match(resume, jd) == pytest.approx(100.0)
+
     def test_empty_keyword_set_returns_zero_current(self) -> None:
         tailored = _resume_dict(summary="python")
         master = _resume_dict(summary="python")

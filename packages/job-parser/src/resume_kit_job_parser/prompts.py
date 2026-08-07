@@ -41,6 +41,13 @@ Extract numeric years (e.g., "5+ years" → 5) and infer seniority level.
 Set "company" to the hiring company name and "role" to the job title exactly as
 written in the posting; use an empty string for either if it is not stated.
 
+"required_skills", "preferred_skills", and "keywords" MUST be concrete skill
+tokens or short noun phrases (e.g. "Python", "CI/CD", "distributed systems"),
+NOT full requirement sentences. Do not put clauses like "4-6+ years of
+experience building large-scale web apps" in these arrays — extract the concrete
+skills from such sentences instead (e.g. "large-scale web apps"). Prose belongs
+in "experience_requirements" / "key_responsibilities".
+
 Job description:
 {job_description}"""  # noqa: E501
 """Job-keyword extraction prompt (from apps/backend/app/prompts/templates.py)."""
