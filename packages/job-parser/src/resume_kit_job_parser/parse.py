@@ -40,6 +40,7 @@ from resume_kit_core.providers import (
     StructuredCompletionRequest,
 )
 from resume_kit_schemas.job import JobDescription, Requirement, RequirementKind
+from resume_kit_schemas.keyword_hygiene import sanitize_keywords
 
 from .prompts import EXTRACT_KEYWORDS_PROMPT
 
@@ -70,9 +71,15 @@ def _coerce_str_list(value: Any) -> list[str]:
 
 
 def _requirements_from(items: Any, kind: RequirementKind) -> list[Requirement]:
-    """Build :class:`Requirement` objects from a list of skill/text strings."""
+    """Build :class:`Requirement` objects from a list of skill/text strings.
+
+    RIT-T-0128: the requirement ``text`` is preserved verbatim (a sentence is a
+    legitimate requirement to display), but ``keywords`` is passed through the
+    hygiene gate so a prose ``text`` yields an empty keyword list instead of a
+    sentence masquerading as a matchable token.
+    """
     return [
-        Requirement(text=text, kind=kind, keywords=[text])
+        Requirement(text=text, kind=kind, keywords=sanitize_keywords([text]))
         for text in _coerce_str_list(items)
     ]
 
@@ -100,18 +107,20 @@ def _map_to_job_description(parsed: dict[str, Any], raw_text: str) -> JobDescrip
     )
 
     # Aggregate all salient terms: explicit keywords + every skill mentioned.
-    keywords: list[str] = []
-    seen: set[str] = set()
-    for source in (
-        parsed.get("keywords"),
-        parsed.get("required_skills"),
-        parsed.get("preferred_skills"),
-    ):
-        for term in _coerce_str_list(source):
-            lowered = term.casefold()
-            if lowered not in seen:
-                seen.add(lowered)
-                keywords.append(term)
+    # RIT-T-0128: pass the aggregate through the hygiene gate so sentence-shaped
+    # "skills" never land in JobDescription.keywords (dedup + order-preserving is
+    # handled by sanitize_keywords itself).
+    keywords = sanitize_keywords(
+        [
+            term
+            for source in (
+                parsed.get("keywords"),
+                parsed.get("required_skills"),
+                parsed.get("preferred_skills"),
+            )
+            for term in _coerce_str_list(source)
+        ]
+    )
 
     summary_parts: list[str] = []
     seniority = _coerce_str(parsed.get("seniority_level"))

@@ -712,13 +712,25 @@ def init(
 @app.command(name="set-active")
 def set_active(
     resume: str | None = typer.Option(
-        None, "--resume", help="Active resume JSON path (relative to resume-kit/)."
+        None,
+        "--resume",
+        help=(
+            "Active resume JSON path. Accepts either the working-dir-relative "
+            "form (resumes/x.json) or the cwd-relative form "
+            "(resume-kit/resumes/x.json); both are normalized to the same pointer."
+        ),
     ),
     resume_source: str | None = typer.Option(
         None, "--source", help="Original source file the active resume came from."
     ),
     job: str | None = typer.Option(
-        None, "--job", help="Active job JSON path (relative to resume-kit/)."
+        None,
+        "--job",
+        help=(
+            "Active job JSON path. Accepts either the working-dir-relative form "
+            "(jobs/x.json) or the cwd-relative form (resume-kit/jobs/x.json); "
+            "both are normalized to the same pointer."
+        ),
     ),
     job_source: str | None = typer.Option(
         None, "--job-source", help="Original source file the active job came from."

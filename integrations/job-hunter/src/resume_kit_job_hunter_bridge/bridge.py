@@ -126,7 +126,7 @@ async def analyze_resume_for_job(
         opts,
     )
     gaps = await _dispatch(
-        "identify-resume-gaps",
+        "check-gaps",
         IdentifyResumeGapsRequest(
             job=job, tailored=resume, master=baseline, alias_file=alias_file
         ),
@@ -162,14 +162,15 @@ async def validate_truth(
     *,
     options: CapabilityOptions | None = None,
 ) -> InterfaceResponse[object]:
-    """Validate ``resume`` against ``evidence`` via ``validate-resume-truth``.
+    """Validate ``resume`` against ``evidence`` via ``validate-facts``.
 
     Deterministic and provider-free; returns a canonical ``TruthReport``
-    response.
+    response. (Capability renamed from ``validate-resume-truth`` to
+    ``validate-facts`` in RIT-A-0005; this bridge dispatch was stale.)
     """
     opts = options or CapabilityOptions()
     return await _dispatch(
-        "validate-resume-truth",
+        "validate-facts",
         ValidateResumeTruthRequest(resume=resume, evidence=list(evidence or [])),
         opts,
     )
@@ -188,7 +189,7 @@ async def build_evidence(
     """
     opts = options or CapabilityOptions()
     return await _dispatch(
-        "build-candidate-evidence",
+        "extract-evidence",
         BuildCandidateEvidenceRequest(resume=resume, approved_claims=approved_claims),
         opts,
     )

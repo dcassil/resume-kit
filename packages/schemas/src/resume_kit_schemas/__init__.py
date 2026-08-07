@@ -64,6 +64,7 @@ from .feedback import (
     UserPreferenceProfile,
 )
 from .job import JobDescription, Requirement, RequirementKind
+from .keyword_hygiene import is_concrete_keyword, sanitize_keywords
 from .provenance import ClaimProvenance, ProvenanceReasonCode, ProvenanceStatus
 from .results import (
     AlignmentResult,
@@ -112,6 +113,9 @@ from .scoredoc import (
 __version__ = "0.0.0"
 
 __all__ = [
+    # keyword hygiene (RIT-T-0128)
+    "is_concrete_keyword",
+    "sanitize_keywords",
     # scoredoc (RIT-I-0017)
     "SCOREDOC_SCHEMA_VERSION",
     "KeywordZone",

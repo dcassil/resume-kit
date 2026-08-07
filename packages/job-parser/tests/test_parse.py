@@ -117,6 +117,35 @@ async def test_partial_dict_tolerates_missing_fields() -> None:
     assert result.keywords == ["SQL"]
 
 
+@pytest.mark.asyncio
+async def test_sentence_skill_dropped_from_keywords_but_text_retained() -> None:
+    # RIT-T-0128: a prose "skill" must not enter keywords / requirement keywords,
+    # but the requirement text is preserved verbatim for display.
+    sentence = "4-6+ years of professional experience building large-scale web apps"
+    provider = FakeStructuredCompletionProvider(
+        responses=[
+            {
+                "role": "Engineer",
+                "required_skills": ["Python", sentence],
+                "keywords": ["React", sentence],
+            }
+        ]
+    )
+
+    result = await parse_job_description(_RAW_TEXT, provider)
+
+    # The prose never appears as a keyword...
+    assert sentence not in result.keywords
+    assert result.keywords == ["React", "Python"]
+    # ...and the prose requirement carries no sentence-shaped keyword.
+    prose_reqs = [r for r in result.requirements if r.text == sentence]
+    assert len(prose_reqs) == 1  # text retained for display
+    assert prose_reqs[0].keywords == []  # but no fake keyword token
+    # The concrete requirement keeps its token.
+    python_reqs = [r for r in result.requirements if r.text == "Python"]
+    assert python_reqs[0].keywords == ["Python"]
+
+
 def test_text_only_path_preserves_raw_text() -> None:
     result = parse_job_description_text_only(_RAW_TEXT)
 

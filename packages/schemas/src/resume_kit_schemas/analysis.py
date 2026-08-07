@@ -236,6 +236,14 @@ class KeywordGapAnalysis(BaseModel):
             "(exact/stem/alias). Synonym-aware (RIT-I-0008)."
         ),
     )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Non-fatal advisories about input degeneracy that make the "
+            "injectable/non-injectable split unreliable (e.g. tailored and "
+            "master resolve to near-identical content). Empty on normal runs."
+        ),
+    )
 
 
 class AlignmentViolation(BaseModel):

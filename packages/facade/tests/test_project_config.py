@@ -24,6 +24,7 @@ from resume_kit_facade.project_config import (
     save_config,
     save_evidence_file,
     set_active,
+    working_dir,
 )
 from resume_kit_schemas import CandidateEvidence, EvidenceKind
 
@@ -105,6 +106,35 @@ def test_load_preserves_unknown_keys_on_model(tmp_path: Path) -> None:
     config = load_config(tmp_path)
     dumped = config.model_dump(mode="json")
     assert dumped["future_key"] == 42
+
+
+def test_set_active_strips_working_dir_prefix(tmp_path: Path) -> None:
+    # RIT-T-0127: cwd-relative input (resume-kit/...) is normalized to the
+    # working-dir-relative pointer so build-base does not double the prefix.
+    init_project(tmp_path)
+    result = set_active(
+        tmp_path,
+        resume="resume-kit/resumes/x-original.json",
+        job="resume-kit/jobs/j.json",
+    )
+    assert result.active_resume == "resumes/x-original.json"
+    assert result.active_job == "jobs/j.json"
+    # Round-trip: the stored pointer resolves under the working dir, no doubling.
+    resolved = working_dir(tmp_path) / result.active_resume
+    assert "resume-kit/resume-kit" not in str(resolved)
+    assert resolved == working_dir(tmp_path) / "resumes/x-original.json"
+
+
+def test_set_active_leaves_wd_relative_and_absolute_unchanged(tmp_path: Path) -> None:
+    # RIT-T-0127: already-wd-relative and absolute inputs pass through as-is.
+    init_project(tmp_path)
+    result = set_active(
+        tmp_path,
+        resume="resumes/x-original.json",
+        resume_source="/abs/path/x.docx",
+    )
+    assert result.active_resume == "resumes/x-original.json"
+    assert result.active_resume_source == "/abs/path/x.docx"
 
 
 def test_set_active_source_without_document_is_rejected(tmp_path: Path) -> None:
