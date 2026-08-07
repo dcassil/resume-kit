@@ -16,10 +16,11 @@ Each finding is classified per :class:`~resume_kit_schemas.ResolutionKind`:
 dropping a buzzword or a weak opener), ``needs_user_input`` when the fix requires
 facts the system does not have (e.g. a real metric to quantify an accomplishment).
 
-Implemented wording rules (deterministic): WEAK_OPENER, FIRST_PERSON_OPENER,
-BUZZWORD, MISSING_QUANTIFICATION. Further rules (duplicate-bullet,
-equal-detail-per-job, tense/punctuation consistency) are deferred to follow-up
-increments and are intentionally not silently claimed here.
+Implemented wording rules (deterministic): WEAK_OPENER, PASSIVE_OPENER,
+VAGUE_IMPACT, DUTY_PATTERN, FIRST_PERSON_OPENER, BUZZWORD,
+MISSING_QUANTIFICATION. Further rules (duplicate-bullet, equal-detail-per-job,
+tense/punctuation consistency) are deferred to follow-up increments and are
+intentionally not silently claimed here.
 
 ``MISSING_QUANTIFICATION`` emits one needs-input finding for each unquantified
 experience bullet, with its exact bullet location and per-bullet elicitation
@@ -52,6 +53,29 @@ _WEAK_OPENERS = (
     "helped with",
     "assisted with",
     "involved in",
+)
+_PASSIVE_STRIP_PREFIXES = (
+    "was responsible for",
+    "were responsible for",
+    "was tasked with",
+    "were tasked with",
+)
+_PASSIVE_GENERIC_RE = re.compile(
+    r"^\s*(?:was|were)\s+([a-z]+(?:ed|en)\b.*)", re.IGNORECASE
+)
+_VAGUE_IMPACT_PREFIXES = (
+    ("helped to", ""),
+    ("helped with", "Supported"),
+    ("worked to", ""),
+    ("contributed to", "Supported"),
+    ("in charge of", "Managed"),
+    ("tasked with", ""),
+)
+_DUTY_PATTERN_PREFIXES = (
+    ("handled", "Managed"),
+    ("managed to", ""),
+    ("participated in", "Supported"),
+    ("engaged in", "Supported"),
 )
 _FIRST_PERSON_RE = re.compile(r"^\s*(i|my|me)\b", re.IGNORECASE)
 _BUZZWORDS = (
@@ -110,6 +134,14 @@ def _strip_words(text: str, words: list[str]) -> str:
     return cleaned or text
 
 
+def _replace_prefix(text: str, prefix: str, replacement: str) -> str:
+    """Replace leading *prefix* with *replacement*, preserving the original object."""
+    if not replacement:
+        return _strip_prefix(text, prefix)
+    rest = text[len(prefix):].lstrip(" :,-")
+    return f"{replacement} {rest}".strip() if rest else text
+
+
 def summary_too_long(summary: str, word_limit: int = _SUMMARY_WORD_LIMIT) -> bool:
     """Return True when ``summary`` exceeds the standard summary word limit.
 
@@ -150,6 +182,28 @@ def _weak_opener(text: str) -> str | None:
     return None
 
 
+def _passive_opener(text: str) -> tuple[str, str] | None:
+    low = text.lower()
+    for opener in _PASSIVE_STRIP_PREFIXES:
+        if low.startswith(opener):
+            return opener, _strip_prefix(text, opener)
+
+    match = _PASSIVE_GENERIC_RE.match(text)
+    if not match:
+        return None
+    stripped = match.group(1).lstrip(" :,-")
+    opener = match.group(0).split(maxsplit=1)[0]
+    return opener, stripped[:1].upper() + stripped[1:] if stripped else text
+
+
+def _prefix_rewrite(text: str, prefixes: tuple[tuple[str, str], ...]) -> tuple[str, str] | None:
+    low = text.lower()
+    for prefix, replacement in prefixes:
+        if low.startswith(prefix):
+            return prefix, _replace_prefix(text, prefix, replacement)
+    return None
+
+
 def _bullets(resume: ResumeDocument) -> Iterator[tuple[str, int, str]]:
     """Yield (entity_id, bullet_index, text) for every experience bullet."""
     for exp in resume.workExperience:
@@ -174,8 +228,68 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             section="experience", zone="experience", entity_id=entity_id, bullet_index=idx
         )
 
-        opener = _weak_opener(bullet)
-        if opener:
+        # These opener rewrites are claim-gated by construction: they only
+        # remove or replace mechanical wording frames around the existing
+        # object, so employer/title/skill/degree facts and claimed outcomes are
+        # not changed.
+        #
+        # Precedence: run the more specific mechanical rules before legacy
+        # WEAK_OPENER. Shared phrase families such as "helped with" therefore
+        # emit one targeted finding instead of competing suggested rewrites.
+        passive = _passive_opener(bullet)
+        vague = _prefix_rewrite(bullet, _VAGUE_IMPACT_PREFIXES) if not passive else None
+        duty = (
+            _prefix_rewrite(bullet, _DUTY_PATTERN_PREFIXES)
+            if not passive and not vague
+            else None
+        )
+        opener = _weak_opener(bullet) if not passive and not vague and not duty else None
+        if passive:
+            passive_opener, suggested_change = passive
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="PASSIVE_OPENER",
+                    message=(
+                        f"Bullet opens with the passive phrase '{passive_opener}';"
+                        " lead with the action directly."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=suggested_change,
+                )
+            )
+        elif vague:
+            vague_opener, suggested_change = vague
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="VAGUE_IMPACT",
+                    message=(
+                        f"Bullet opens with the vague filler phrase '{vague_opener}';"
+                        " keep the object and lead with the work."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=suggested_change,
+                )
+            )
+        elif duty:
+            duty_opener, suggested_change = duty
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="DUTY_PATTERN",
+                    message=(
+                        f"Bullet opens with the duty phrase '{duty_opener}';"
+                        " reword it as direct contribution."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=suggested_change,
+                )
+            )
+        elif opener:
             findings.append(
                 BestPracticesFinding(
                     rule_code="WEAK_OPENER",

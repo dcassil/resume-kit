@@ -34,6 +34,10 @@ def _quantification_findings(report):
     return [f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION"]
 
 
+def _findings(report, rule_code: str):
+    return [f for f in report.findings if f.rule_code == rule_code]
+
+
 def test_weak_opener_is_auto_suggestible_with_rewrite() -> None:
     resume = ResumeDocument(
         workExperience=[
@@ -51,6 +55,94 @@ def test_weak_opener_is_auto_suggestible_with_rewrite() -> None:
     assert weak.resolution_kind is ResolutionKind.AUTO_SUGGESTIBLE
     assert weak.suggested_change and not weak.suggested_change.lower().startswith("responsible")
     assert weak.location.bullet_index == 0
+
+
+@pytest.mark.parametrize(
+    ("rule_code", "bullet", "expected"),
+    [
+        (
+            "PASSIVE_OPENER",
+            "Was responsible for maintaining the billing service.",
+            "Maintaining the billing service.",
+        ),
+        (
+            "VAGUE_IMPACT",
+            "Helped to improve onboarding docs.",
+            "Improve onboarding docs.",
+        ),
+        (
+            "DUTY_PATTERN",
+            "Participated in release planning.",
+            "Supported release planning.",
+        ),
+    ],
+)
+def test_mechanical_wording_rules_are_auto_suggestible_with_rewrites(
+    rule_code: str,
+    bullet: str,
+    expected: str,
+) -> None:
+    resume = ResumeDocument(
+        workExperience=[
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=[bullet],
+            )
+        ]
+    )
+    report = _analyze(resume)
+    finding = next(f for f in report.findings if f.rule_code == rule_code)
+    assert finding.resolution_kind is ResolutionKind.AUTO_SUGGESTIBLE
+    assert finding.suggested_change == expected
+
+
+@pytest.mark.parametrize(
+    ("rule_code", "bullet"),
+    [
+        ("PASSIVE_OPENER", "Maintained the billing service for 3 product teams."),
+        ("VAGUE_IMPACT", "Improved onboarding docs for 3 product teams."),
+        ("DUTY_PATTERN", "Resolved release planning blockers for 3 product teams."),
+    ],
+)
+def test_clean_bullets_do_not_trigger_mechanical_wording_rules(
+    rule_code: str,
+    bullet: str,
+) -> None:
+    resume = ResumeDocument(
+        workExperience=[
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=[bullet],
+            )
+        ]
+    )
+    assert rule_code not in _codes(_analyze(resume))
+
+
+def test_specific_wording_rule_precedes_overlapping_weak_opener() -> None:
+    resume = ResumeDocument(
+        workExperience=[
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=["Helped with release planning across 3 product teams."],
+            )
+        ]
+    )
+    report = _analyze(resume)
+    vague = _findings(report, "VAGUE_IMPACT")
+
+    assert len(vague) == 1
+    assert vague[0].suggested_change == "Supported release planning across 3 product teams."
+    assert "WEAK_OPENER" not in _codes(report)
 
 
 def test_first_person_opener_flagged_and_stripped() -> None:
