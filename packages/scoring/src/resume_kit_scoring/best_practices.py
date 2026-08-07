@@ -16,11 +16,10 @@ Each finding is classified per :class:`~resume_kit_schemas.ResolutionKind`:
 dropping a buzzword or a weak opener), ``needs_user_input`` when the fix requires
 facts the system does not have (e.g. a real metric to quantify an accomplishment).
 
-Implemented rules (deterministic): WEAK_OPENER, FIRST_PERSON_OPENER, BUZZWORD,
-MISSING_QUANTIFICATION, MISSING_QUANTIFICATION_MORE, FOUNDATIONAL_SKILL,
-SUMMARY_TOO_LONG. Further rules (duplicate-bullet, equal-detail-per-job,
-tense/punctuation consistency) are deferred to follow-up increments and are
-intentionally not silently claimed here.
+Implemented wording rules (deterministic): WEAK_OPENER, FIRST_PERSON_OPENER,
+BUZZWORD, MISSING_QUANTIFICATION, MISSING_QUANTIFICATION_MORE. Further rules
+(duplicate-bullet, equal-detail-per-job, tense/punctuation consistency) are
+deferred to follow-up increments and are intentionally not silently claimed here.
 
 ``MISSING_QUANTIFICATION`` is capped and prioritized (RIT-T-0130): rather than
 one prompt per unquantified bullet (a low-density "wall"), at most
@@ -33,7 +32,7 @@ advisory names the remaining count so the cap is never a silent truncation.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 from resume_kit_schemas import (
     BestPracticesFinding,
@@ -114,6 +113,38 @@ def _strip_words(text: str, words: list[str]) -> str:
     cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,.;")
     # Fall back to the original if stripping emptied the text (validator needs a value).
     return cleaned or text
+
+
+def summary_too_long(summary: str, word_limit: int = _SUMMARY_WORD_LIMIT) -> bool:
+    """Return True when ``summary`` exceeds the standard summary word limit.
+
+    This detector is intentionally kept out of :func:`analyze_best_practices`
+    because summary length is a content/framing concern, not a deterministic
+    wording rewrite rule. Callers that need a summary-length advisory can opt in
+    without mixing it into the standard wording pass.
+    """
+    return len(summary.split()) > word_limit
+
+
+def detect_summary_too_long(summary: str, word_limit: int = _SUMMARY_WORD_LIMIT) -> bool:
+    """Compatibility wrapper for the summary-length detector."""
+    return summary_too_long(summary, word_limit)
+
+
+def foundational_skills(skills: Iterable[str]) -> list[str]:
+    """Return foundational skills that are better handled by guidance surfaces.
+
+    Foundational-tool hygiene is not emitted by :func:`analyze_best_practices`
+    because removing skills is a content decision. The detector stays available
+    for future guidance/reporting code that can route the advice through the
+    proper human-review surface.
+    """
+    return [skill for skill in skills if skill.strip().lower() in _FOUNDATIONAL_SKILLS]
+
+
+def detect_foundational_skills(skills: Iterable[str]) -> list[str]:
+    """Compatibility wrapper for the foundational-skills detector."""
+    return foundational_skills(skills)
 
 
 def _weak_opener(text: str) -> str | None:
@@ -239,7 +270,7 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             )
         )
 
-    # Summary in the buzzword scan + length.
+    # Summary participates only in wording checks.
     if resume.summary.strip():
         loc = FindingLocation(section="summary", zone="summary")
         matched_bw = [w for w in _BUZZWORDS if w in resume.summary.lower()]
@@ -258,41 +289,6 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
                     suggested_change=_strip_words(resume.summary, matched_bw),
                 )
             )
-        if len(resume.summary.split()) > _SUMMARY_WORD_LIMIT:
-            findings.append(
-                BestPracticesFinding(
-                    rule_code="SUMMARY_TOO_LONG",
-                    message=(
-                        f"Summary is longer than ~{_SUMMARY_WORD_LIMIT} words; tighten to 2-4 "
-                        "lines of identity, specialization, scale, and value."
-                    ),
-                    location=loc,
-                    severity=FindingSeverity.REVIEW_NOTE,
-                    resolution_kind=ResolutionKind.NEEDS_USER_INPUT,
-                    elicitation_prompt=(
-                        "Which one specialization and what scale/level best define you? "
-                        "We will tighten the summary around that."
-                    ),
-                )
-            )
-
-    # Foundational skills dilute the skills section.
-    for skill in resume.additional.technicalSkills:
-        if skill.strip().lower() in _FOUNDATIONAL_SKILLS:
-            findings.append(
-                BestPracticesFinding(
-                    rule_code="FOUNDATIONAL_SKILL",
-                    message=(
-                        f"'{skill}' is a foundational tool that weakens the skills section;"
-                        " remove it."
-                    ),
-                    location=FindingLocation(section="skills", zone="skills_list"),
-                    severity=FindingSeverity.RECOMMENDATION,
-                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
-                    suggested_change=f"Remove '{skill}' from the skills list.",
-                )
-            )
-
     return BestPracticesReport(
         report_provenance=ProvenanceKind.DETERMINISTIC,
         findings=findings,

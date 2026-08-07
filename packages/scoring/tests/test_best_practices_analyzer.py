@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 
+import pytest
 from resume_kit_schemas import (
     AdditionalInfo,
     Experience,
@@ -11,7 +13,12 @@ from resume_kit_schemas import (
     ResolutionKind,
     ResumeDocument,
 )
-from resume_kit_scoring import analyze_best_practices, project_scoredoc
+from resume_kit_scoring import (
+    analyze_best_practices,
+    foundational_skills,
+    project_scoredoc,
+    summary_too_long,
+)
 
 _REF = date(2025, 1, 1)
 
@@ -137,11 +144,29 @@ def test_buzzword_in_summary_auto_suggestible() -> None:
     assert bw and all(f.resolution_kind is ResolutionKind.AUTO_SUGGESTIBLE for f in bw)
 
 
-def test_foundational_skill_flagged() -> None:
-    resume = ResumeDocument(additional=AdditionalInfo(technicalSkills=["Python", "Email"]))
+@pytest.mark.parametrize(
+    ("rule_code", "resume", "detector_hit"),
+    [
+        (
+            "SUMMARY_TOO_LONG",
+            ResumeDocument(summary=" ".join(f"word{i}" for i in range(61))),
+            lambda: summary_too_long(" ".join(f"word{i}" for i in range(61))),
+        ),
+        (
+            "FOUNDATIONAL_SKILL",
+            ResumeDocument(additional=AdditionalInfo(technicalSkills=["Python", "Email"])),
+            lambda: foundational_skills(["Python", "Email"]) == ["Email"],
+        ),
+    ],
+)
+def test_non_wording_rules_are_detectors_not_best_practice_findings(
+    rule_code: str,
+    resume: ResumeDocument,
+    detector_hit: Callable[[], bool],
+) -> None:
     report = _analyze(resume)
-    fs = next(f for f in report.findings if f.rule_code == "FOUNDATIONAL_SKILL")
-    assert fs.severity is FindingSeverity.RECOMMENDATION
+    assert detector_hit()
+    assert rule_code not in _codes(report)
 
 
 def test_clean_bullet_produces_no_wording_findings() -> None:

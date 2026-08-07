@@ -8,8 +8,15 @@ from resume_kit_scoring.base_fix import (
     apply_auto_fixes,
     claim_diff,
     claims_preserved,
+    content_preserved,
 )
-from resume_kit_scoring.best_practices import analyze_best_practices
+from resume_kit_scoring.best_practices import (
+    analyze_best_practices,
+    detect_foundational_skills,
+    detect_summary_too_long,
+    foundational_skills,
+    summary_too_long,
+)
 from resume_kit_scoring.projection import project_scoredoc
 from resume_kit_scoring.standard_fix import (
     StandardFixResult,
@@ -26,6 +33,11 @@ __all__ = [
     "build_ats_view",
     "claim_diff",
     "claims_preserved",
+    "content_preserved",
+    "detect_foundational_skills",
+    "detect_summary_too_long",
     "finding_key",
+    "foundational_skills",
     "project_scoredoc",
+    "summary_too_long",
 ]
