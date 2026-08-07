@@ -80,6 +80,12 @@ class ProjectConfig(BaseModel):
         base_derived_from: The resume path ``base_resume`` was derived from (by
             convention the original ``active_resume``), recording lineage. Only
             written together with ``base_resume``.
+        structure_resume: Path of the canonical ``structure`` resume JSON —
+            ``base`` after the lossless shape pass (RIT-I-0019). ``None`` until
+            canonicalization produces it.
+        structure_derived_from: The resume path ``structure_resume`` was derived
+            from (by convention ``base_resume``), recording lineage. Only
+            written together with ``structure_resume``.
         standard_resume: Path of the ``standard`` resume JSON — ``base`` after
             the generic best-practices human-in-the-loop pass (RIT-I-0016). This
             is the default input for all downstream tailoring once present.
@@ -100,6 +106,8 @@ class ProjectConfig(BaseModel):
     active_evidence: str | None = None
     base_resume: str | None = None
     base_derived_from: str | None = None
+    structure_resume: str | None = None
+    structure_derived_from: str | None = None
     standard_resume: str | None = None
     standard_derived_from: str | None = None
 
@@ -279,14 +287,21 @@ def set_active(
 def resolve_active_resume(config: ProjectConfig) -> str | None:
     """Resolve the resume path downstream tailoring should consume.
 
-    Implements the version-lineage precedence ``standard -> base -> original``:
-    prefer the best-practices-groomed ``standard_resume``, then the ATS-cleaned
-    ``base_resume``, then the immutable original ``active_resume``. A project
-    that only ever set ``active_resume`` (the pre-RIT-I-0016 world) therefore
-    resolves to exactly that original, so this is fully backward-compatible.
+    Implements the version-lineage precedence
+    ``standard -> structure -> base -> original``: prefer the best-practices
+    groomed ``standard_resume``, then the canonicalized ``structure_resume``,
+    then the ATS-cleaned ``base_resume``, then the immutable original
+    ``active_resume``. A project that only ever set ``active_resume`` (the
+    pre-RIT-I-0016 world) therefore resolves to exactly that original, so this
+    is fully backward-compatible.
     Returns ``None`` only when no resume pointer of any tier is set.
     """
-    return config.standard_resume or config.base_resume or config.active_resume
+    return (
+        config.standard_resume
+        or config.structure_resume
+        or config.base_resume
+        or config.active_resume
+    )
 
 
 def set_version(
@@ -294,29 +309,37 @@ def set_version(
     *,
     base: str | None = None,
     base_derived_from: str | None = None,
+    structure: str | None = None,
+    structure_derived_from: str | None = None,
     standard: str | None = None,
     standard_derived_from: str | None = None,
 ) -> ProjectConfig:
-    """Record the ``base`` and/or ``standard`` version pointers plus lineage.
+    """Record version pointers plus lineage.
 
     Mirrors :func:`set_active`'s contract: loads the existing config (preserving
     unknown keys and any pointer not being changed), sets whichever of
-    ``base_resume`` / ``standard_resume`` (and their ``*_derived_from``
+    ``base_resume`` / ``structure_resume`` / ``standard_resume`` (and their
+    ``*_derived_from``
     companions) were supplied, and saves atomically. A ``*_derived_from`` given
     without its matching pointer is a caller error (``ValueError``) so lineage
     can never drift away from the version it describes. Additive: it never
     touches ``active_resume`` (the original). Returns the updated config.
     """
-    if base is None and standard is None:
-        raise ValueError("set_version requires at least one of base or standard.")
+    if base is None and structure is None and standard is None:
+        raise ValueError("set_version requires at least one version pointer.")
     if base_derived_from is not None and base is None:
         raise ValueError("base_derived_from given without a base.")
+    if structure_derived_from is not None and structure is None:
+        raise ValueError("structure_derived_from given without a structure.")
     if standard_derived_from is not None and standard is None:
         raise ValueError("standard_derived_from given without a standard.")
     config = load_config(root)
     if base is not None:
         config.base_resume = _normalize_pointer(base)
         config.base_derived_from = _normalize_pointer(base_derived_from)
+    if structure is not None:
+        config.structure_resume = _normalize_pointer(structure)
+        config.structure_derived_from = _normalize_pointer(structure_derived_from)
     if standard is not None:
         config.standard_resume = _normalize_pointer(standard)
         config.standard_derived_from = _normalize_pointer(standard_derived_from)

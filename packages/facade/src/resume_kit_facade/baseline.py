@@ -15,6 +15,7 @@ altered (:func:`resume_kit_scoring.claims_preserved`).
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -22,13 +23,21 @@ from pathlib import Path
 from resume_kit_ats.engine import check_ats_structure
 from resume_kit_core import ErrorCode, ResumeKitError
 from resume_kit_document_parser import detect_source_parse_risks
+from resume_kit_policy import load_shape_policy
 from resume_kit_schemas import AtsStructureFinding, AtsStructureReport, ResumeDocument
+from resume_kit_schemas.canonical import CanonicalSection, Resume
+from resume_kit_schemas.shape import ContentLedger, SectionMapping, ShapeReport
 from resume_kit_scoring import (
     analyze_best_practices,
+    analyze_resume_shape,
     apply_auto_fixes,
     apply_best_practices_edits,
+    apply_shape_transforms,
     claim_diff,
     claims_preserved,
+    claims_preserved_across_sections,
+    content_ledger_ok,
+    project_builddoc_from_canonical,
     project_scoredoc,
 )
 
@@ -60,11 +69,24 @@ class BuildStandardResult:
     deferred: list[str] = field(default_factory=list)
 
 
+@dataclass
+class BuildStructureResult:
+    """Outcome of the ``base -> structure`` canonical shape build."""
+
+    structure_path: str | None
+    report: ShapeReport
+    ledger: ContentLedger
+    ledger_ok: bool
+    claims_ok: bool
+    applied: list[str] = field(default_factory=list)
+    deferred: list[str] = field(default_factory=list)
+
+
 def _version_path_for(rel: str, suffix: str) -> str:
     """Derive a ``-<suffix>.json`` sibling path from a version pointer."""
     p = Path(rel)
     stem = p.name
-    for known in ("-original", "-base", "-standard"):
+    for known in ("-original", "-base", "-structure", "-standard"):
         if known in stem:
             return str(p.with_name(stem.replace(known, f"-{suffix}")))
     if stem.endswith(".json"):
@@ -166,6 +188,72 @@ def build_base(root: str | Path, *, mode: str = "auto") -> BuildBaseResult:
     return BuildBaseResult(base_path=base_rel, applied=fix.applied, deferred=fix.deferred)
 
 
+type ShapeDecision = CanonicalSection | SectionMapping | str
+
+
+def build_structure(
+    root: str | Path,
+    *,
+    answers: Mapping[str, str] | None = None,
+    decisions: Mapping[str, ShapeDecision] | None = None,
+) -> BuildStructureResult:
+    """Produce the canonical ``structure`` version from ``base`` or original.
+
+    The structure pass is deterministic and non-destructive. It resolves
+    ``base ?? original``, applies report-driven shape transforms, and writes the
+    canonical ``Resume`` only when both hard gates pass. Gate failure returns the
+    report and ledger details without writing an artifact or mutating config.
+    """
+    config = load_config(root)
+    source_rel = config.base_resume or config.active_resume
+    if not source_rel:
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, "No base or active_resume set."
+        )
+
+    source_file = working_dir(root) / source_rel
+    if not source_file.exists():
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, f"Source resume not found: {source_rel}."
+        )
+
+    source = ResumeDocument.model_validate(json.loads(source_file.read_text(encoding="utf-8")))
+    report = analyze_resume_shape(source, load_shape_policy(root))
+    decision_map: Mapping[str, ShapeDecision] = (
+        decisions if decisions is not None else answers or {}
+    )
+    fix = apply_shape_transforms(source, report, decision_map)
+    ledger_ok = content_ledger_ok(fix.ledger)
+    claims_ok = claims_preserved_across_sections(source, fix.resume)
+    applied = [finding.code for finding in fix.applied_findings]
+    deferred = [finding.code for finding in fix.deferred_findings]
+
+    if not ledger_ok or not claims_ok:
+        return BuildStructureResult(
+            structure_path=None,
+            report=report,
+            ledger=fix.ledger,
+            ledger_ok=ledger_ok,
+            claims_ok=claims_ok,
+            applied=applied,
+            deferred=deferred,
+        )
+
+    structure_rel = _version_path_for(source_rel, "structure")
+    atomic_write_json(working_dir(root) / structure_rel, fix.resume.model_dump(mode="json"))
+    set_version(root, structure=structure_rel, structure_derived_from=source_rel)
+
+    return BuildStructureResult(
+        structure_path=structure_rel,
+        report=report,
+        ledger=fix.ledger,
+        ledger_ok=True,
+        claims_ok=True,
+        applied=applied,
+        deferred=deferred,
+    )
+
+
 def build_standard(
     root: str | Path,
     *,
@@ -183,9 +271,11 @@ def build_standard(
     ``deferred`` for the caller to elicit and re-run.
     """
     config = load_config(root)
-    source_rel = config.base_resume or config.active_resume
+    source_rel = config.structure_resume or config.base_resume or config.active_resume
     if not source_rel:
-        raise ResumeKitError.from_code(ErrorCode.VALIDATION_FAILED, "No base or active_resume set.")
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, "No base or active_resume set."
+        )
 
     source_file = working_dir(root) / source_rel
     if not source_file.exists():
@@ -193,7 +283,12 @@ def build_standard(
             ErrorCode.VALIDATION_FAILED, f"Source resume not found: {source_rel}."
         )
 
-    source = ResumeDocument.model_validate(json.loads(source_file.read_text(encoding="utf-8")))
+    source_raw = json.loads(source_file.read_text(encoding="utf-8"))
+    source = (
+        project_builddoc_from_canonical(Resume.model_validate(source_raw))
+        if source_rel == config.structure_resume
+        else ResumeDocument.model_validate(source_raw)
+    )
     scoredoc = project_scoredoc(source, reference_date=_PLACEMENT_REF_DATE)
     report = analyze_best_practices(source, scoredoc)
     edit = apply_best_practices_edits(source, report, answers or {})
@@ -214,4 +309,11 @@ def build_standard(
     )
 
 
-__all__ = ["BuildBaseResult", "BuildStandardResult", "build_base", "build_standard"]
+__all__ = [
+    "BuildBaseResult",
+    "BuildStandardResult",
+    "BuildStructureResult",
+    "build_base",
+    "build_standard",
+    "build_structure",
+]

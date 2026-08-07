@@ -22,10 +22,12 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AnalyzeShapeRequest,
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
+    BuildStructureRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -94,6 +96,8 @@ TOOL_NAMES: tuple[str, ...] = (
     "project_init",
     "project_set_active",
     "resume_build_base",
+    "resume_analyze_shape",
+    "resume_build_structure",
     "resume_build_standard",
     "resume_analyze_best_practices",
     "resume_ats_view",
@@ -901,6 +905,34 @@ async def resume_build_standard(arguments: ToolArguments) -> ToolResult:
     return await _call("build-standard", request, arguments)
 
 
+async def resume_analyze_shape(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            AnalyzeShapeRequest,
+            {
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+                "root": _optional_string(arguments, "root", "."),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("analyze-shape", request, arguments)
+
+
+async def resume_build_structure(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            BuildStructureRequest,
+            {
+                "root": _optional_string(arguments, "root", "."),
+                "answers": _optional_answers(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("build-structure", request, arguments)
+
+
 async def resume_analyze_best_practices(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -1058,6 +1090,8 @@ HANDLERS: dict[str, ToolHandler] = {
     "project_init": project_init,
     "project_set_active": project_set_active,
     "resume_build_base": resume_build_base,
+    "resume_analyze_shape": resume_analyze_shape,
+    "resume_build_structure": resume_build_structure,
     "resume_build_standard": resume_build_standard,
     "resume_analyze_best_practices": resume_analyze_best_practices,
     "resume_ats_view": resume_ats_view,

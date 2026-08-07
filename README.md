@@ -83,17 +83,21 @@ view of the sections, entities/YoE, and zoned keywords an ATS is likely to parse
 (`resume-tool ats-view --resume <path>`), identical across the CLI, MCP, API, and
 facade surfaces.
 
-### Resume baselining (`original → base → standard`)
+### Resume baselining (`original → base → structure → standard`)
 
 Before any job-specific tailoring, a resume moves through a fixed, deterministic
-baselining lineage that produces three tracked versions:
+baselining lineage that produces four tracked versions:
 
 ```bash
 resume-tool build-base                              # original → base (auto): strips PII, normalizes
                                                     #   presentation, behind the claim-preservation gate
+resume-tool analyze-shape \                         # base → structure report: redundant/non-standard
+  --resume resumes/resume-base.json                 #   sections, mappings, and informational budgets
+resume-tool build-structure                         # base → structure: canonicalizes shape losslessly
+                                                    #   behind ledger + claims-preserved gates
 resume-tool analyze-best-practices \                # job-independent best-practices report; each finding
-  --resume resumes/resume-base.json                 #   is auto_suggestible or needs_user_input
-resume-tool build-standard --answers answers.json   # base → standard: applies auto-suggestible rewrites
+  --resume resumes/resume-structure.json            #   is auto_suggestible or needs_user_input
+resume-tool build-standard --answers answers.json   # structure → standard: applies auto-suggestible rewrites
                                                     #   + user-supplied facts, behind the same gate
 ```
 
@@ -105,16 +109,23 @@ resume-tool build-standard --answers answers.json   # base → standard: applies
   claim-preservation gate holds** — no employer/title/degree/skill claim may be
   added, dropped, or altered. Findings that need judgment are deferred to the
   walkthrough.
-- **`standard`** — `base` after the generic best-practices walkthrough: every
-  finding is classified `auto_suggestible` (a truthful rewrite is applied now) or
-  `needs_user_input` (the user supplies real facts, e.g. a metric). Applied
-  behind the same claim-preservation gate.
+- **`structure`** — `base` projected into the canonical resume schema:
+  redundant skill/custom sections are merged and deduped, section order is
+  normalized, and ambiguous custom sections are deferred rather than guessed.
+  `build-structure` writes `<name>-structure.json` only when the content ledger
+  is fully accounted and whole-resume claims are preserved.
+- **`standard`** — `structure` after the generic best-practices walkthrough:
+  every finding is classified `auto_suggestible` (a truthful rewrite is applied
+  now) or `needs_user_input` (the user supplies real facts, e.g. a metric).
+  Applied behind the same claim-preservation gate. If no `structure` exists yet,
+  `build-standard` remains backward-compatible and falls back to `base`, then
+  `original`.
 
 **All job-specific tailoring runs off `standard`, not `original`.** The active
-resume resolves as `standard ?? base ?? original`, so once baselining has run,
-downstream tailoring and edit sessions operate on the best-practices-improved
-`standard` version by default. The lineage is fully deterministic and offline:
-no LLM or network is touched on the baselining path.
+resume resolves as `standard ?? structure ?? base ?? original`, so once
+baselining has run, downstream tailoring and edit sessions operate on the
+best-practices-improved `standard` version by default. The lineage is fully
+deterministic and offline: no LLM or network is touched on the baselining path.
 
 ### Project aliases and accepted terminology edits
 
@@ -153,6 +164,17 @@ active refutation; each claim carries a machine-readable `reason_code` such as
 
 ## Release Notes
 
+### Unreleased — canonical structure stage (RIT-I-0019)
+
+- Inserts the lossless `structure` stage into resume baselining, making the
+  tracked lineage `original → base → structure → standard`.
+- Adds shape analysis and `build-structure`: redundant skill/custom sections are
+  merged into canonical skills, ambiguous sections are deferred, and writes are
+  gated by content-ledger accounting plus whole-resume claim preservation.
+- Keeps the wording pass behavior unchanged: `build-standard` now reads
+  `structure ?? base ?? original`, projects canonical `structure` back to the
+  BuildDoc read model, and writes `standard` as before.
+
 ### Package 0.9.0 / plugin 1.2.0 — test-run tightening (RIT-T-0126–0130)
 
 - **Keyword hygiene gate** (`schemas.keyword_hygiene`): full requirement
@@ -186,18 +208,20 @@ active refutation; each claim carries a machine-readable `reason_code` such as
 - Adds the read-only **ats-view** "what the ATS sees" report, rendered off the
   ScoreDoc and identical across the CLI, MCP, API, and facade surfaces.
 
-### Package 0.7.0 / plugin 1.0.0 — resume baselining (RIT-I-0016)
+### Package 0.7.0 / plugin 1.0.0 — initial resume baselining (RIT-I-0016)
 
-- Adds the `original → base → standard` baselining lineage as the mandatory
-  pre-tailoring phase: `build-base` (auto structural fixes behind the
+- Adds the initial `original → base → standard` baselining lineage as the
+  mandatory pre-tailoring phase: `build-base` (auto structural fixes behind the
   claim-preservation gate), `analyze-best-practices` (job-independent report
   classifying each finding `auto_suggestible` vs `needs_user_input`), and
-  `build-standard` (best-practices walkthrough behind the same gate).
+  `build-standard` (best-practices walkthrough behind the same gate). This was
+  later extended by the `structure` stage.
 - Makes `standard` the default tailoring input — active resolution is
-  `standard ?? base ?? original`, so tailoring and edit sessions operate on the
-  best-practices-improved version rather than the raw ingest.
+  `standard ?? base ?? original` in the initial lineage, so tailoring and edit
+  sessions operate on the best-practices-improved version rather than the raw
+  ingest.
 - The entire baselining path is deterministic and offline (no LLM, no network),
-  proven end-to-end by the `original → base → standard` lineage integration test.
+  proven end-to-end by the lineage integration test.
 
 ### Package 0.6.0 / plugin 0.7.0 — enforced edit loop (RIT-I-0015)
 

@@ -1,0 +1,144 @@
+{
+  "additional": {
+    "awards": [],
+    "certificationsTraining": [],
+    "languages": [],
+    "technicalSkills": [
+      "Python",
+      "React",
+      "AWS"
+    ]
+  },
+  "customSections": {
+    "coreSkills": {
+      "sectionType": "stringList",
+      "strings": [
+        "Python",
+        "React",
+        "AWS"
+      ]
+    },
+    "domainsIndustries": {
+      "sectionType": "stringList",
+      "strings": [
+        "Domains & Industries",
+        "added_tokens"
+      ]
+    },
+    "technicalSkills": {
+      "sectionType": "stringList",
+      "strings": [
+        "Technical Skills",
+        "Python",
+        "React",
+        "AWS",
+        "TypeScript"
+      ]
+    }
+  },
+  "education": [
+    {
+      "degree": "BS Computer Science",
+      "id": 1,
+      "institution": "State University",
+      "years": "2016"
+    }
+  ],
+  "personalInfo": {
+    "email": "jane@example.com",
+    "github": "https://github.com/jane",
+    "linkedin": "https://www.linkedin.com/in/jane",
+    "location": "Chicago, IL",
+    "name": "Jane Engineer",
+    "phone": "555-0100",
+    "title": "Senior Web Engineer",
+    "website": "https://jane.example.com"
+  },
+  "sectionMeta": [
+    {
+      "displayName": "Personal Info",
+      "id": "personalInfo",
+      "isDefault": true,
+      "isVisible": true,
+      "key": "personalInfo",
+      "order": 0,
+      "sectionType": "personalInfo"
+    },
+    {
+      "displayName": "Summary",
+      "id": "summary",
+      "isDefault": true,
+      "isVisible": true,
+      "key": "summary",
+      "order": 1,
+      "sectionType": "text"
+    },
+    {
+      "displayName": "Core Skills",
+      "id": "coreSkills",
+      "isDefault": false,
+      "isVisible": true,
+      "key": "coreSkills",
+      "order": 2,
+      "sectionType": "stringList"
+    },
+    {
+      "displayName": "Domains & Industries",
+      "id": "domainsIndustries",
+      "isDefault": false,
+      "isVisible": true,
+      "key": "domainsIndustries",
+      "order": 3,
+      "sectionType": "stringList"
+    },
+    {
+      "displayName": "Technical Skills",
+      "id": "technicalSkills",
+      "isDefault": false,
+      "isVisible": true,
+      "key": "technicalSkills",
+      "order": 4,
+      "sectionType": "stringList"
+    },
+    {
+      "displayName": "Experience",
+      "id": "workExperience",
+      "isDefault": true,
+      "isVisible": true,
+      "key": "workExperience",
+      "order": 5,
+      "sectionType": "itemList"
+    },
+    {
+      "displayName": "Education",
+      "id": "education",
+      "isDefault": true,
+      "isVisible": true,
+      "key": "education",
+      "order": 6,
+      "sectionType": "itemList"
+    },
+    {
+      "displayName": "Skills & Awards",
+      "id": "additional",
+      "isDefault": true,
+      "isVisible": true,
+      "key": "additional",
+      "order": 7,
+      "sectionType": "stringList"
+    }
+  ],
+  "summary": "A results-driven team player building reliable media platforms.",
+  "workExperience": [
+    {
+      "company": "Acme Media",
+      "description": [
+        "Responsible for modernizing web playback services for creators."
+      ],
+      "id": 1,
+      "location": "Remote",
+      "title": "Senior Web Engineer",
+      "years": "2021-2024"
+    }
+  ]
+}

@@ -41,6 +41,7 @@ from resume_kit_schemas import (
 )
 from resume_kit_schemas.change import ChangeProposal
 from resume_kit_schemas.results import PolicyRejection
+from resume_kit_schemas.shape import ContentLedger, ShapeReport
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,33 @@ class BuildStandardRequest:
 
 
 @dataclass(frozen=True)
+class AnalyzeShapeRequest:
+    """Inputs for the analyze-shape capability (RIT-I-0019, RIT-T-0138).
+
+    Pure and deterministic: loads the shape policy for ``root`` and returns a
+    read-only :class:`~resume_kit_schemas.shape.ShapeReport` for ``resume``. The
+    analyzer never mutates the resume, writes files, or applies mappings.
+    """
+
+    resume: ResumeDocument
+    root: str | Path = "."
+
+
+@dataclass(frozen=True)
+class BuildStructureRequest:
+    """Inputs for the build-structure capability (RIT-I-0019, RIT-T-0138).
+
+    Deterministic, filesystem-local: runs the ``base -> structure`` canonical
+    shape build under ``root``. Optional ``answers`` map source-section display
+    names to canonical section names. Ambiguous or unsupported mappings remain
+    deferred by the engine.
+    """
+
+    root: str | Path = "."
+    answers: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
 class AnalyzeBestPracticesRequest:
     """Inputs for the analyze-best-practices capability (RIT-I-0016, RIT-T-0117).
 
@@ -221,6 +249,27 @@ class StandardBuildResult(BaseModel):
     deferred: list[str] = Field(
         default_factory=list, description="Findings needing user input that were not answered."
     )
+
+
+class StructureBuildResult(BaseModel):
+    """Serializable outcome of the ``base -> structure`` shape build.
+
+    Frozen facade response mirroring the engine's ``BuildStructureResult`` so
+    CLI/MCP/API can return the write-path outcome as JSON.
+    """
+
+    model_config = {"frozen": True}
+
+    structure_path: str | None = Field(
+        default=None,
+        description="Written structure version path, relative to resume-kit/; null when gated.",
+    )
+    report: ShapeReport
+    ledger: ContentLedger
+    ledger_ok: bool
+    claims_ok: bool
+    applied: list[str] = Field(default_factory=list, description="Shape findings applied.")
+    deferred: list[str] = Field(default_factory=list, description="Shape findings deferred.")
 
 
 @dataclass(frozen=True)

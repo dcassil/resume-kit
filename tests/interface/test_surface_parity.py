@@ -25,10 +25,12 @@ from resume_kit_facade.models import (
     AlignResumeRequest,
     AlignTerminologyRequest,
     AnalyzeBestPracticesRequest,
+    AnalyzeShapeRequest,
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildStandardRequest,
+    BuildStructureRequest,
     CapabilityOptions,
     CheckAtsStructureRequest,
     CheckResumeAtsRequest,
@@ -50,7 +52,7 @@ from resume_kit_facade.models import (
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
-from resume_kit_facade.project_config import init_project, set_active, working_dir
+from resume_kit_facade.project_config import init_project, load_config, set_active, working_dir
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.tools import HANDLERS
 from resume_kit_schemas import (
@@ -1310,6 +1312,162 @@ def test_baseline_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
     assert cli == direct
     assert mcp == direct
     assert api == direct
+
+
+def _shape_resume() -> ResumeDocument:
+    return ResumeDocument.model_validate(
+        {
+            "personalInfo": {
+                "name": "Jane Dev",
+                "email": "jane@example.com",
+                "phone": "555-0100",
+                "title": "Staff Engineer",
+            },
+            "summary": "A results-driven team player who ships Python platforms.",
+            "workExperience": [
+                {
+                    "id": 1,
+                    "title": "Staff Engineer",
+                    "company": "Acme",
+                    "years": "2020-2024",
+                    "description": ["Responsible for maintaining the billing service."],
+                }
+            ],
+            "education": [{"institution": "State U", "degree": "BS CS", "years": "2016"}],
+            "additional": {"technicalSkills": ["Python", "TypeScript"]},
+            "customSections": {
+                "Core Skills": {
+                    "sectionType": "stringList",
+                    "strings": ["Python", "React", "AWS"],
+                },
+                "Technical Skills": {
+                    "sectionType": "stringList",
+                    "strings": ["Technical Skills", "Python", "TypeScript", "React", "AWS"],
+                },
+            },
+        }
+    )
+
+
+def _shape_root(tmp_path: Path, name: str) -> Path:
+    root = tmp_path / name
+    init_project(root)
+    base = working_dir(root)
+    (base / "resumes" / "jane-original.json").write_text(
+        _shape_resume().model_dump_json(), encoding="utf-8"
+    )
+    set_active(root, resume="resumes/jane-original.json")
+    return root
+
+
+def _shape_gate_failure_root(tmp_path: Path, name: str) -> Path:
+    root = tmp_path / name
+    init_project(root)
+    resume = _shape_resume().model_dump(mode="json")
+    resume["customSections"] = {
+        "Open Source": {
+            "sectionType": "text",
+            "text": "Maintained Python libraries and React dashboards.",
+        }
+    }
+    (working_dir(root) / "resumes" / "jane-original.json").write_text(
+        json.dumps(resume), encoding="utf-8"
+    )
+    set_active(root, resume="resumes/jane-original.json")
+    return root
+
+
+def _structure_json(root: Path) -> JsonDict:
+    path = working_dir(root) / "resumes" / "jane-structure.json"
+    return cast(JsonDict, json.loads(path.read_text(encoding="utf-8")))
+
+
+def _structure_lineage(root: Path) -> JsonDict:
+    config = load_config(root)
+    return {
+        "base_resume": config.base_resume,
+        "base_derived_from": config.base_derived_from,
+        "structure_resume": config.structure_resume,
+        "structure_derived_from": config.structure_derived_from,
+    }
+
+
+def _direct_shape_lifecycle(root: Path) -> list[JsonDict]:
+    resume = _shape_resume()
+    return [
+        _direct_json("analyze-shape", AnalyzeShapeRequest(resume=resume, root=root)),
+        _direct_json("build-base", BuildBaseRequest(root=root)),
+        _direct_json("build-structure", BuildStructureRequest(root=root)),
+    ]
+
+
+def _cli_shape_lifecycle(root: Path) -> list[JsonDict]:
+    resume_path = working_dir(root) / "resumes" / "jane-original.json"
+    return [
+        _cli_json(["analyze-shape", "--resume", str(resume_path), "--root", str(root)]),
+        _cli_json(["build-base", "--root", str(root)]),
+        _cli_json(["build-structure", "--root", str(root)]),
+    ]
+
+
+def _mcp_shape_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _mcp_json(
+            "resume_analyze_shape",
+            {"resume": _json_model(_shape_resume()), "root": str(root)},
+        ),
+        _mcp_json("resume_build_base", {"root": str(root)}),
+        _mcp_json("resume_build_structure", {"root": str(root)}),
+    ]
+
+
+def _api_shape_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _api_json(
+            "/analyze-shape",
+            {"resume": _json_model(_shape_resume()), "root": str(root)},
+        ),
+        _api_json("/build-base", {"root": str(root)}),
+        _api_json("/build-structure", {"root": str(root)}),
+    ]
+
+
+def test_shape_structure_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _shape_root(tmp_path, "direct-shape"),
+        "cli": _shape_root(tmp_path, "cli-shape"),
+        "mcp": _shape_root(tmp_path, "mcp-shape"),
+        "api": _shape_root(tmp_path, "api-shape"),
+    }
+
+    direct = _direct_shape_lifecycle(roots["direct"])
+    cli = _cli_shape_lifecycle(roots["cli"])
+    mcp = _mcp_shape_lifecycle(roots["mcp"])
+    api = _api_shape_lifecycle(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+    assert _structure_json(roots["cli"]) == _structure_json(roots["direct"])
+    assert _structure_json(roots["mcp"]) == _structure_json(roots["direct"])
+    assert _structure_json(roots["api"]) == _structure_json(roots["direct"])
+    assert _structure_lineage(roots["cli"]) == _structure_lineage(roots["direct"])
+    assert _structure_lineage(roots["mcp"]) == _structure_lineage(roots["direct"])
+    assert _structure_lineage(roots["api"]) == _structure_lineage(roots["direct"])
+
+
+def test_build_structure_cli_exits_nonzero_when_gate_fails(tmp_path: Path) -> None:
+    root = _shape_gate_failure_root(tmp_path, "cli-gate-failure")
+
+    _cli_json(["build-base", "--root", str(root)])
+    payload = _cli_json(
+        ["build-structure", "--root", str(root)],
+        expected_exit=int(ExitCode.INVALID_INPUT),
+    )
+
+    data = cast(JsonDict, payload["data"])
+    assert data["structure_path"] is None
+    assert data["ledger_ok"] is False
 
 
 # ---------------------------------------------------------------------------

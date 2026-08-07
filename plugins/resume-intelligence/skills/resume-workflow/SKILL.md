@@ -3,7 +3,7 @@ name: resume-workflow
 description: >
   The end-to-end runbook for tailoring a resume to a job with resume-intelligence.
   Sequences the single-purpose skills in the one obvious order — ingest →
-  baseline the resume (base → standard, job-independent, REQUIRED before
+  baseline the resume (base → structure → standard, job-independent, REQUIRED before
   tailoring) → check against the job → (optionally) improve → (optionally)
   second-agent review → validate truth → re-check for deltas → export — and names
   the gate (what must exist) for each step, including that all job tailoring is
@@ -26,7 +26,7 @@ in **subagents** so large document text stays out of the main context.
 
 **Once-per-session review offer.** When a session starts in an initialized
 `resume-kit/` working dir, the SessionStart hook reminds the agent that the
-optional, advice-only **review-resume** step (step 5 below) is available.
+optional, advice-only **review-resume** step (step 6 below) is available.
 **Offer it at most once per session** — and only after a tailored resume exists.
 The guard is a presence marker at `resume-kit/.cache/review-offered`: once you have
 offered the review (whether the user accepts or declines), write that marker; before
@@ -52,9 +52,16 @@ opt-in and never auto-runs.
    - **update-structure** — gate: a faithful `original` (`active_resume`). Runs
      the structural check + the auto-safe `base` fix behind the claim-preservation
      gate → writes `<name>-base.json`.
-   - **check-best-practices** — gate: `base` exists. Scores `base` and classifies
-     findings `auto_suggestible` vs `needs_user_input` (read-only).
-   - **update-best-practices** — gate: `base` + the best-practices report.
+   - **update-shape** — gate: `base` exists. Runs deterministic shape analysis
+     and the non-destructive canonical section pass behind the content-ledger and
+     cross-section claim gates → writes `<name>-structure.json` only when those
+     gates pass. It does no wording change, no budget/trim, and defers ambiguous
+     section mappings for a user decision.
+   - **check-best-practices** — gate: `structure` exists (or `base` with a
+     recorded shape-pass override). Scores the structurally canonical resume and
+     classifies findings `auto_suggestible` vs `needs_user_input` (read-only).
+   - **update-best-practices** — gate: `structure` (or recorded override) + the
+     best-practices report.
      Auto-applies truthful rewrites, elicits the user's real facts for
      `needs_user_input` items, and writes `<name>-standard.json` behind the
      claim-preservation gate. **`standard` becomes the default resume for all

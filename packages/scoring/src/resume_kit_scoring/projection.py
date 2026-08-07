@@ -1,4 +1,4 @@
-"""Deterministic ``BuildDoc -> ScoreDoc`` projection (RIT-T-0106).
+"""Deterministic resume projections (RIT-T-0106 / RIT-T-0137).
 
 Produces the canonical ATS view (:class:`~resume_kit_schemas.ScoreDoc`) from a
 :class:`~resume_kit_schemas.ResumeDocument` in code — no rendering, no text
@@ -12,18 +12,52 @@ See RIT-T-0104 (design) and RIT-A-0002 for the contract.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import date
+from typing import Protocol
 
 from resume_kit_schemas import (
+    AdditionalInfo,
     CustomSection,
+    CustomSectionItem,
     KeywordZone,
+    PersonalInfo,
     ResumeDocument,
     ScoreDegree,
     ScoreDoc,
     ScoreEntities,
     ScoreRole,
     ScoreSection,
+    SectionMeta,
     ZonedKeywordIndex,
+)
+from resume_kit_schemas import (
+    Education as BuildEducation,
+)
+from resume_kit_schemas import (
+    Experience as BuildExperience,
+)
+from resume_kit_schemas import (
+    Project as BuildProject,
+)
+from resume_kit_schemas.canonical import (
+    Award,
+    Certification,
+    Link,
+    LinkType,
+    Location,
+)
+from resume_kit_schemas.canonical import (
+    Education as CanonicalEducation,
+)
+from resume_kit_schemas.canonical import (
+    Experience as CanonicalExperience,
+)
+from resume_kit_schemas.canonical import (
+    Project as CanonicalProject,
+)
+from resume_kit_schemas.canonical import (
+    Resume as CanonicalResume,
 )
 from resume_kit_schemas.resume import SectionType
 from resume_kit_terms import normalize
@@ -37,6 +71,10 @@ _OPEN_END_RE = re.compile(r"present|current|now|ongoing", re.IGNORECASE)
 _TOKEN_RE = re.compile(r"[A-Za-z0-9+#.]+")
 #: Split a "years" string into its two endpoints on common range separators.
 _RANGE_SPLIT_RE = re.compile(r"\s*(?:-|–|—|to)\s*", re.IGNORECASE)
+
+
+class _NamedItem(Protocol):
+    name: str
 
 
 def _custom_zone(name: str) -> KeywordZone:
@@ -235,6 +273,271 @@ def _zoned_index(sections: list[ScoreSection]) -> ZonedKeywordIndex:
             if section.zone not in zones:
                 zones.append(section.zone)
     return ZonedKeywordIndex(token_zones=token_zones, zone_tokens=zone_tokens)
+
+
+def _first_link(links: list[Link], link_type: LinkType) -> str | None:
+    for link in links:
+        if link.type is link_type and link.url.strip():
+            return link.url
+    return None
+
+
+def _location_text(location: Location | str | None) -> str | None:
+    if location is None:
+        return None
+    if isinstance(location, str):
+        return location if location.strip() else None
+    if location.address and location.address.strip():
+        return location.address
+    parts = [
+        part
+        for part in (
+            location.city,
+            location.region,
+            location.countryCode,
+            location.postalCode,
+        )
+        if part is not None and part.strip()
+    ]
+    return ", ".join(parts) if parts else None
+
+
+def _format_range(
+    start: str | None,
+    end: str | None,
+    *,
+    fallback: str | None = None,
+) -> str:
+    if start and end:
+        return f"{start} - {end}"
+    if start:
+        return start
+    if end:
+        return end
+    return fallback or ""
+
+
+def _unique_text(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = " ".join(value.split())
+        if not normalized:
+            continue
+        key = normalized.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(normalized)
+    return result
+
+
+def _build_experience(entry: CanonicalExperience, index: int) -> BuildExperience:
+    return BuildExperience(
+        id=index + 1,
+        title=entry.title,
+        company=entry.organization,
+        location=_location_text(entry.location),
+        years=_format_range(entry.startDate, entry.endDate, fallback=entry.summary),
+        description=[achievement.text for achievement in entry.achievements],
+    )
+
+
+def _build_education(
+    entry: CanonicalEducation,
+    index: int,
+) -> BuildEducation:
+    degree = entry.degree or entry.field or ""
+    years = _format_range(entry.startDate, entry.endDate)
+    highlights = list(entry.highlights)
+    courses = list(entry.courses)
+    score = entry.score
+    description = "\n".join(_unique_text([*highlights, *courses, score or ""])) or None
+    return BuildEducation(
+        id=index + 1,
+        institution=entry.institution,
+        degree=degree,
+        years=years,
+        description=description,
+    )
+
+
+def _build_project(entry: CanonicalProject, index: int) -> BuildProject:
+    descriptions = _unique_text(
+        [
+            entry.description or "",
+            *(achievement.text for achievement in entry.achievements),
+        ]
+    )
+    return BuildProject(
+        id=index + 1,
+        name=entry.name,
+        role=", ".join(entry.roles),
+        years=_format_range(entry.startDate, entry.endDate),
+        github=_first_link(entry.links, LinkType.GITHUB),
+        website=_first_link(entry.links, LinkType.WEBSITE)
+        or _first_link(entry.links, LinkType.PROJECT),
+        description=descriptions,
+    )
+
+
+def _custom_named_section(
+    *,
+    values: Sequence[_NamedItem],
+    key: str,
+    display_name: str,
+    order: int,
+) -> tuple[SectionMeta, CustomSection] | None:
+    names = _unique_text([value.name for value in values])
+    if not names:
+        return None
+    return (
+        SectionMeta(
+            id=key,
+            key=key,
+            displayName=display_name,
+            sectionType=SectionType.STRING_LIST,
+            isDefault=False,
+            isVisible=True,
+            order=order,
+        ),
+        CustomSection(sectionType=SectionType.STRING_LIST, strings=names),
+    )
+
+
+def _custom_item_section(
+    *,
+    values: Sequence[_NamedItem],
+    key: str,
+    display_name: str,
+    order: int,
+) -> tuple[SectionMeta, CustomSection] | None:
+    items: list[CustomSectionItem] = []
+    for index, value in enumerate(values):
+        if not value.name.strip():
+            continue
+        items.append(CustomSectionItem(id=index + 1, title=value.name))
+    if not items:
+        return None
+    return (
+        SectionMeta(
+            id=key,
+            key=key,
+            displayName=display_name,
+            sectionType=SectionType.ITEM_LIST,
+            isDefault=False,
+            isVisible=True,
+            order=order,
+        ),
+        CustomSection(sectionType=SectionType.ITEM_LIST, items=items),
+    )
+
+
+def _certification_names(values: list[Certification]) -> list[str]:
+    names: list[str] = []
+    for value in values:
+        parts = [value.name]
+        if value.issuer:
+            parts.append(value.issuer)
+        if value.date:
+            parts.append(value.date)
+        names.append(" - ".join(parts))
+    return _unique_text(names)
+
+
+def _award_names(values: list[Award]) -> list[str]:
+    return _unique_text([value.name for value in values])
+
+
+def _technical_skills(resume: CanonicalResume) -> list[str]:
+    values: list[str] = []
+    for group in resume.skills:
+        values.extend(group.keywords)
+    for entry in resume.work:
+        values.extend(entry.skills)
+        values.extend(entry.technologies)
+    for project in resume.projects:
+        values.extend(project.skills)
+        values.extend(project.technologies)
+    return _unique_text(values)
+
+
+def project_builddoc_from_canonical(resume: CanonicalResume) -> ResumeDocument:
+    """Project canonical ``Resume`` data back to the BuildDoc read model.
+
+    This is the inverse-direction bridge used by the structure pass before the
+    unchanged standardize wording logic runs. It is pure and deterministic:
+    canonical achievement text stays verbatim, canonical skill keywords become
+    ``additional.technicalSkills``, and optional collections without native
+    BuildDoc fields are preserved as custom sections.
+    """
+
+    info = resume.basics
+    additional = AdditionalInfo(
+        technicalSkills=_technical_skills(resume),
+        languages=_unique_text([language.name for language in resume.languages]),
+        certificationsTraining=_certification_names(resume.certifications),
+        awards=_award_names(resume.awards),
+    )
+    custom_sections: dict[str, CustomSection] = {}
+    section_meta: list[SectionMeta] = []
+    custom_specs = [
+        _custom_named_section(
+            values=resume.publications,
+            key="publications",
+            display_name="Publications",
+            order=6,
+        ),
+        _custom_item_section(
+            values=resume.volunteer,
+            key="volunteer",
+            display_name="Volunteer",
+            order=7,
+        ),
+        _custom_named_section(
+            values=resume.interests,
+            key="interests",
+            display_name="Interests",
+            order=8,
+        ),
+        _custom_named_section(
+            values=resume.references,
+            key="references",
+            display_name="References",
+            order=9,
+        ),
+    ]
+    for spec in custom_specs:
+        if spec is None:
+            continue
+        meta, section = spec
+        section_meta.append(meta)
+        custom_sections[meta.key] = section
+
+    return ResumeDocument(
+        personalInfo=PersonalInfo(
+            name=info.name,
+            title=info.headline or "",
+            email=info.email or "",
+            phone=info.phone or "",
+            location=_location_text(info.location) or "",
+            website=_first_link(info.links, LinkType.WEBSITE)
+            or _first_link(info.links, LinkType.PORTFOLIO),
+            linkedin=_first_link(info.links, LinkType.LINKEDIN),
+            github=_first_link(info.links, LinkType.GITHUB),
+        ),
+        summary=info.summary or "",
+        workExperience=[
+            _build_experience(entry, index) for index, entry in enumerate(resume.work)
+        ],
+        education=[_build_education(entry, index) for index, entry in enumerate(resume.education)],
+        personalProjects=[
+            _build_project(entry, index) for index, entry in enumerate(resume.projects)
+        ],
+        additional=additional,
+        sectionMeta=section_meta,
+        customSections=custom_sections,
+    )
 
 
 def project_scoredoc(resume: ResumeDocument, *, reference_date: date) -> ScoreDoc:

@@ -39,3 +39,4 @@ resume-kit/working/
 resume-kit/review/
 resume-kit/resumes/
 resume-kit/jobs/
+.agents/*.log

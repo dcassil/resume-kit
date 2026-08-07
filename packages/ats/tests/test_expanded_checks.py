@@ -335,12 +335,12 @@ def test_consistent_dates_not_flagged() -> None:
     assert not _has_tip(_expanded_recommendations(resume), "inconsistent date formats")
 
 
-def test_nonstandard_section_heading_flagged() -> None:
+def test_nonstandard_section_heading_not_flagged_by_ats() -> None:
     resume = {
         **_COMPLETE_RESUME,
         "customSections": {"My Superpowers": {"sectionType": "text", "text": "stuff"}},
     }
-    assert _has_tip(_expanded_recommendations(resume), "non-standard section")
+    assert not _has_tip(_expanded_recommendations(resume), "non-standard section")
 
 
 def test_conventional_custom_section_not_flagged() -> None:

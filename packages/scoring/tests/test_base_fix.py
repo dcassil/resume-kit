@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from resume_kit_ats.engine import check_ats_structure
+from resume_kit_policy import default_shape_policy
 from resume_kit_schemas import ResumeDocument
-from resume_kit_scoring import apply_auto_fixes
+from resume_kit_schemas.shape import ShapeFindingFamily
+from resume_kit_scoring import analyze_resume_shape, apply_auto_fixes
 
 
 def _fix(resume: ResumeDocument):
@@ -67,9 +69,14 @@ def test_needs_judgment_findings_are_deferred_not_applied() -> None:
         }
     )
     result = _fix(resume)
-    assert "MISSING_EMAIL" in result.deferred
-    assert "NONSTANDARD_SECTION" in result.deferred
+    assert result.deferred == ["MISSING_EMAIL"]
     assert "MISSING_EMAIL" not in result.applied
+    shape_report = analyze_resume_shape(resume, default_shape_policy())
+    assert any(
+        finding.family is ShapeFindingFamily.CUSTOM_SECTION_UNMAPPED
+        and finding.section == "My Superpowers"
+        for finding in shape_report.findings
+    )
 
 
 def test_deterministic_and_idempotent() -> None:

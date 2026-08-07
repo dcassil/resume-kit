@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from resume_kit_facade.baseline import build_base
+from resume_kit_facade.baseline import build_base, build_structure
 from resume_kit_facade.project_config import (
     init_project,
     load_config,
@@ -14,6 +14,7 @@ from resume_kit_facade.project_config import (
     working_dir,
 )
 from resume_kit_schemas import ResumeDocument
+from resume_kit_schemas.canonical import Resume
 
 
 def _setup(root: Path, resume: dict) -> None:
@@ -73,7 +74,7 @@ def test_build_base_defers_needs_judgment(tmp_path: Path) -> None:
     _setup(tmp_path, resume)
     result = build_base(tmp_path, mode="auto")
     assert "MISSING_EMAIL" in result.deferred
-    assert "NONSTANDARD_SECTION" in result.deferred
+    assert "NONSTANDARD_SECTION" not in result.deferred
 
 
 def test_clean_resume_base_equals_original_content(tmp_path: Path) -> None:
@@ -108,6 +109,79 @@ def _resume_for_standard() -> dict:
     }
 
 
+def _resume_with_redundant_skill_sections() -> dict:
+    return {
+        "personalInfo": {
+            "name": "Jane",
+            "email": "j@x.com",
+            "phone": "5",
+            "title": "Staff Engineer",
+        },
+        "summary": "A results-driven team player who ships.",
+        "workExperience": [
+            {
+                "id": 1,
+                "title": "Staff Engineer",
+                "company": "Acme",
+                "years": "2020-2024",
+                "description": ["Responsible for maintaining the billing service."],
+            }
+        ],
+        "education": [{"institution": "State U", "degree": "BS CS", "years": "2016"}],
+        "additional": {"technicalSkills": ["Python", "TypeScript"]},
+        "customSections": {
+            "Core Skills": {
+                "sectionType": "stringList",
+                "strings": ["Python", "React", "AWS"],
+            },
+            "Technical Skills": {
+                "sectionType": "stringList",
+                "strings": ["Technical Skills", "Python", "TypeScript", "React", "AWS"],
+            },
+        },
+    }
+
+
+def test_build_structure_writes_canonical_and_sets_lineage(tmp_path: Path) -> None:
+    _setup(tmp_path, _resume_with_redundant_skill_sections())
+    build_base(tmp_path, mode="auto")
+
+    result = build_structure(tmp_path)
+
+    assert result.structure_path == "resumes/jane-structure.json"
+    assert result.ledger_ok
+    assert result.claims_ok
+    structure_file = working_dir(tmp_path) / "resumes" / "jane-structure.json"
+    structure = Resume.model_validate(json.loads(structure_file.read_text(encoding="utf-8")))
+    assert structure.work[0].achievements[0].text.startswith("Responsible for")
+    assert structure.skills[0].keywords == ["Python", "TypeScript", "React", "AWS"]
+
+    config = load_config(tmp_path)
+    assert config.structure_resume == "resumes/jane-structure.json"
+    assert config.structure_derived_from == "resumes/jane-base.json"
+    assert resolve_active_resume(config) == "resumes/jane-structure.json"
+
+
+def test_build_structure_refuses_write_when_ledger_gate_fails(tmp_path: Path) -> None:
+    resume = _resume_for_standard()
+    resume["customSections"] = {
+        "Core Skills": {
+            "sectionType": "text",
+            "text": "Python, React, and payments platform leadership.",
+        }
+    }
+    _setup(tmp_path, resume)
+    build_base(tmp_path, mode="auto")
+
+    result = build_structure(tmp_path)
+
+    assert result.structure_path is None
+    assert not result.ledger_ok
+    assert result.report.findings
+    assert not (working_dir(tmp_path) / "resumes" / "jane-structure.json").exists()
+    assert load_config(tmp_path).structure_resume is None
+
+
 def test_build_standard_writes_standard_and_sets_pointer(tmp_path: Path) -> None:
     from resume_kit_facade.baseline import build_standard
 
@@ -129,6 +203,28 @@ def test_build_standard_writes_standard_and_sets_pointer(tmp_path: Path) -> None
     assert config.standard_resume == "resumes/jane-standard.json"
     assert config.standard_derived_from == "resumes/jane-base.json"
     assert resolve_active_resume(config) == "resumes/jane-standard.json"
+
+
+def test_build_standard_reads_structure_when_present(tmp_path: Path) -> None:
+    from resume_kit_facade.baseline import build_standard
+
+    _setup(tmp_path, _resume_with_redundant_skill_sections())
+    build_base(tmp_path, mode="auto")
+    structure = build_structure(tmp_path)
+    assert structure.structure_path == "resumes/jane-structure.json"
+
+    result = build_standard(tmp_path)
+
+    assert result.standard_path == "resumes/jane-standard.json"
+    std_file = working_dir(tmp_path) / "resumes" / "jane-standard.json"
+    std = ResumeDocument.model_validate(json.loads(std_file.read_text(encoding="utf-8")))
+    assert "results-driven" not in std.summary.lower()
+    assert not std.workExperience[0].description[0].lower().startswith("responsible for")
+    assert std.additional.technicalSkills == ["Python", "TypeScript", "React", "AWS"]
+
+    config = load_config(tmp_path)
+    assert config.standard_resume == "resumes/jane-standard.json"
+    assert config.standard_derived_from == "resumes/jane-structure.json"
 
 
 def test_build_standard_applies_user_answer(tmp_path: Path) -> None:

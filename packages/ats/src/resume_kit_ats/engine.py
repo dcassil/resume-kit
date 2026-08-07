@@ -473,8 +473,8 @@ def _structure_findings(resume: dict[str, Any]) -> list[AtsStructureFinding]:
     """Deterministic structural findings — the machine channel (RIT-T-0114).
 
     Inspects the raw resume dict for common ATS failure modes (contact-info
-    presence, section presence, date presence/consistency, non-standard
-    headings, prohibited PII, placeholder/AI-leftover text, formatting risks).
+    presence, section presence, date presence/consistency, prohibited PII,
+    placeholder/AI-leftover text, formatting risks).
     Each finding carries a stable ``code``, shared-taxonomy ``severity``, a
     ``fix_affordance`` telling the base fixer whether it can act unattended, and
     ``metadata`` with the concrete fix target. NEVER alters the composite score.
@@ -574,21 +574,6 @@ def _structure_findings(resume: dict[str, Any]) -> list[AtsStructureFinding]:
             _R, FixAffordance.AUTO_SAFE_NORMALIZE,
             section="experience",
             metadata={"month_level": "; ".join(month_level), "year_only": "; ".join(year_only)})
-
-    # --- Non-standard section headings (rename target is ambiguous -> judgment) ---
-    custom_sections: dict[str, Any] = resume.get("customSections", {}) or {}
-    nonstandard = [
-        name
-        for name in custom_sections
-        if not any(kw in name.lower() for kw in _CONVENTIONAL_SECTION_KEYWORDS)
-    ]
-    if nonstandard:
-        shown = ", ".join(f"'{n}'" for n in nonstandard[:3])
-        add("NONSTANDARD_SECTION",
-            f"Non-standard section heading(s) detected ({shown}) — use conventional"
-            " names (Summary, Experience, Skills, Education, Certifications, Projects)"
-            " so an ATS can categorize them.", _R, _NJ,
-            metadata={"sections": "; ".join(nonstandard)})
 
     # --- Prohibited PII / placeholder / formatting risks (from the pattern tables) ---
     for table in (_PII_PATTERNS, _PLACEHOLDER_PATTERNS, _FORMATTING_RISK_PATTERNS):
