@@ -153,6 +153,26 @@ active refutation; each claim carries a machine-readable `reason_code` such as
 
 ## Release Notes
 
+### Package 0.9.0 / plugin 1.2.0 — test-run tightening (RIT-T-0126–0130)
+
+- **Keyword hygiene gate** (`schemas.keyword_hygiene`): full requirement
+  sentences are no longer scored as keywords. Applied at the matching scoring
+  boundary and at job parse time, so `match` / `check-keywords` / `check-gaps`
+  stop counting unmatchable prose in the denominator (fixes artificially
+  depressed match scores and cluttered missing/non-injectable lists).
+- **check-gaps degeneracy warning**: when the tailored and master resumes resolve
+  to near-identical content, the report now warns that the injectable split is
+  unreliable instead of presenting every miss as an unfixable gap.
+- **set-active path normalization**: a leading `resume-kit/` on a user-supplied
+  pointer is stripped, so cwd-relative and working-dir-relative paths resolve
+  identically and `build-base` no longer fails on a doubled path.
+- **check-best-practices quantification**: `MISSING_QUANTIFICATION` is capped and
+  prioritized to the few bullets where a metric adds most (impact-verb bullets
+  first), with a single `MISSING_QUANTIFICATION_MORE` note for the remainder —
+  replacing the one-prompt-per-bullet wall.
+- **job-hunter bridge**: reconciled three stale capability dispatch names left by
+  the RIT-A-0005 rename.
+
 ### Package 0.8.0 / plugin 1.0.0 — ScoreDoc scoring projection + ATS-view report (RIT-I-0017)
 
 - Separates the scoring representation (`ScoreDoc`) from the build representation
