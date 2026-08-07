@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 
+import pytest
 from resume_kit_schemas import (
     AdditionalInfo,
     Experience,
-    FindingSeverity,
     ResolutionKind,
     ResumeDocument,
 )
-from resume_kit_scoring import analyze_best_practices, project_scoredoc
+from resume_kit_scoring import (
+    analyze_best_practices,
+    foundational_skills,
+    project_scoredoc,
+    summary_too_long,
+)
 
 _REF = date(2025, 1, 1)
 
@@ -22,6 +28,14 @@ def _analyze(resume: ResumeDocument):
 
 def _codes(report):
     return [f.rule_code for f in report.findings]
+
+
+def _quantification_findings(report):
+    return [f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION"]
+
+
+def _findings(report, rule_code: str):
+    return [f for f in report.findings if f.rule_code == rule_code]
 
 
 def test_weak_opener_is_auto_suggestible_with_rewrite() -> None:
@@ -41,6 +55,94 @@ def test_weak_opener_is_auto_suggestible_with_rewrite() -> None:
     assert weak.resolution_kind is ResolutionKind.AUTO_SUGGESTIBLE
     assert weak.suggested_change and not weak.suggested_change.lower().startswith("responsible")
     assert weak.location.bullet_index == 0
+
+
+@pytest.mark.parametrize(
+    ("rule_code", "bullet", "expected"),
+    [
+        (
+            "PASSIVE_OPENER",
+            "Was responsible for maintaining the billing service.",
+            "Maintaining the billing service.",
+        ),
+        (
+            "VAGUE_IMPACT",
+            "Helped to improve onboarding docs.",
+            "Improve onboarding docs.",
+        ),
+        (
+            "DUTY_PATTERN",
+            "Participated in release planning.",
+            "Supported release planning.",
+        ),
+    ],
+)
+def test_mechanical_wording_rules_are_auto_suggestible_with_rewrites(
+    rule_code: str,
+    bullet: str,
+    expected: str,
+) -> None:
+    resume = ResumeDocument(
+        workExperience=[
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=[bullet],
+            )
+        ]
+    )
+    report = _analyze(resume)
+    finding = next(f for f in report.findings if f.rule_code == rule_code)
+    assert finding.resolution_kind is ResolutionKind.AUTO_SUGGESTIBLE
+    assert finding.suggested_change == expected
+
+
+@pytest.mark.parametrize(
+    ("rule_code", "bullet"),
+    [
+        ("PASSIVE_OPENER", "Maintained the billing service for 3 product teams."),
+        ("VAGUE_IMPACT", "Improved onboarding docs for 3 product teams."),
+        ("DUTY_PATTERN", "Resolved release planning blockers for 3 product teams."),
+    ],
+)
+def test_clean_bullets_do_not_trigger_mechanical_wording_rules(
+    rule_code: str,
+    bullet: str,
+) -> None:
+    resume = ResumeDocument(
+        workExperience=[
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=[bullet],
+            )
+        ]
+    )
+    assert rule_code not in _codes(_analyze(resume))
+
+
+def test_specific_wording_rule_precedes_overlapping_weak_opener() -> None:
+    resume = ResumeDocument(
+        workExperience=[
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=["Helped with release planning across 3 product teams."],
+            )
+        ]
+    )
+    report = _analyze(resume)
+    vague = _findings(report, "VAGUE_IMPACT")
+
+    assert len(vague) == 1
+    assert vague[0].suggested_change == "Supported release planning across 3 product teams."
+    assert "WEAK_OPENER" not in _codes(report)
 
 
 def test_first_person_opener_flagged_and_stripped() -> None:
@@ -78,26 +180,42 @@ def test_quantified_bullet_not_flagged_missing() -> None:
     assert "MISSING_QUANTIFICATION" not in _codes(_analyze(resume))
 
 
-def test_missing_quantification_capped_with_aggregate_note() -> None:
-    # RIT-T-0130: >cap unquantified bullets → exactly 3 per-bullet findings plus
-    # one MISSING_QUANTIFICATION_MORE advisory naming the remainder.
-    words = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"]
-    bullets = [f"Maintained the internal {w} service" for w in words]
+def test_missing_quantification_emits_one_finding_per_unquantified_bullet() -> None:
+    # RIT-T-0143: whole-resume quantification emits every targeted prompt, not a
+    # capped batch plus an aggregate advisory.
     resume = ResumeDocument(
         workExperience=[
-            Experience(id=1, title="E", company="X", years="2020-2022",
-                       description=bullets)
+            Experience(
+                id=1,
+                title="E",
+                company="X",
+                years="2020-2022",
+                description=[
+                    "Maintained the internal wiki",
+                    "Reduced onboarding friction for new hires",
+                ],
+            ),
+            Experience(
+                id=2,
+                title="Senior E",
+                company="Y",
+                years="2022-2024",
+                description=[
+                    "Owned the release checklist",
+                    "Improved incident response workflows",
+                    "Coordinated roadmap planning",
+                ],
+            ),
         ]
     )
     report = _analyze(resume)
-    per_bullet = [f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION"]
-    more = [f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION_MORE"]
-    assert len(per_bullet) == 3
-    assert all(f.location.bullet_index is not None for f in per_bullet)
-    assert len(more) == 1
-    assert more[0].severity is FindingSeverity.REVIEW_NOTE
-    assert more[0].location.bullet_index is None
-    assert "4 more" in more[0].message  # 7 - 3
+    per_bullet = _quantification_findings(report)
+    locations = [(f.location.entity_id, f.location.bullet_index) for f in per_bullet]
+
+    assert len(per_bullet) == 5
+    assert locations == [("1", 1), ("2", 1), ("1", 0), ("2", 0), ("2", 2)]
+    assert all(f.elicitation_prompt for f in per_bullet)
+    assert "MISSING_QUANTIFICATION_MORE" not in _codes(report)
 
 
 def test_missing_quantification_prioritizes_impact_verb_bullets() -> None:
@@ -113,12 +231,12 @@ def test_missing_quantification_prioritizes_impact_verb_bullets() -> None:
         ]
     )
     report = _analyze(resume)
-    per_bullet = [f for f in report.findings if f.rule_code == "MISSING_QUANTIFICATION"]
-    # All 3 fit under the cap, but the impact-verb bullet (index 2) ranks first.
+    per_bullet = _quantification_findings(report)
+    # The impact-verb bullet (index 2) ranks first.
     assert per_bullet[0].location.bullet_index == 2
 
 
-def test_missing_quantification_no_aggregate_when_within_cap() -> None:
+def test_missing_quantification_has_no_aggregate_advisory() -> None:
     resume = ResumeDocument(
         workExperience=[
             Experience(id=1, title="E", company="X", years="2020-2022",
@@ -137,11 +255,29 @@ def test_buzzword_in_summary_auto_suggestible() -> None:
     assert bw and all(f.resolution_kind is ResolutionKind.AUTO_SUGGESTIBLE for f in bw)
 
 
-def test_foundational_skill_flagged() -> None:
-    resume = ResumeDocument(additional=AdditionalInfo(technicalSkills=["Python", "Email"]))
+@pytest.mark.parametrize(
+    ("rule_code", "resume", "detector_hit"),
+    [
+        (
+            "SUMMARY_TOO_LONG",
+            ResumeDocument(summary=" ".join(f"word{i}" for i in range(61))),
+            lambda: summary_too_long(" ".join(f"word{i}" for i in range(61))),
+        ),
+        (
+            "FOUNDATIONAL_SKILL",
+            ResumeDocument(additional=AdditionalInfo(technicalSkills=["Python", "Email"])),
+            lambda: foundational_skills(["Python", "Email"]) == ["Email"],
+        ),
+    ],
+)
+def test_non_wording_rules_are_detectors_not_best_practice_findings(
+    rule_code: str,
+    resume: ResumeDocument,
+    detector_hit: Callable[[], bool],
+) -> None:
     report = _analyze(resume)
-    fs = next(f for f in report.findings if f.rule_code == "FOUNDATIONAL_SKILL")
-    assert fs.severity is FindingSeverity.RECOMMENDATION
+    assert detector_hit()
+    assert rule_code not in _codes(report)
 
 
 def test_clean_bullet_produces_no_wording_findings() -> None:

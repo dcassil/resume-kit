@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from resume_kit_core import ResumeKitError
 from resume_kit_facade.baseline import build_base, build_structure
 from resume_kit_facade.project_config import (
     init_project,
@@ -252,6 +254,29 @@ def test_build_standard_applies_user_answer(tmp_path: Path) -> None:
         json.loads((working_dir(tmp_path) / result.standard_path).read_text())
     )
     assert any("40%" in b for b in std.workExperience[0].description)
+
+
+def test_build_standard_refuses_non_wording_content_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import resume_kit_facade.baseline as baseline
+    from resume_kit_scoring import StandardFixResult
+
+    _setup(tmp_path, _resume_for_standard())
+    build_base(tmp_path, mode="auto")
+
+    def _drift_content(resume, _report, _answers):
+        data = resume.model_dump(by_alias=True)
+        data["additional"]["languages"] = ["Spanish"]
+        return StandardFixResult(
+            resume=ResumeDocument.model_validate(data),
+            applied=[],
+            deferred=[],
+        )
+
+    monkeypatch.setattr(baseline, "apply_best_practices_edits", _drift_content)
+    with pytest.raises(ResumeKitError, match="content-preservation"):
+        baseline.build_standard(tmp_path)
 
 
 def test_build_base_surfaces_source_parse_risk(tmp_path: Path) -> None:

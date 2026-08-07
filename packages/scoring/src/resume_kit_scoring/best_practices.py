@@ -16,24 +16,23 @@ Each finding is classified per :class:`~resume_kit_schemas.ResolutionKind`:
 dropping a buzzword or a weak opener), ``needs_user_input`` when the fix requires
 facts the system does not have (e.g. a real metric to quantify an accomplishment).
 
-Implemented rules (deterministic): WEAK_OPENER, FIRST_PERSON_OPENER, BUZZWORD,
-MISSING_QUANTIFICATION, MISSING_QUANTIFICATION_MORE, FOUNDATIONAL_SKILL,
-SUMMARY_TOO_LONG. Further rules (duplicate-bullet, equal-detail-per-job,
+Implemented wording rules (deterministic): WEAK_OPENER, PASSIVE_OPENER,
+VAGUE_IMPACT, DUTY_PATTERN, FIRST_PERSON_OPENER, BUZZWORD,
+MISSING_QUANTIFICATION. Further rules (duplicate-bullet, equal-detail-per-job,
 tense/punctuation consistency) are deferred to follow-up increments and are
 intentionally not silently claimed here.
 
-``MISSING_QUANTIFICATION`` is capped and prioritized (RIT-T-0130): rather than
-one prompt per unquantified bullet (a low-density "wall"), at most
-:data:`_MISSING_QUANT_CAP` per-bullet findings are surfaced, chosen where a
-metric adds the most (bullets with an impact/achievement verb first, then resume
-order). When more bullets lack a number, a single ``MISSING_QUANTIFICATION_MORE``
-advisory names the remaining count so the cap is never a silent truncation.
+``MISSING_QUANTIFICATION`` emits one needs-input finding for each unquantified
+experience bullet, with its exact bullet location and per-bullet elicitation
+prompt. Findings are prioritized where a metric adds the most (bullets with an
+impact/achievement verb first, then resume order) without truncating the
+whole-resume list.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 from resume_kit_schemas import (
     BestPracticesFinding,
@@ -54,6 +53,29 @@ _WEAK_OPENERS = (
     "helped with",
     "assisted with",
     "involved in",
+)
+_PASSIVE_STRIP_PREFIXES = (
+    "was responsible for",
+    "were responsible for",
+    "was tasked with",
+    "were tasked with",
+)
+_PASSIVE_GENERIC_RE = re.compile(
+    r"^\s*(?:was|were)\s+([a-z]+(?:ed|en)\b.*)", re.IGNORECASE
+)
+_VAGUE_IMPACT_PREFIXES = (
+    ("helped to", ""),
+    ("helped with", "Supported"),
+    ("worked to", ""),
+    ("contributed to", "Supported"),
+    ("in charge of", "Managed"),
+    ("tasked with", ""),
+)
+_DUTY_PATTERN_PREFIXES = (
+    ("handled", "Managed"),
+    ("managed to", ""),
+    ("participated in", "Supported"),
+    ("engaged in", "Supported"),
 )
 _FIRST_PERSON_RE = re.compile(r"^\s*(i|my|me)\b", re.IGNORECASE)
 _BUZZWORDS = (
@@ -80,7 +102,7 @@ _SUMMARY_WORD_LIMIT = 60
 
 #: Impact / achievement verbs. A bullet that claims an outcome with one of these
 #: but carries no number is the highest-value place to ask for a metric, so such
-#: bullets are prioritized when the MISSING_QUANTIFICATION list is capped.
+#: bullets are prioritized in the MISSING_QUANTIFICATION list.
 _IMPACT_VERBS = frozenset(
     {
         "improved", "reduced", "increased", "grew", "cut", "accelerated", "drove",
@@ -89,10 +111,6 @@ _IMPACT_VERBS = frozenset(
         "tripled", "eliminated", "generated", "achieved", "won", "led",
     }
 )
-#: Maximum per-bullet MISSING_QUANTIFICATION findings surfaced per report. Extra
-#: unquantified bullets are summarized by a single MISSING_QUANTIFICATION_MORE
-#: advisory. Tunable UX knob (see RIT-T-0130).
-_MISSING_QUANT_CAP = 3
 
 
 def _has_impact_verb(bullet: str) -> bool:
@@ -116,11 +134,73 @@ def _strip_words(text: str, words: list[str]) -> str:
     return cleaned or text
 
 
+def _replace_prefix(text: str, prefix: str, replacement: str) -> str:
+    """Replace leading *prefix* with *replacement*, preserving the original object."""
+    if not replacement:
+        return _strip_prefix(text, prefix)
+    rest = text[len(prefix):].lstrip(" :,-")
+    return f"{replacement} {rest}".strip() if rest else text
+
+
+def summary_too_long(summary: str, word_limit: int = _SUMMARY_WORD_LIMIT) -> bool:
+    """Return True when ``summary`` exceeds the standard summary word limit.
+
+    This detector is intentionally kept out of :func:`analyze_best_practices`
+    because summary length is a content/framing concern, not a deterministic
+    wording rewrite rule. Callers that need a summary-length advisory can opt in
+    without mixing it into the standard wording pass.
+    """
+    return len(summary.split()) > word_limit
+
+
+def detect_summary_too_long(summary: str, word_limit: int = _SUMMARY_WORD_LIMIT) -> bool:
+    """Compatibility wrapper for the summary-length detector."""
+    return summary_too_long(summary, word_limit)
+
+
+def foundational_skills(skills: Iterable[str]) -> list[str]:
+    """Return foundational skills that are better handled by guidance surfaces.
+
+    Foundational-tool hygiene is not emitted by :func:`analyze_best_practices`
+    because removing skills is a content decision. The detector stays available
+    for future guidance/reporting code that can route the advice through the
+    proper human-review surface.
+    """
+    return [skill for skill in skills if skill.strip().lower() in _FOUNDATIONAL_SKILLS]
+
+
+def detect_foundational_skills(skills: Iterable[str]) -> list[str]:
+    """Compatibility wrapper for the foundational-skills detector."""
+    return foundational_skills(skills)
+
+
 def _weak_opener(text: str) -> str | None:
     low = text.lower()
     for opener in _WEAK_OPENERS:
         if low.startswith(opener):
             return opener
+    return None
+
+
+def _passive_opener(text: str) -> tuple[str, str] | None:
+    low = text.lower()
+    for opener in _PASSIVE_STRIP_PREFIXES:
+        if low.startswith(opener):
+            return opener, _strip_prefix(text, opener)
+
+    match = _PASSIVE_GENERIC_RE.match(text)
+    if not match:
+        return None
+    stripped = match.group(1).lstrip(" :,-")
+    opener = match.group(0).split(maxsplit=1)[0]
+    return opener, stripped[:1].upper() + stripped[1:] if stripped else text
+
+
+def _prefix_rewrite(text: str, prefixes: tuple[tuple[str, str], ...]) -> tuple[str, str] | None:
+    low = text.lower()
+    for prefix, replacement in prefixes:
+        if low.startswith(prefix):
+            return prefix, _replace_prefix(text, prefix, replacement)
     return None
 
 
@@ -140,8 +220,7 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
     """
     findings: list[BestPracticesFinding] = []
     # (order_index, has_impact_verb, location) for each unquantified bullet, so
-    # the MISSING_QUANTIFICATION list can be prioritized and capped after the
-    # scan rather than emitting one prompt per bullet (RIT-T-0130).
+    # the MISSING_QUANTIFICATION list can be prioritized after the scan.
     quant_candidates: list[tuple[int, bool, FindingLocation]] = []
 
     for order_index, (entity_id, idx, bullet) in enumerate(_bullets(resume)):
@@ -149,8 +228,68 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             section="experience", zone="experience", entity_id=entity_id, bullet_index=idx
         )
 
-        opener = _weak_opener(bullet)
-        if opener:
+        # These opener rewrites are claim-gated by construction: they only
+        # remove or replace mechanical wording frames around the existing
+        # object, so employer/title/skill/degree facts and claimed outcomes are
+        # not changed.
+        #
+        # Precedence: run the more specific mechanical rules before legacy
+        # WEAK_OPENER. Shared phrase families such as "helped with" therefore
+        # emit one targeted finding instead of competing suggested rewrites.
+        passive = _passive_opener(bullet)
+        vague = _prefix_rewrite(bullet, _VAGUE_IMPACT_PREFIXES) if not passive else None
+        duty = (
+            _prefix_rewrite(bullet, _DUTY_PATTERN_PREFIXES)
+            if not passive and not vague
+            else None
+        )
+        opener = _weak_opener(bullet) if not passive and not vague and not duty else None
+        if passive:
+            passive_opener, suggested_change = passive
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="PASSIVE_OPENER",
+                    message=(
+                        f"Bullet opens with the passive phrase '{passive_opener}';"
+                        " lead with the action directly."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=suggested_change,
+                )
+            )
+        elif vague:
+            vague_opener, suggested_change = vague
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="VAGUE_IMPACT",
+                    message=(
+                        f"Bullet opens with the vague filler phrase '{vague_opener}';"
+                        " keep the object and lead with the work."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=suggested_change,
+                )
+            )
+        elif duty:
+            duty_opener, suggested_change = duty
+            findings.append(
+                BestPracticesFinding(
+                    rule_code="DUTY_PATTERN",
+                    message=(
+                        f"Bullet opens with the duty phrase '{duty_opener}';"
+                        " reword it as direct contribution."
+                    ),
+                    location=loc,
+                    severity=FindingSeverity.WARNING,
+                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
+                    suggested_change=suggested_change,
+                )
+            )
+        elif opener:
             findings.append(
                 BestPracticesFinding(
                     rule_code="WEAK_OPENER",
@@ -198,10 +337,9 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
             quant_candidates.append((order_index, _has_impact_verb(bullet), loc))
 
     # Prioritize where a metric adds the most (impact-verb bullets first), then
-    # by resume order (recency); surface only the top few, and summarize the rest
-    # so the cap is never a silent truncation (RIT-T-0130).
+    # by resume order (recency).
     quant_candidates.sort(key=lambda c: (not c[1], c[0]))
-    for _order_index, _has_impact, loc in quant_candidates[:_MISSING_QUANT_CAP]:
+    for _order_index, _has_impact, loc in quant_candidates:
         findings.append(
             BestPracticesFinding(
                 rule_code="MISSING_QUANTIFICATION",
@@ -218,28 +356,8 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
                 ),
             )
         )
-    remaining = len(quant_candidates) - _MISSING_QUANT_CAP
-    if remaining > 0:
-        findings.append(
-            BestPracticesFinding(
-                rule_code="MISSING_QUANTIFICATION_MORE",
-                message=(
-                    f"{remaining} more experience bullet(s) also lack a quantified"
-                    " outcome. Add real numbers where they exist; re-run to surface"
-                    " the next batch as targeted prompts."
-                ),
-                location=FindingLocation(section="experience", zone="experience"),
-                severity=FindingSeverity.REVIEW_NOTE,
-                resolution_kind=ResolutionKind.NEEDS_USER_INPUT,
-                elicitation_prompt=(
-                    "Across your remaining bullets, which achievements had a"
-                    " measurable result (percent, time, money, scale)? Add a real"
-                    " number to each where one exists."
-                ),
-            )
-        )
 
-    # Summary in the buzzword scan + length.
+    # Summary participates only in wording checks.
     if resume.summary.strip():
         loc = FindingLocation(section="summary", zone="summary")
         matched_bw = [w for w in _BUZZWORDS if w in resume.summary.lower()]
@@ -258,41 +376,6 @@ def analyze_best_practices(resume: ResumeDocument, scoredoc: ScoreDoc) -> BestPr
                     suggested_change=_strip_words(resume.summary, matched_bw),
                 )
             )
-        if len(resume.summary.split()) > _SUMMARY_WORD_LIMIT:
-            findings.append(
-                BestPracticesFinding(
-                    rule_code="SUMMARY_TOO_LONG",
-                    message=(
-                        f"Summary is longer than ~{_SUMMARY_WORD_LIMIT} words; tighten to 2-4 "
-                        "lines of identity, specialization, scale, and value."
-                    ),
-                    location=loc,
-                    severity=FindingSeverity.REVIEW_NOTE,
-                    resolution_kind=ResolutionKind.NEEDS_USER_INPUT,
-                    elicitation_prompt=(
-                        "Which one specialization and what scale/level best define you? "
-                        "We will tighten the summary around that."
-                    ),
-                )
-            )
-
-    # Foundational skills dilute the skills section.
-    for skill in resume.additional.technicalSkills:
-        if skill.strip().lower() in _FOUNDATIONAL_SKILLS:
-            findings.append(
-                BestPracticesFinding(
-                    rule_code="FOUNDATIONAL_SKILL",
-                    message=(
-                        f"'{skill}' is a foundational tool that weakens the skills section;"
-                        " remove it."
-                    ),
-                    location=FindingLocation(section="skills", zone="skills_list"),
-                    severity=FindingSeverity.RECOMMENDATION,
-                    resolution_kind=ResolutionKind.AUTO_SUGGESTIBLE,
-                    suggested_change=f"Remove '{skill}' from the skills list.",
-                )
-            )
-
     return BestPracticesReport(
         report_provenance=ProvenanceKind.DETERMINISTIC,
         findings=findings,

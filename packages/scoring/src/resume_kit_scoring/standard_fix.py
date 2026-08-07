@@ -8,10 +8,10 @@ apply a user-supplied rewrite passed in ``answers`` (keyed by
 fabricates a value the user did not provide.
 
 Scope: findings located at the ``summary`` or an ``experience`` bullet (the core
-wording pass — weak openers, first-person, buzzwords, quantification, summary
-length). Skills-section findings (e.g. foundational-tool removal) are deferred to
-a later increment. Pure/deterministic; the write path + claim-preservation gate
-live in the facade ``build_standard`` capability.
+wording pass — weak openers, first-person, buzzwords, quantification). Non-wording
+findings are left to guidance/review surfaces. Pure/deterministic; the write path
+and claim/content-preservation gates live in the facade ``build_standard``
+capability.
 """
 
 from __future__ import annotations

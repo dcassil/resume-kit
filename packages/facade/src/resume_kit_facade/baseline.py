@@ -37,6 +37,7 @@ from resume_kit_scoring import (
     claims_preserved,
     claims_preserved_across_sections,
     content_ledger_ok,
+    content_preserved,
     project_builddoc_from_canonical,
     project_scoredoc,
 )
@@ -264,9 +265,11 @@ def build_standard(
     Resolves the ``base`` (or original) resume, runs the best-practices analyzer,
     applies auto-suggestible edits plus any user-supplied rewrites in ``answers``
     (keyed by ``resume_kit_scoring.finding_key``), and writes
-    ``<name>-standard.json`` behind the **claim-preservation gate** — the wording
-    pass may reword but must not add/drop/alter an employer/title/degree/skill
-    claim. Records the config ``standard`` pointer; resolution then prefers it.
+    ``<name>-standard.json`` behind the **claim-preservation gate** and a
+    content-preservation gate — the wording pass may reword summary/experience
+    bullets but must not add/drop/alter an employer/title/degree/skill claim or
+    drift into other resume content. Records the config ``standard`` pointer;
+    resolution then prefers it.
     Findings needing user input that were not answered are returned as
     ``deferred`` for the caller to elicit and re-run.
     """
@@ -298,6 +301,12 @@ def build_standard(
             ErrorCode.VALIDATION_FAILED,
             "standard build refused: claim-preservation gate failed "
             f"(altered claims: {claim_diff(source, edit.resume)}).",
+        )
+    if not content_preserved(source, edit.resume):
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED,
+            "standard build refused: content-preservation gate failed "
+            "(standard may only rewrite summary and experience bullet text).",
         )
 
     standard_rel = _version_path_for(source_rel, "standard")

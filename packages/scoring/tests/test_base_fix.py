@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import copy
+from typing import Any
+
 from resume_kit_ats.engine import check_ats_structure
 from resume_kit_policy import default_shape_policy
 from resume_kit_schemas import ResumeDocument
 from resume_kit_schemas.shape import ShapeFindingFamily
-from resume_kit_scoring import analyze_resume_shape, apply_auto_fixes
+from resume_kit_scoring import analyze_resume_shape, apply_auto_fixes, content_preserved
 
 
 def _fix(resume: ResumeDocument):
@@ -112,3 +115,42 @@ def test_clean_resume_no_fixes() -> None:
     result = _fix(resume)
     assert result.applied == []
     assert result.resume.model_dump() == resume.model_dump()
+
+
+def test_content_preserved_only_allows_summary_and_experience_bullet_rewrites() -> None:
+    base = {
+        "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "5"},
+        "summary": "Engineer.",
+        "workExperience": [
+            {
+                "id": 1,
+                "title": "Engineer",
+                "company": "Acme",
+                "years": "2020-2022",
+                "description": ["Responsible for maintaining billing."],
+            }
+        ],
+        "education": [{"institution": "MIT", "degree": "BS CS", "years": "2016"}],
+        "additional": {"technicalSkills": ["Python"], "languages": ["English"]},
+    }
+    cases = [
+        ("summary wording", ("summary",), "Senior engineer.", True),
+        (
+            "experience bullet wording",
+            ("workExperience", 0, "description", 0),
+            "Maintained billing.",
+            True,
+        ),
+        ("skill content", ("additional", "technicalSkills"), ["Python", "SQL"], False),
+        ("bullet dropped", ("workExperience", 0, "description"), [], False),
+        ("experience title", ("workExperience", 0, "title"), "Staff Engineer", False),
+    ]
+    before = ResumeDocument.model_validate(base)
+    for _name, path, value, expected in cases:
+        changed = copy.deepcopy(base)
+        target: Any = changed
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        after = ResumeDocument.model_validate(changed)
+        assert content_preserved(before, after) is expected

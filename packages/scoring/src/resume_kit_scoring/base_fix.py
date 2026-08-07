@@ -18,6 +18,7 @@ unchanged by the auto pass.
 
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -131,6 +132,35 @@ def claims_preserved(before: ResumeDocument, after: ResumeDocument) -> bool:
     return not claim_diff(before, after)
 
 
+def _wording_shape(data: dict[str, Any]) -> dict[str, Any]:
+    """Return a resume fingerprint that permits only standard wording edits.
+
+    ``standard`` may rewrite the summary and individual work-experience bullets,
+    but it must not add/remove/reorder bullets, sections, skills, jobs, education,
+    projects, metadata, or any other content-bearing field. Masking the allowed
+    wording strings while keeping list shape makes that invariant cheap and
+    deterministic.
+    """
+    shaped: dict[str, Any] = copy.deepcopy(data)
+    shaped["summary"] = ""
+    for exp in shaped.get("workExperience", []) or []:
+        if isinstance(exp, dict):
+            exp["description"] = ["" for _ in exp.get("description", []) or []]
+    return shaped
+
+
+def content_preserved(before: ResumeDocument, after: ResumeDocument) -> bool:
+    """True iff a standard edit changed only summary or experience-bullet wording.
+
+    This complements :func:`claims_preserved`: claim preservation protects the
+    load-bearing employer/title/degree/skill facts, while this gate prevents the
+    standard wording pass from drifting outside its allowed editing surface.
+    """
+    return _wording_shape(before.model_dump(by_alias=True)) == _wording_shape(
+        after.model_dump(by_alias=True)
+    )
+
+
 #: Which fix affordances the auto pass applies, and their transform.
 _AUTO_AFFORDANCES = {
     FixAffordance.AUTO_SAFE_STRIP,
@@ -178,4 +208,4 @@ def apply_auto_fixes(
     )
 
 
-__all__ = ["BaseFixResult", "apply_auto_fixes"]
+__all__ = ["BaseFixResult", "apply_auto_fixes", "content_preserved"]

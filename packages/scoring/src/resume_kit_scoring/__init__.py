@@ -8,8 +8,15 @@ from resume_kit_scoring.base_fix import (
     apply_auto_fixes,
     claim_diff,
     claims_preserved,
+    content_preserved,
 )
-from resume_kit_scoring.best_practices import analyze_best_practices
+from resume_kit_scoring.best_practices import (
+    analyze_best_practices,
+    detect_foundational_skills,
+    detect_summary_too_long,
+    foundational_skills,
+    summary_too_long,
+)
 from resume_kit_scoring.projection import project_builddoc_from_canonical, project_scoredoc
 from resume_kit_scoring.shape_analyzer import analyze_resume_shape
 from resume_kit_scoring.shape_fix import (
@@ -36,7 +43,12 @@ __all__ = [
     "claims_preserved",
     "claims_preserved_across_sections",
     "content_ledger_ok",
+    "content_preserved",
+    "detect_foundational_skills",
+    "detect_summary_too_long",
     "finding_key",
+    "foundational_skills",
     "project_builddoc_from_canonical",
     "project_scoredoc",
+    "summary_too_long",
 ]
