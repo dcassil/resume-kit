@@ -96,6 +96,7 @@ from resume_kit_facade.models import (
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.perfect import BuildPerfectResult, build_perfect
 from resume_kit_facade.project_config import (
     ProjectConfig,
     init_project,
@@ -120,6 +121,7 @@ __all__ = [
     "build_candidate_evidence_capability",
     "build_standard_capability",
     "build_structure_capability",
+    "build_perfect",
     "check_ats_structure",
     "check_resume_ats",
     "check_resume_job_match",
@@ -197,6 +199,7 @@ __all__ = [
     "AliasGrowthEntry",
     "AlignTerminologyResult",
     "BaseBuildResult",
+    "BuildPerfectResult",
     "CommitSessionResult",
     "StandardBuildResult",
     "StructureBuildResult",

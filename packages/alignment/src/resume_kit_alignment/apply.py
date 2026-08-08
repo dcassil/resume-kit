@@ -266,6 +266,10 @@ def apply_diffs(
     URL / id) are rejected at every freedom level, including ``freedom=10``, so
     identity facts can never be fabricated.
 
+    Unlike ``reorder``, which preserves all original list items by appending any
+    omitted originals, ``remove`` deletes the named items. It is intended for
+    the perfect/fit budget pass.
+
     Args:
         original_resume: The original resume (``ResumeDocument`` or dict). It is
             deep-copied; the caller's input is never mutated.
@@ -383,6 +387,65 @@ def apply_diffs(
                         change,
                         PolicyReasonCode.MALFORMED_PATH,
                         f"Could not set reordered list at '{path}'.",
+                    )
+                )
+                continue
+            applied.append(change)
+
+        elif action == "remove":
+            if not isinstance(actual_value, list) or not isinstance(
+                change.value, list
+            ):
+                rejected.append(
+                    _rejection(
+                        change,
+                        PolicyReasonCode.UNSUPPORTED_ACTION,
+                        f"Remove on '{path}' requires a list target and value.",
+                    )
+                )
+                continue
+            if change.original is not None and (
+                not isinstance(change.original, list)
+                or list(actual_value) != change.original
+            ):
+                rejected.append(
+                    _rejection(
+                        change,
+                        PolicyReasonCode.ORIGINAL_MISMATCH,
+                        (
+                            f"Original list for '{path}' did not match the "
+                            "current resume list."
+                        ),
+                    )
+                )
+                continue
+            new_list = list(actual_value)
+            missing_item: str | None = None
+            for item in change.value:
+                try:
+                    index = new_list.index(item)
+                except ValueError:
+                    missing_item = item
+                    break
+                new_list.pop(index)
+            if missing_item is not None:
+                rejected.append(
+                    _rejection(
+                        change,
+                        PolicyReasonCode.ORIGINAL_MISMATCH,
+                        (
+                            f"Remove item {missing_item!r} was not present in "
+                            f"the current list at '{path}'."
+                        ),
+                    )
+                )
+                continue
+            if not _set_at_path(result, path, new_list):
+                rejected.append(
+                    _rejection(
+                        change,
+                        PolicyReasonCode.MALFORMED_PATH,
+                        f"Could not set shortened list at '{path}'.",
                     )
                 )
                 continue
