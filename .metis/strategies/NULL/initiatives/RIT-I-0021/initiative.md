@@ -4,14 +4,14 @@ level: initiative
 title: "Perfect/fit pass: job-aware budget enforcement via ranked, decision-driven trims after tailoring"
 short_code: "RIT-I-0021"
 created_at: 2026-08-07T18:29:07.699663+00:00
-updated_at: 2026-08-07T18:35:17.753017+00:00
+updated_at: 2026-08-08T01:47:00.299168+00:00
 parent: RIT-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/decompose"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
