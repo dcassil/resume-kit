@@ -86,13 +86,20 @@ class ProjectConfig(BaseModel):
         structure_derived_from: The resume path ``structure_resume`` was derived
             from (by convention ``base_resume``), recording lineage. Only
             written together with ``structure_resume``.
+        refine_resume: Path of the ``refine`` resume JSON — ``structure`` /
+            ``base`` after the generic job-independent wording-grooming pass
+            (formerly ``standard``). This is the default input for downstream
+            tailoring once present. ``None`` until the walkthrough produces it.
+        refine_derived_from: The resume path ``refine_resume`` was derived from,
+            recording lineage. Only written together with ``refine_resume``.
         standard_resume: Path of the ``standard`` resume JSON — ``base`` after
-            the generic best-practices human-in-the-loop pass (RIT-I-0016). This
-            is the default input for all downstream tailoring once present.
-            ``None`` until the walkthrough produces it.
+            the generic best-practices human-in-the-loop pass (RIT-I-0016).
+            Legacy read-alias for pre-rename projects; new writes use
+            ``refine_resume``.
         standard_derived_from: The resume path ``standard_resume`` was derived
-            from (by convention ``base_resume``), recording lineage. Only written
-            together with ``standard_resume``.
+            from (by convention ``base_resume``), recording lineage. Legacy
+            read-alias for pre-rename projects; new writes use
+            ``refine_derived_from``.
         final_resume: Path of the job-specific final resume JSON produced by the
             perfect-stage budget fit. ``None`` until a final artifact is written.
         final_derived_from: The resume path ``final_resume`` was derived from,
@@ -115,6 +122,8 @@ class ProjectConfig(BaseModel):
     base_derived_from: str | None = None
     structure_resume: str | None = None
     structure_derived_from: str | None = None
+    refine_resume: str | None = None
+    refine_derived_from: str | None = None
     standard_resume: str | None = None
     standard_derived_from: str | None = None
     final_resume: str | None = None
@@ -298,16 +307,18 @@ def resolve_active_resume(config: ProjectConfig) -> str | None:
     """Resolve the resume path downstream tailoring should consume.
 
     Implements the version-lineage precedence
-    ``standard -> structure -> base -> original``: prefer the best-practices
-    groomed ``standard_resume``, then the canonicalized ``structure_resume``,
-    then the ATS-cleaned ``base_resume``, then the immutable original
-    ``active_resume``. A project that only ever set ``active_resume`` (the
-    pre-RIT-I-0016 world) therefore resolves to exactly that original, so this
-    is fully backward-compatible.
+    ``refine -> standard(legacy) -> structure -> base -> original``: prefer the
+    job-independent wording-groomed ``refine_resume``, then the legacy
+    ``standard_resume`` read-alias for pre-rename projects, then the
+    canonicalized ``structure_resume``, then the ATS-cleaned ``base_resume``,
+    then the immutable original ``active_resume``. A project that only ever set
+    ``active_resume`` (the pre-RIT-I-0016 world) therefore resolves to exactly
+    that original, so this is fully backward-compatible.
     Returns ``None`` only when no resume pointer of any tier is set.
     """
     return (
-        config.standard_resume
+        config.refine_resume
+        or config.standard_resume
         or config.structure_resume
         or config.base_resume
         or config.active_resume
@@ -321,6 +332,8 @@ def set_version(
     base_derived_from: str | None = None,
     structure: str | None = None,
     structure_derived_from: str | None = None,
+    refine: str | None = None,
+    refine_derived_from: str | None = None,
     standard: str | None = None,
     standard_derived_from: str | None = None,
     final: str | None = None,
@@ -331,19 +344,28 @@ def set_version(
 
     Mirrors :func:`set_active`'s contract: loads the existing config (preserving
     unknown keys and any pointer not being changed), sets whichever of
-    ``base_resume`` / ``structure_resume`` / ``standard_resume`` /
-    ``final_resume`` (and their lineage companions) were supplied, and saves
-    atomically. A lineage value given without its matching pointer is a caller
-    error (``ValueError``) so lineage can never drift away from the version it
-    describes. Additive: it never touches ``active_resume`` (the original).
+    ``base_resume`` / ``structure_resume`` / ``refine_resume`` /
+    ``standard_resume`` (legacy) / ``final_resume`` (and their lineage
+    companions) were supplied, and saves atomically. A lineage value given
+    without its matching pointer is a caller error (``ValueError``) so lineage
+    can never drift away from the version it describes. Additive: it never
+    touches ``active_resume`` (the original).
     Returns the updated config.
     """
-    if base is None and structure is None and standard is None and final is None:
+    if (
+        base is None
+        and structure is None
+        and refine is None
+        and standard is None
+        and final is None
+    ):
         raise ValueError("set_version requires at least one version pointer.")
     if base_derived_from is not None and base is None:
         raise ValueError("base_derived_from given without a base.")
     if structure_derived_from is not None and structure is None:
         raise ValueError("structure_derived_from given without a structure.")
+    if refine_derived_from is not None and refine is None:
+        raise ValueError("refine_derived_from given without a refine.")
     if standard_derived_from is not None and standard is None:
         raise ValueError("standard_derived_from given without a standard.")
     if final_derived_from is not None and final is None:
@@ -357,6 +379,9 @@ def set_version(
     if structure is not None:
         config.structure_resume = _normalize_pointer(structure)
         config.structure_derived_from = _normalize_pointer(structure_derived_from)
+    if refine is not None:
+        config.refine_resume = _normalize_pointer(refine)
+        config.refine_derived_from = _normalize_pointer(refine_derived_from)
     if standard is not None:
         config.standard_resume = _normalize_pointer(standard)
         config.standard_derived_from = _normalize_pointer(standard_derived_from)

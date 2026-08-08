@@ -250,6 +250,22 @@ class BaseBuildResult(BaseModel):
     )
 
 
+class RefineBuildResult(BaseModel):
+    """Serializable outcome of the ``base -> refine`` build (RIT-T-0118).
+
+    Frozen facade response mirroring the engine's ``BuildRefineResult``
+    dataclass so future surfaces can return the write-path outcome as JSON.
+    """
+
+    model_config = {"frozen": True}
+
+    refine_path: str = Field(description="Written refine version path, relative to resume-kit/.")
+    applied: list[str] = Field(default_factory=list, description="Best-practices edits applied.")
+    deferred: list[str] = Field(
+        default_factory=list, description="Findings needing user input that were not answered."
+    )
+
+
 class StandardBuildResult(BaseModel):
     """Serializable outcome of the ``base -> standard`` build (RIT-T-0118).
 

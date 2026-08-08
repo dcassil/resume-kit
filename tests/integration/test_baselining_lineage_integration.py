@@ -173,9 +173,9 @@ def test_full_lineage_original_to_base_to_standard(tmp_path: Path) -> None:
     )
     assert std.exit_code == 0, std.stdout
     std_data = json.loads(std.stdout)["data"]
-    assert std_data["standard_path"] == "resumes/jordan-standard.json"
+    assert std_data["standard_path"] == "resumes/jordan-refine.json"
 
-    std_doc = _read(tmp_path, "resumes/jordan-standard.json")
+    std_doc = _read(tmp_path, "resumes/jordan-refine.json")
     # auto rewrites landed (buzzword + weak opener), user fact applied, claims preserved
     assert "results-driven" not in (std_doc.summary or "").lower()
     assert not std_doc.workExperience[0].description[0].lower().startswith("responsible for")
@@ -186,16 +186,16 @@ def test_full_lineage_original_to_base_to_standard(tmp_path: Path) -> None:
     for rel in (
         "resumes/jordan-original.json",
         "resumes/jordan-base.json",
-        "resumes/jordan-standard.json",
+        "resumes/jordan-refine.json",
     ):
         assert (rk / rel).is_file(), rel
 
     config = json.loads((rk / "config.json").read_text(encoding="utf-8"))
-    assert config["standard_resume"] == "resumes/jordan-standard.json"
-    # resolution prefers standard ?? base ?? original
+    assert config["refine_resume"] == "resumes/jordan-refine.json"
+    # resolution prefers refine ?? standard(legacy) ?? structure ?? base ?? original
     from resume_kit_facade.project_config import load_config, resolve_active_resume
 
-    assert resolve_active_resume(load_config(tmp_path)) == "resumes/jordan-standard.json"
+    assert resolve_active_resume(load_config(tmp_path)) == "resumes/jordan-refine.json"
 
 
 def test_lineage_is_offline_no_network_no_llm(
@@ -237,4 +237,4 @@ def test_lineage_is_offline_no_network_no_llm(
 
     std = runner.invoke(app, ["build-standard", "--root", str(tmp_path)])
     assert std.exit_code == 0, std.stdout
-    assert (rk / "resumes" / "jordan-standard.json").is_file()
+    assert (rk / "resumes" / "jordan-refine.json").is_file()

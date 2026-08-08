@@ -37,6 +37,7 @@ from resume_kit_scoring.shape_fix import (
     content_ledger_ok,
 )
 from resume_kit_scoring.standard_fix import (
+    RefineFixResult,
     StandardFixResult,
     apply_best_practices_edits,
     finding_key,
@@ -45,6 +46,7 @@ from resume_kit_scoring.standard_fix import (
 __all__ = [
     "BaseFixResult",
     "CompressionCandidate",
+    "RefineFixResult",
     "StandardFixResult",
     "analyze_best_practices",
     "analyze_resume_shape",

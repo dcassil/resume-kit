@@ -239,6 +239,15 @@ def test_resolve_active_resume_precedence_and_fallbacks() -> None:
     )
     assert resolve_active_resume(with_standard) == "resumes/x-standard.json"
 
+    with_refine = ProjectConfig(
+        active_resume="resumes/x-original.json",
+        base_resume="resumes/x-base.json",
+        structure_resume="resumes/x-structure.json",
+        standard_resume="resumes/x-standard.json",
+        refine_resume="resumes/x-refine.json",
+    )
+    assert resolve_active_resume(with_refine) == "resumes/x-refine.json"
+
     # nothing set -> None
     assert resolve_active_resume(ProjectConfig()) is None
 
@@ -281,6 +290,32 @@ def test_set_version_records_pointers_and_lineage(tmp_path: Path) -> None:
     assert cfg.standard_derived_from == "resumes/x-structure.json"
     assert resolve_active_resume(cfg) == "resumes/x-standard.json"
 
+    cfg = set_version(
+        tmp_path,
+        refine="resumes/x-refine.json",
+        refine_derived_from="resumes/x-structure.json",
+    )
+    # legacy standard pointer preserved; refine wins resolution once present
+    assert cfg.standard_resume == "resumes/x-standard.json"
+    assert cfg.standard_derived_from == "resumes/x-structure.json"
+    assert cfg.refine_resume == "resumes/x-refine.json"
+    assert cfg.refine_derived_from == "resumes/x-structure.json"
+    assert resolve_active_resume(cfg) == "resumes/x-refine.json"
+
+
+def test_resolve_active_resume_uses_legacy_standard_when_refine_absent() -> None:
+    from resume_kit_facade.project_config import resolve_active_resume
+
+    legacy_only = ProjectConfig(
+        active_resume="resumes/x-original.json",
+        base_resume="resumes/x-base.json",
+        structure_resume="resumes/x-structure.json",
+        standard_resume="resumes/x-standard.json",
+        refine_resume=None,
+    )
+
+    assert resolve_active_resume(legacy_only) == "resumes/x-standard.json"
+
 
 def test_set_version_requires_a_pointer_and_guards_lineage(tmp_path: Path) -> None:
     from resume_kit_facade.project_config import set_version
@@ -291,6 +326,8 @@ def test_set_version_requires_a_pointer_and_guards_lineage(tmp_path: Path) -> No
         set_version(tmp_path, base_derived_from="resumes/x-original.json")
     with pytest.raises(ValueError):
         set_version(tmp_path, structure_derived_from="resumes/x-base.json")
+    with pytest.raises(ValueError):
+        set_version(tmp_path, refine_derived_from="resumes/x-structure.json")
     with pytest.raises(ValueError):
         set_version(tmp_path, standard_derived_from="resumes/x-base.json")
 
@@ -313,4 +350,5 @@ def test_version_pointers_round_trip_and_preserve_unknown_keys(tmp_path: Path) -
     legacy = ProjectConfig.model_validate({"active_resume": "resumes/y-original.json"})
     assert legacy.base_resume is None
     assert legacy.structure_resume is None
+    assert legacy.refine_resume is None
     assert legacy.standard_resume is None

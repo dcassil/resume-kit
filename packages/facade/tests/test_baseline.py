@@ -13,6 +13,7 @@ from resume_kit_facade.project_config import (
     load_config,
     resolve_active_resume,
     set_active,
+    set_version,
     working_dir,
 )
 from resume_kit_schemas import ResumeDocument
@@ -192,8 +193,8 @@ def test_build_standard_writes_standard_and_sets_pointer(tmp_path: Path) -> None
     build_base(tmp_path, mode="auto")
     result = build_standard(tmp_path)
 
-    assert result.standard_path == "resumes/jane-standard.json"
-    std_file = working_dir(tmp_path) / "resumes" / "jane-standard.json"
+    assert result.refine_path == "resumes/jane-refine.json"
+    std_file = working_dir(tmp_path) / "resumes" / "jane-refine.json"
     assert std_file.exists()
     std = ResumeDocument.model_validate(json.loads(std_file.read_text(encoding="utf-8")))
     # buzzwords removed, weak opener fixed; claims preserved
@@ -202,9 +203,26 @@ def test_build_standard_writes_standard_and_sets_pointer(tmp_path: Path) -> None
     assert std.workExperience[0].company == "Acme"
 
     config = load_config(tmp_path)
-    assert config.standard_resume == "resumes/jane-standard.json"
-    assert config.standard_derived_from == "resumes/jane-base.json"
-    assert resolve_active_resume(config) == "resumes/jane-standard.json"
+    assert config.refine_resume == "resumes/jane-refine.json"
+    assert config.refine_derived_from == "resumes/jane-base.json"
+    assert resolve_active_resume(config) == "resumes/jane-refine.json"
+
+
+def test_build_refine_writes_refine_and_sets_pointer(tmp_path: Path) -> None:
+    from resume_kit_facade.baseline import build_refine
+
+    _setup(tmp_path, _resume_for_standard())
+    build_base(tmp_path, mode="auto")
+    result = build_refine(tmp_path)
+
+    assert result.refine_path == "resumes/jane-refine.json"
+    refine_file = working_dir(tmp_path) / "resumes" / "jane-refine.json"
+    assert refine_file.exists()
+
+    config = load_config(tmp_path)
+    assert config.refine_resume == "resumes/jane-refine.json"
+    assert config.refine_derived_from == "resumes/jane-base.json"
+    assert resolve_active_resume(config) == "resumes/jane-refine.json"
 
 
 def test_build_standard_reads_structure_when_present(tmp_path: Path) -> None:
@@ -217,16 +235,47 @@ def test_build_standard_reads_structure_when_present(tmp_path: Path) -> None:
 
     result = build_standard(tmp_path)
 
-    assert result.standard_path == "resumes/jane-standard.json"
-    std_file = working_dir(tmp_path) / "resumes" / "jane-standard.json"
+    assert result.refine_path == "resumes/jane-refine.json"
+    std_file = working_dir(tmp_path) / "resumes" / "jane-refine.json"
     std = ResumeDocument.model_validate(json.loads(std_file.read_text(encoding="utf-8")))
     assert "results-driven" not in std.summary.lower()
     assert not std.workExperience[0].description[0].lower().startswith("responsible for")
     assert std.additional.technicalSkills == ["Python", "TypeScript", "React", "AWS"]
 
     config = load_config(tmp_path)
-    assert config.standard_resume == "resumes/jane-standard.json"
-    assert config.standard_derived_from == "resumes/jane-structure.json"
+    assert config.refine_resume == "resumes/jane-refine.json"
+    assert config.refine_derived_from == "resumes/jane-structure.json"
+
+
+def test_legacy_standard_only_project_resolves_then_refine_preserves_standard(
+    tmp_path: Path,
+) -> None:
+    from resume_kit_facade.baseline import build_refine
+
+    _setup(tmp_path, _resume_for_standard())
+    base = build_base(tmp_path, mode="auto")
+    legacy_standard = "resumes/jane-standard.json"
+    (working_dir(tmp_path) / legacy_standard).write_text(
+        (working_dir(tmp_path) / base.base_path).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    config = set_version(
+        tmp_path,
+        standard=legacy_standard,
+        standard_derived_from=base.base_path,
+    )
+    assert config.refine_resume is None
+    assert resolve_active_resume(config) == legacy_standard
+
+    result = build_refine(tmp_path)
+
+    assert result.refine_path == "resumes/jane-refine.json"
+    config = load_config(tmp_path)
+    assert config.refine_resume == "resumes/jane-refine.json"
+    assert config.refine_derived_from == base.base_path
+    assert config.standard_resume == legacy_standard
+    assert config.standard_derived_from == base.base_path
+    assert resolve_active_resume(config) == "resumes/jane-refine.json"
 
 
 def test_build_standard_applies_user_answer(tmp_path: Path) -> None:

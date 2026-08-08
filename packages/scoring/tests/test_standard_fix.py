@@ -6,6 +6,8 @@ from datetime import date
 
 from resume_kit_schemas import ResumeDocument
 from resume_kit_scoring import (
+    RefineFixResult,
+    StandardFixResult,
     analyze_best_practices,
     apply_best_practices_edits,
     finding_key,
@@ -75,3 +77,7 @@ def test_deterministic() -> None:
     a = apply_best_practices_edits(base, report).resume.model_dump_json()
     b = apply_best_practices_edits(base, report).resume.model_dump_json()
     assert a == b
+
+
+def test_standard_fix_result_is_refine_fix_result_alias() -> None:
+    assert StandardFixResult is RefineFixResult
