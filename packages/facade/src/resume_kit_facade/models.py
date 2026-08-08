@@ -145,16 +145,22 @@ class BuildBaseRequest:
 class BuildStandardRequest:
     """Inputs for the build-standard capability (RIT-I-0016, RIT-T-0118).
 
-    Deterministic, filesystem-local: runs the ``base -> standard`` best-practices
-    write path under ``root`` (analyze best practices → apply auto-suggestible
-    edits + any user-supplied ``answers`` rewrites keyed by
-    ``resume_kit_scoring.finding_key`` → claim-preservation gate → persist
-    ``<name>-standard.json`` → record the ``standard`` pointer). Findings needing
-    user input that were not answered are returned as ``deferred``.
+    Deprecated request name for the ``base -> refine`` wording pass. Kept for
+    legacy ``build-standard`` surfaces, with the same input shape as
+    :class:`BuildRefineRequest`.
     """
 
     root: str | Path = "."
     answers: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class BuildRefineRequest(BuildStandardRequest):
+    """Inputs for the build-refine capability (RIT-I-0016, RIT-T-0118).
+
+    Shape-compatible alias of :class:`BuildStandardRequest` for the renamed
+    ``base -> refine`` wording pass.
+    """
 
 
 @dataclass(frozen=True)
@@ -247,6 +253,22 @@ class BaseBuildResult(BaseModel):
     applied: list[str] = Field(default_factory=list, description="Auto-safe fixes applied.")
     deferred: list[str] = Field(
         default_factory=list, description="Findings deferred to the standard walkthrough."
+    )
+
+
+class RefineBuildResult(BaseModel):
+    """Serializable outcome of the ``base -> refine`` build (RIT-T-0118).
+
+    Frozen facade response mirroring the engine's ``BuildRefineResult``
+    dataclass so future surfaces can return the write-path outcome as JSON.
+    """
+
+    model_config = {"frozen": True}
+
+    refine_path: str = Field(description="Written refine version path, relative to resume-kit/.")
+    applied: list[str] = Field(default_factory=list, description="Best-practices edits applied.")
+    deferred: list[str] = Field(
+        default_factory=list, description="Findings needing user input that were not answered."
     )
 
 

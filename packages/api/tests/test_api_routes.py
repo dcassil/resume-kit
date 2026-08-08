@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 from resume_kit_api.app import create_app
+from resume_kit_facade.project_config import init_project, set_active, working_dir
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_schemas import (
     CandidateEvidence,
@@ -226,6 +227,64 @@ def test_review_edits_routes_registered() -> None:
         "/review-edits/status",
         "/review-edits/reconcile",
     }.issubset(paths)
+
+
+def _baseline_project(root: Path) -> Path:
+    init_project(root)
+    base = working_dir(root)
+    resume = ResumeDocument.model_validate(
+        {
+            "personalInfo": {
+                "name": "Jordan Lee",
+                "title": "Senior Backend Engineer",
+                "email": "jordan@example.com",
+                "phone": "555-0100",
+                "location": "Austin, TX",
+            },
+            "summary": (
+                "Responsible for building Python APIs, Docker services, and "
+                "PostgreSQL analytics."
+            ),
+            "workExperience": [
+                {
+                    "id": 1,
+                    "title": "Senior Software Engineer",
+                    "company": "Acme Labs",
+                    "years": "2021-2025",
+                    "description": [
+                        "Responsible for Python APIs with FastAPI and PostgreSQL.",
+                        "Containerized services with Docker and automated CI pipelines.",
+                    ],
+                }
+            ],
+            "additional": {"technicalSkills": ["Python", "FastAPI", "PostgreSQL", "Docker"]},
+        }
+    )
+    (base / "resumes" / "jordan-original.json").write_text(
+        resume.model_dump_json(), encoding="utf-8"
+    )
+    set_active(root, resume="resumes/jordan-original.json")
+    return root
+
+
+def test_build_wording_routes_return_alias_specific_schema(tmp_path: Path) -> None:
+    for endpoint, expected_key, legacy_key in (
+        ("/build-standard", "standard_path", "refine_path"),
+        ("/build-refine", "refine_path", "standard_path"),
+    ):
+        root = _baseline_project(tmp_path / endpoint.strip("/"))
+        base = client.post("/build-base", json={"root": str(root)})
+        assert base.status_code == 200
+        _assert_envelope(base.json())
+
+        response = client.post(endpoint, json={"root": str(root)})
+
+        assert response.status_code == 200
+        payload = response.json()
+        _assert_envelope(payload)
+        assert payload["errors"] == []
+        assert payload["data"][expected_key] == "resumes/jordan-refine.json"
+        assert legacy_key not in payload["data"]
 
 
 def test_build_evidence_approved_claims_envelope_feeds_validate_truth() -> None:

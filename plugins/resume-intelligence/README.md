@@ -78,7 +78,8 @@ resume-kit/
 ├── config.json                          # active_resume / active_job / alias_file pointers + preferences
 ├── resumes/<name>-original.json         # immutable faithful resume conversions
 ├── resumes/<name>-base.json             # baselining: original + auto-safe structural fixes
-├── resumes/<name>-standard.json         # baselining: base + best-practices (default tailoring input)
+├── resumes/<name>-structure.json        # baselining: canonical shape after base
+├── resumes/<name>-refine.json           # baselining: wording pass (default tailoring input)
 ├── jobs/<name>-original.json            # immutable job conversions
 ├── working/edit-session.json            # code-owned active edit-session state
 ├── working/<name>.tailored.json         # commit-session output for a tailored resume
@@ -124,22 +125,29 @@ facts, bypass evidence, or create business rules in prompt text.
 1. **Ingest** — `parse-resume`, `parse-job` (no LLM; the agent converts the
    files/posting into canonical JSON). Writes the immutable `<name>-original.json`.
 2. **Baseline** *(job-independent — REQUIRED before any tailoring)* — take
-   `original` through `original → base → standard`: `update-structure` runs the
-   structural check + the auto-safe `base` fix behind the claim-preservation gate
-   (`<name>-base.json`); `check-best-practices` scores `base` and classifies each
-   finding `auto_suggestible` vs `needs_user_input`; `update-best-practices`
-   applies the auto-suggestible rewrites plus user-supplied facts and writes
-   `<name>-standard.json` behind the same gate. **`standard` then becomes the
-   default resume for all tailoring below** (active resolution is
-   `standard ?? base ?? original`). If the user declines baselining, that
-   override is recorded so the tailoring gate is satisfied.
-3. **Check** *(tailoring — gated on `standard` or a recorded override)* —
+   `original` through `original → base → structure → refine`: `update-structure`
+   runs the structural check + the auto-safe `base` fix behind the
+   claim-preservation gate (`<name>-base.json`) and the lossless structure pass
+   (`<name>-structure.json`); `check-best-practices` scores `structure` and
+   classifies each finding `auto_suggestible` vs `needs_user_input`;
+   `update-refine` applies the auto-suggestible rewrites plus user-supplied
+   facts through the `build-refine` capability and writes `<name>-refine.json`
+   behind the same gate. **`refine` then becomes the default resume for all
+   tailoring below** (active resolution is
+   `refine ?? standard(legacy) ?? structure ?? base ?? original`). The
+   CLI/capability/API surface is `build-refine`; the MCP tool is
+   `resume_build_refine`. Migration: the former `standard` pass is now
+   `refine`; legacy `standard_resume` pointers still resolve as a read-alias,
+   and `build-standard` surfaces remain as one-release deprecation aliases for
+   `build-refine`. If the user declines baselining, that override is recorded so
+   the tailoring gate is satisfied.
+3. **Check** *(tailoring — gated on `refine` or a recorded override)* —
    `check-keywords` (resume↔job keyword coverage) and `check-gaps`
-   (missing / injectable keywords), both run against `standard`. The structural
+   (missing / injectable keywords), both run against `refine`. The structural
    check already ran in baselining and is not repeated. `check-ats-view` renders
    the read-only "what the ATS sees" report (sections, entities/YoE, and zoned
    keywords) off the same deterministic ScoreDoc projection that scoring reads.
-4. **Improve** (no LLM, truth-gated; gated on `standard`) — `update-keywords` and
+4. **Improve** (no LLM, truth-gated; gated on `refine`) — `update-keywords` and
    `update-terminology` produce truthful `ChangeProposal` records, prompt for
    mode (`interactive`, `review_at_end`, or `auto`), then drive
    `resume-tool review-edits open` → `resume-tool review-edits prompt` →

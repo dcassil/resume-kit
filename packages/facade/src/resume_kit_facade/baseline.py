@@ -61,13 +61,36 @@ class BuildBaseResult:
     deferred: list[str] = field(default_factory=list)
 
 
-@dataclass
-class BuildStandardResult:
-    """Outcome of the ``base -> standard`` walkthrough build."""
+@dataclass(init=False)
+class BuildRefineResult:
+    """Outcome of the ``base -> refine`` walkthrough build."""
 
-    standard_path: str
+    refine_path: str
     applied: list[str] = field(default_factory=list)
     deferred: list[str] = field(default_factory=list)
+
+    def __init__(
+        self,
+        refine_path: str | None = None,
+        applied: list[str] | None = None,
+        deferred: list[str] | None = None,
+        standard_path: str | None = None,
+    ) -> None:
+        if refine_path is None:
+            if standard_path is None:
+                raise TypeError("BuildRefineResult requires refine_path or standard_path.")
+            refine_path = standard_path
+        self.refine_path = refine_path
+        self.applied = list(applied or [])
+        self.deferred = list(deferred or [])
+
+    @property
+    def standard_path(self) -> str:
+        """Legacy read alias for callers still expecting ``standard_path``."""
+        return self.refine_path
+
+
+BuildStandardResult = BuildRefineResult
 
 
 @dataclass
@@ -87,7 +110,7 @@ def _version_path_for(rel: str, suffix: str) -> str:
     """Derive a ``-<suffix>.json`` sibling path from a version pointer."""
     p = Path(rel)
     stem = p.name
-    for known in ("-original", "-base", "-structure", "-standard"):
+    for known in ("-original", "-base", "-structure", "-refine", "-standard"):
         if known in stem:
             return str(p.with_name(stem.replace(known, f"-{suffix}")))
     if stem.endswith(".json"):
@@ -255,20 +278,20 @@ def build_structure(
     )
 
 
-def build_standard(
+def build_refine(
     root: str | Path,
     *,
     answers: dict[str, str] | None = None,
-) -> BuildStandardResult:
-    """Produce the ``standard`` version from ``base`` via the best-practices pass.
+) -> BuildRefineResult:
+    """Produce the ``refine`` version from ``base`` via the best-practices pass.
 
     Resolves the ``base`` (or original) resume, runs the best-practices analyzer,
     applies auto-suggestible edits plus any user-supplied rewrites in ``answers``
     (keyed by ``resume_kit_scoring.finding_key``), and writes
-    ``<name>-standard.json`` behind the **claim-preservation gate** and a
+    ``<name>-refine.json`` behind the **claim-preservation gate** and a
     content-preservation gate — the wording pass may reword summary/experience
     bullets but must not add/drop/alter an employer/title/degree/skill claim or
-    drift into other resume content. Records the config ``standard`` pointer;
+    drift into other resume content. Records the config ``refine`` pointer;
     resolution then prefers it.
     Findings needing user input that were not answered are returned as
     ``deferred`` for the caller to elicit and re-run.
@@ -299,30 +322,33 @@ def build_standard(
     if not claims_preserved(source, edit.resume):
         raise ResumeKitError.from_code(
             ErrorCode.VALIDATION_FAILED,
-            "standard build refused: claim-preservation gate failed "
+            "refine build refused: claim-preservation gate failed "
             f"(altered claims: {claim_diff(source, edit.resume)}).",
         )
     if not content_preserved(source, edit.resume):
         raise ResumeKitError.from_code(
             ErrorCode.VALIDATION_FAILED,
-            "standard build refused: content-preservation gate failed "
-            "(standard may only rewrite summary and experience bullet text).",
+            "refine build refused: content-preservation gate failed "
+            "(refine may only rewrite summary and experience bullet text).",
         )
 
-    standard_rel = _version_path_for(source_rel, "standard")
-    atomic_write_json(working_dir(root) / standard_rel, edit.resume.model_dump(mode="json"))
-    set_version(root, standard=standard_rel, standard_derived_from=source_rel)
+    refine_rel = _version_path_for(source_rel, "refine")
+    atomic_write_json(working_dir(root) / refine_rel, edit.resume.model_dump(mode="json"))
+    set_version(root, refine=refine_rel, refine_derived_from=source_rel)
 
-    return BuildStandardResult(
-        standard_path=standard_rel, applied=edit.applied, deferred=edit.deferred
-    )
+    return BuildRefineResult(refine_path=refine_rel, applied=edit.applied, deferred=edit.deferred)
+
+
+build_standard = build_refine
 
 
 __all__ = [
     "BuildBaseResult",
+    "BuildRefineResult",
     "BuildStandardResult",
     "BuildStructureResult",
     "build_base",
+    "build_refine",
     "build_standard",
     "build_structure",
 ]

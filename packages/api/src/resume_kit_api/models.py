@@ -344,10 +344,8 @@ class BuildBaseBody(_Options):
 class BuildStandardBody(_Options):
     """Body for ``POST /build-standard`` — run the base->standard write path.
 
-    Filesystem-local (RIT-T-0118): analyzes best practices and applies
-    auto-suggestible edits plus any ``answers`` rewrites (keyed by finding key)
-    under ``root`` behind the claim-preservation gate, writes the ``standard``
-    version, and records the pointer.
+    Deprecated alias for ``POST /build-refine``. Kept with the same input shape
+    for callers still using the legacy route.
     """
 
     root: str = Field(default=".", description="Project root containing resume-kit/.")
@@ -355,6 +353,10 @@ class BuildStandardBody(_Options):
         default=None,
         description="Optional map of finding keys to user-supplied rewrites.",
     )
+
+
+class BuildRefineBody(BuildStandardBody):
+    """Body for ``POST /build-refine`` — run the base->refine wording pass."""
 
 
 class AnalyzeShapeBody(_Options):

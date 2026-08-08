@@ -1,7 +1,7 @@
-"""Deterministic ``base -> standard`` walkthrough apply engine (RIT-T-0118).
+"""Deterministic ``base -> refine`` walkthrough apply engine (RIT-T-0118).
 
 Applies accepted :class:`~resume_kit_schemas.BestPracticesReport` findings to the
-``base`` resume to produce ``standard``. ``auto_suggestible`` findings apply their
+``base`` resume to produce ``refine``. ``auto_suggestible`` findings apply their
 ``suggested_change`` (a ready replacement string); ``needs_user_input`` findings
 apply a user-supplied rewrite passed in ``answers`` (keyed by
 :func:`finding_key`), and are otherwise deferred — the walkthrough never
@@ -10,7 +10,7 @@ fabricates a value the user did not provide.
 Scope: findings located at the ``summary`` or an ``experience`` bullet (the core
 wording pass — weak openers, first-person, buzzwords, quantification). Non-wording
 findings are left to guidance/review surfaces. Pure/deterministic; the write path
-and claim/content-preservation gates live in the facade ``build_standard``
+and claim/content-preservation gates live in the facade ``build_refine``
 capability.
 """
 
@@ -28,12 +28,15 @@ from resume_kit_schemas import (
 
 
 @dataclass
-class StandardFixResult:
+class RefineFixResult:
     """Outcome of applying accepted best-practices edits."""
 
     resume: ResumeDocument
     applied: list[str] = field(default_factory=list)
     deferred: list[str] = field(default_factory=list)
+
+
+StandardFixResult = RefineFixResult
 
 
 def finding_key(finding: BestPracticesFinding) -> str:
@@ -65,8 +68,8 @@ def apply_best_practices_edits(
     resume: ResumeDocument,
     report: BestPracticesReport,
     answers: dict[str, str] | None = None,
-) -> StandardFixResult:
-    """Apply accepted best-practices findings to ``resume`` -> ``standard`` draft.
+) -> RefineFixResult:
+    """Apply accepted best-practices findings to ``resume`` -> ``refine`` draft.
 
     ``answers`` maps :func:`finding_key` -> the user's rewrite for
     ``needs_user_input`` findings. auto_suggestible findings apply their
@@ -127,11 +130,16 @@ def apply_best_practices_edits(
             else:
                 deferred.append(f.rule_code)
 
-    return StandardFixResult(
+    return RefineFixResult(
         resume=ResumeDocument.model_validate(data),
         applied=applied,
         deferred=deferred,
     )
 
 
-__all__ = ["StandardFixResult", "apply_best_practices_edits", "finding_key"]
+__all__ = [
+    "RefineFixResult",
+    "StandardFixResult",
+    "apply_best_practices_edits",
+    "finding_key",
+]

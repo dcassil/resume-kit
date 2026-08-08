@@ -29,6 +29,7 @@ from resume_kit_facade.models import (
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildRefineRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -1312,6 +1313,75 @@ def test_baseline_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
     assert cli == direct
     assert mcp == direct
     assert api == direct
+
+
+def _refine_json(root: Path) -> JsonDict:
+    path = working_dir(root) / "resumes" / "jordan-refine.json"
+    return cast(JsonDict, json.loads(path.read_text(encoding="utf-8")))
+
+
+def _refine_lineage(root: Path) -> JsonDict:
+    config = load_config(root)
+    return {
+        "base_resume": config.base_resume,
+        "base_derived_from": config.base_derived_from,
+        "refine_resume": config.refine_resume,
+        "refine_derived_from": config.refine_derived_from,
+        "standard_resume": config.standard_resume,
+        "standard_derived_from": config.standard_derived_from,
+    }
+
+
+def _direct_refine_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _direct_json("build-base", BuildBaseRequest(root=root)),
+        _direct_json("build-refine", BuildRefineRequest(root=root)),
+    ]
+
+
+def _cli_refine_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _cli_json(["build-base", "--root", str(root)]),
+        _cli_json(["build-refine", "--root", str(root)]),
+    ]
+
+
+def _mcp_refine_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _mcp_json("resume_build_base", {"root": str(root)}),
+        _mcp_json("resume_build_refine", {"root": str(root)}),
+    ]
+
+
+def _api_refine_lifecycle(root: Path) -> list[JsonDict]:
+    return [
+        _api_json("/build-base", {"root": str(root)}),
+        _api_json("/build-refine", {"root": str(root)}),
+    ]
+
+
+def test_refine_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _baseline_root(tmp_path, "direct-refine"),
+        "cli": _baseline_root(tmp_path, "cli-refine"),
+        "mcp": _baseline_root(tmp_path, "mcp-refine"),
+        "api": _baseline_root(tmp_path, "api-refine"),
+    }
+
+    direct = _direct_refine_lifecycle(roots["direct"])
+    cli = _cli_refine_lifecycle(roots["cli"])
+    mcp = _mcp_refine_lifecycle(roots["mcp"])
+    api = _api_refine_lifecycle(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+    assert _refine_json(roots["cli"]) == _refine_json(roots["direct"])
+    assert _refine_json(roots["mcp"]) == _refine_json(roots["direct"])
+    assert _refine_json(roots["api"]) == _refine_json(roots["direct"])
+    assert _refine_lineage(roots["cli"]) == _refine_lineage(roots["direct"])
+    assert _refine_lineage(roots["mcp"]) == _refine_lineage(roots["direct"])
+    assert _refine_lineage(roots["api"]) == _refine_lineage(roots["direct"])
 
 
 def _shape_resume() -> ResumeDocument:

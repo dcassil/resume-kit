@@ -83,7 +83,7 @@ view of the sections, entities/YoE, and zoned keywords an ATS is likely to parse
 (`resume-tool ats-view --resume <path>`), identical across the CLI, MCP, API, and
 facade surfaces.
 
-### Resume baselining and final fit (`original → base → structure → standard → refine → tailored → perfect`)
+### Resume baselining and final fit (`original → base → structure → refine → tailored → final`)
 
 Before any job-specific tailoring, a resume moves through a fixed, deterministic
 baselining lineage that produces four tracked versions:
@@ -97,7 +97,7 @@ resume-tool build-structure                         # base → structure: canoni
                                                     #   behind ledger + claims-preserved gates
 resume-tool analyze-best-practices \                # job-independent best-practices report; each finding
   --resume resumes/resume-structure.json            #   is auto_suggestible or needs_user_input
-resume-tool build-standard --answers answers.json   # structure → standard: applies auto-suggestible rewrites
+resume-tool build-refine --answers answers.json     # structure → refine: applies auto-suggestible rewrites
                                                     #   + user-supplied facts, behind the same gate
 ```
 
@@ -114,20 +114,27 @@ resume-tool build-standard --answers answers.json   # structure → standard: ap
   normalized, and ambiguous custom sections are deferred rather than guessed.
   `build-structure` writes `<name>-structure.json` only when the content ledger
   is fully accounted and whole-resume claims are preserved.
-- **`standard`** — `structure` after the generic best-practices walkthrough:
+- **`refine`** — `structure` after the generic best-practices walkthrough:
   every finding is classified `auto_suggestible` (a truthful rewrite is applied
   now) or `needs_user_input` (the user supplies real facts, e.g. a metric).
   Applied behind the same claim-preservation gate. If no `structure` exists yet,
-  `build-standard` remains backward-compatible and falls back to `base`, then
-  `original`.
+  `build-refine` falls back to `base`, then `original`. It writes
+  `<name>-refine.json`; the CLI/capability/API surface is `build-refine`, and
+  the MCP tool is `resume_build_refine`.
 
-**All job-specific tailoring runs off `standard`, not `original`.** The active
-resume resolves as `standard ?? structure ?? base ?? original`, so once
-baselining has run, downstream tailoring and edit sessions operate on the
-best-practices-improved `standard` version by default. The lineage is fully
+Migration: the former `standard` pass is now `refine`. Legacy
+`standard_resume` pointers still resolve as a read-alias for existing projects,
+and `build-standard` surfaces remain as one-release deprecation aliases for
+`build-refine`.
+
+**All job-specific tailoring runs off `refine`, not `original`.** The active
+resume resolves as
+`refine ?? standard(legacy) ?? structure ?? base ?? original`, so once baselining
+has run, downstream tailoring and edit sessions operate on the
+best-practices-improved `refine` version by default. The lineage is fully
 deterministic and offline: no LLM or network is touched on the baselining path.
 
-After the improve/refine loop produces a job-specific tailored resume, run the
+After the job-specific improve/tailor loop produces a tailored resume, run the
 perfect fit pass before export:
 
 ```bash
@@ -178,10 +185,10 @@ claims remain `CONTRADICTED`. `UNSUPPORTED` means missing evidence, not an
 active refutation; each claim carries a machine-readable `reason_code` such as
 `missing_evidence`, `strong_evidence_overlap`, or `refuted_by_evidence`.
 
-The full job-specific path is `original → base → structure → standard → refine
-→ tailored → perfect`: refine/tailor proposes and commits truthful
-job-alignment edits, while perfect only fits that tailored content to the
-configured shape and page budgets.
+The full job-specific path is `original → base → structure → refine → tailored
+→ final`: refine performs the job-independent wording pass, tailor proposes and
+commits truthful job-alignment edits, and the final fit only fits that tailored
+content to the configured shape and page budgets.
 
 ## Release Notes
 
@@ -189,20 +196,20 @@ configured shape and page budgets.
 
 - Documents the job-specific `perfect` stage after tailoring: `resume-tool fit`
   / `resume_build_perfect` writes `<name>-<job>-final.json` without mutating the
-  `original` / `base` / `structure` / `standard` lineage.
+  `original` / `base` / `structure` / `refine` lineage.
 - Clarifies that export enforces the rendered `max_pages` page hard gate after
   the fit pass.
 
 ### Unreleased — canonical structure stage (RIT-I-0019)
 
 - Inserts the lossless `structure` stage into resume baselining, making the
-  tracked lineage `original → base → structure → standard`.
+  tracked lineage `original → base → structure → refine`.
 - Adds shape analysis and `build-structure`: redundant skill/custom sections are
   merged into canonical skills, ambiguous sections are deferred, and writes are
   gated by content-ledger accounting plus whole-resume claim preservation.
-- Keeps the wording pass behavior unchanged: `build-standard` now reads
+- Keeps the wording pass behavior unchanged: `build-refine` now reads
   `structure ?? base ?? original`, projects canonical `structure` back to the
-  BuildDoc read model, and writes `standard` as before.
+  BuildDoc read model, and writes `refine`.
 
 ### Package 0.9.0 / plugin 1.2.0 — test-run tightening (RIT-T-0126–0130)
 
@@ -217,10 +224,10 @@ configured shape and page budgets.
 - **set-active path normalization**: a leading `resume-kit/` on a user-supplied
   pointer is stripped, so cwd-relative and working-dir-relative paths resolve
   identically and `build-base` no longer fails on a doubled path.
-- **check-best-practices quantification**: `MISSING_QUANTIFICATION` is capped and
-  prioritized to the few bullets where a metric adds most (impact-verb bullets
-  first), with a single `MISSING_QUANTIFICATION_MORE` note for the remainder —
-  replacing the one-prompt-per-bullet wall.
+- **check-best-practices quantification**: `MISSING_QUANTIFICATION` emits one
+  finding per unquantified bullet across the whole resume, prioritized where a
+  metric adds most (impact-verb bullets first), with no aggregate
+  `MISSING_QUANTIFICATION_MORE` cap.
 - **job-hunter bridge**: reconciled three stale capability dispatch names left by
   the RIT-A-0005 rename.
 
@@ -239,16 +246,17 @@ configured shape and page budgets.
 
 ### Package 0.7.0 / plugin 1.0.0 — initial resume baselining (RIT-I-0016)
 
-- Adds the initial `original → base → standard` baselining lineage as the
+- Adds the initial `original → base → refine` baselining lineage as the
   mandatory pre-tailoring phase: `build-base` (auto structural fixes behind the
   claim-preservation gate), `analyze-best-practices` (job-independent report
   classifying each finding `auto_suggestible` vs `needs_user_input`), and
-  `build-standard` (best-practices walkthrough behind the same gate). This was
-  later extended by the `structure` stage.
-- Makes `standard` the default tailoring input — active resolution is
-  `standard ?? base ?? original` in the initial lineage, so tailoring and edit
-  sessions operate on the best-practices-improved version rather than the raw
-  ingest.
+  `build-refine` (best-practices walkthrough behind the same gate; legacy
+  `build-standard` remains a deprecation alias). This was later extended by the
+  `structure` stage.
+- Makes `refine` the default tailoring input — active resolution is
+  `refine ?? standard(legacy) ?? base ?? original` in the initial lineage, so
+  tailoring and edit sessions operate on the best-practices-improved version
+  rather than the raw ingest.
 - The entire baselining path is deterministic and offline (no LLM, no network),
   proven end-to-end by the lineage integration test.
 

@@ -66,6 +66,14 @@ def test_help_lists_all_commands() -> None:
         "export",
         "init",
         "set-active",
+        "build-base",
+        "build-standard",
+        "build-refine",
+        "fit",
+        "analyze-shape",
+        "build-structure",
+        "analyze-best-practices",
+        "ats-view",
     ]
     for name in expected:
         assert name in result.stdout

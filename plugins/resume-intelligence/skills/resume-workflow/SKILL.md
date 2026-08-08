@@ -3,12 +3,12 @@ name: resume-workflow
 description: >
   The end-to-end runbook for tailoring a resume to a job with resume-intelligence.
   Sequences the single-purpose skills in the one obvious order — ingest →
-  baseline the resume (base → structure → standard, job-independent, REQUIRED before
+  baseline the resume (base → structure → refine, job-independent, REQUIRED before
   tailoring) → check against the job → (optionally) improve → (optionally)
   second-agent review → validate truth → re-check for deltas → perfect fit →
   export — and names
   the gate (what must exist) for each step, including that all job tailoring is
-  gated behind a `standard` version (or a recorded override). This is a GUIDE: it
+  gated behind a `refine` version (or a recorded override). This is a GUIDE: it
   points at the other skills, it does not call tools itself.
 ---
 
@@ -61,14 +61,14 @@ opt-in and never auto-runs.
    - **check-best-practices** — gate: `structure` exists (or `base` with a
      recorded shape-pass override). Scores the structurally canonical resume and
      classifies findings `auto_suggestible` vs `needs_user_input` (read-only).
-   - **update-best-practices** — gate: `structure` (or recorded override) + the
+   - **update-refine** — gate: `structure` (or recorded override) + the
      best-practices report.
      Auto-applies truthful rewrites, elicits the user's real facts for
-     `needs_user_input` items, and writes `<name>-standard.json` behind the
-     claim-preservation gate. **`standard` becomes the default resume for all
-     tailoring below.**
+     `needs_user_input` items, and writes `<name>-refine.json` behind the
+     claim-preservation gate. **`refine` becomes the default resume for all
+     tailoring below** (formerly called `standard`).
    - **check-ats-view** *(read-only, optional)* — gate: any `ResumeDocument`
-     (normally `standard`). Shows "what the ATS sees" — detected sections,
+     (normally `refine`). Shows "what the ATS sees" — detected sections,
      extracted entities + years-of-experience, and the zoned keyword breakdown —
      so the user can confirm the parsed view before tailoring. Job-independent;
      never edits the resume and carries the standing note that a strong ATS match
@@ -90,21 +90,21 @@ opt-in and never auto-runs.
    jobs — job faithfulness is enforced by the skill's prose extraction gates. Writes
    `resume-kit/jobs/<name>-original.json` and sets `active_job`.
 
-4. **Check against the job** *(tailoring — gated on `standard`)* — run:
-   - **check-keywords** — gate: **`standard` present (or a recorded override)** +
-     `active_job`. Runs against the `standard` resume; uses the synonym alias
+4. **Check against the job** *(tailoring — gated on `refine`)* — run:
+   - **check-keywords** — gate: **`refine` present (or a recorded override)** +
+     `active_job`. Runs against the `refine` resume; uses the synonym alias
      index (`alias_file`) when present to match variant terms.
-   - **check-gaps** — gate: **`standard` (or override)** + `active_job`.
+   - **check-gaps** — gate: **`refine` (or override)** + `active_job`.
 
    The structural check already ran in baselining (**update-structure**), so it is
    not repeated here. Record the baseline scores so the re-check step can show
    deltas.
 
-5. **Improve** *(tailoring — gated on `standard`; only what step 4 surfaced)*:
-   - **update-keywords** — gate: **`standard` (or override)** + `active_job` + the
+5. **Improve** *(tailoring — gated on `refine`; only what step 4 surfaced)*:
+   - **update-keywords** — gate: **`refine` (or override)** + `active_job` + the
      keyword-match/gap findings. Produces `ChangeProposal` records for
      missing-but-true keywords.
-   - **update-terminology** — gate: **`standard` (or override)** + `active_job` +
+   - **update-terminology** — gate: **`refine` (or override)** + `active_job` +
      the synonym alias index (`alias_file`). Produces `ChangeProposal` records for
      wording swaps the resume already satisfies.
 

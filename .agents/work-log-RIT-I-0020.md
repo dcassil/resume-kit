@@ -32,3 +32,11 @@ Then poll every 5 min for RIT-I-0019 landing on main; on land, rebase + do Phase
 
 ## Status
 - 2026-08-07: decomposed into 6 tasks; worktree created; dispatching Wave 1.
+- 2026-08-07: Waves 1-3 done via codex, each gated green. Commits 0e47f6a / 863f7b6 / 8484562.
+  RIT-I-0019 landed on main (0445add) meanwhile. Merged feat/rit-i-0020-refine into main in
+  throwaway worktree (resolved 4 import/gate conflicts vs RIT-I-0019), full gate GREEN, merge
+  b61d7cf PUSHED to origin/main. Metis: 0141/0143/0144 completed; backlog 0132 resolved.
+  Note: local main (shared tree) still at 0445add — behind origin; other agents pull to sync.
+- REMAINING: Phases 4-6 (RIT-T-0145/0146/0147) now unblocked (0019 landed). Phase 4 rename
+  (standard→refine) overlaps config/facade/resume-workflow with the in-flight RIT-I-0021
+  (perfect/fit) agent — sequence carefully / rebase on origin/main before starting.

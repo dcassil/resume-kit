@@ -37,6 +37,7 @@ from resume_kit_facade.models import (
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildPerfectRequest,
+    BuildRefineRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -788,10 +789,27 @@ def build_standard(
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
-    """Run the base->standard best-practices write path behind the gate."""
+    """Deprecated alias for build-refine; runs the wording pass behind the gate."""
     request = BuildStandardRequest(root=root, answers=io.load_answers(answers))
     options = _options(False, strict, False)
     _run(caps.build_standard_capability(request, options), output)
+
+
+@app.command(name="build-refine")
+def build_refine(
+    root: str = _Root,
+    answers: str | None = typer.Option(
+        None,
+        "--answers",
+        help="Optional JSON path mapping finding keys to user-supplied rewrites.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the base->refine best-practices wording pass behind the gate."""
+    request = BuildRefineRequest(root=root, answers=io.load_answers(answers))
+    options = _options(False, strict, False)
+    _run(caps.build_refine_capability(request, options), output)
 
 
 @app.command(name="fit")

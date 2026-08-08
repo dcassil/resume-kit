@@ -98,8 +98,8 @@ def test_original_base_structure_standard_lineage_e2e(tmp_path: Path) -> None:
     assert resolve_active_resume(config) == "resumes/resume-a-structure.json"
 
     standard_result = build_standard(tmp_path)
-    assert standard_result.standard_path == "resumes/resume-a-standard.json"
-    standard_path = working_dir(tmp_path) / standard_result.standard_path
+    assert standard_result.refine_path == "resumes/resume-a-refine.json"
+    standard_path = working_dir(tmp_path) / standard_result.refine_path
     standard = ResumeDocument.model_validate(_load_json(standard_path))
     assert "results-driven" not in standard.summary.lower()
     assert "team player" not in standard.summary.lower()
@@ -108,6 +108,6 @@ def test_original_base_structure_standard_lineage_e2e(tmp_path: Path) -> None:
     assert standard.customSections == {}
 
     config = load_config(tmp_path)
-    assert config.standard_resume == "resumes/resume-a-standard.json"
-    assert config.standard_derived_from == "resumes/resume-a-structure.json"
-    assert resolve_active_resume(config) == "resumes/resume-a-standard.json"
+    assert config.refine_resume == "resumes/resume-a-refine.json"
+    assert config.refine_derived_from == "resumes/resume-a-structure.json"
+    assert resolve_active_resume(config) == "resumes/resume-a-refine.json"

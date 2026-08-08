@@ -106,6 +106,7 @@ from resume_kit_scoring import project_scoredoc as _project_scoredoc
 from resume_kit_facade import edit_session as _edit_session
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.baseline import build_base as _build_base
+from resume_kit_facade.baseline import build_refine as _build_refine
 from resume_kit_facade.baseline import build_standard as _build_standard
 from resume_kit_facade.baseline import build_structure as _build_structure
 from resume_kit_facade.models import (
@@ -142,6 +143,7 @@ from resume_kit_facade.models import (
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RecordEditFeedbackResult,
+    RefineBuildResult,
     RefreshPreferencesRequest,
     SelectBestResumeRequest,
     SessionPromptRequest,
@@ -1128,12 +1130,16 @@ async def build_standard_capability(
 ) -> InterfaceResponse[object]:
     """Run the ``base -> standard`` best-practices write path (RIT-T-0118).
 
+    Deprecated alias; prefer ``build-refine`` for the renamed wording pass.
+
     Deterministic and filesystem-local: never requires a provider and ignores
-    ``no_llm``. Delegates to :func:`resume_kit_facade.baseline.build_standard`,
-    which analyzes best practices, applies auto-suggestible edits plus any
-    user-supplied ``answers`` rewrites, enforces the claim-preservation gate,
-    writes ``<name>-standard.json`` and records the ``standard`` pointer. Returns
-    a serializable :class:`StandardBuildResult`.
+    ``no_llm``. Delegates to the legacy
+    :func:`resume_kit_facade.baseline.build_standard` alias, which analyzes best
+    practices, applies auto-suggestible edits plus any user-supplied
+    ``answers`` rewrites, enforces the claim-preservation gate, writes
+    ``<name>-refine.json`` and records the ``refine`` pointer. Returns a
+    serializable :class:`StandardBuildResult` with the legacy ``standard_path``
+    response key.
     """
     if not isinstance(request, BuildStandardRequest):
         return from_resume_kit_error(_bad_request(request, "BuildStandardRequest"))
@@ -1144,7 +1150,36 @@ async def build_standard_capability(
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
         return from_exception(exc)
     response = StandardBuildResult(
-        standard_path=result.standard_path,
+        standard_path=result.refine_path,
+        applied=list(result.applied),
+        deferred=list(result.deferred),
+    )
+    return build_success(response, strict=options.strict)
+
+
+async def build_refine_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the ``base -> refine`` best-practices write path (RIT-T-0118).
+
+    Deterministic and filesystem-local: never requires a provider and ignores
+    ``no_llm``. Delegates to :func:`resume_kit_facade.baseline.build_refine`,
+    which analyzes best practices, applies auto-suggestible edits plus any
+    user-supplied ``answers`` rewrites, enforces the claim-preservation gate,
+    writes ``<name>-refine.json`` and records the ``refine`` pointer. Returns
+    a serializable :class:`RefineBuildResult`.
+    """
+    if not isinstance(request, BuildStandardRequest):
+        return from_resume_kit_error(_bad_request(request, "BuildRefineRequest"))
+    try:
+        result = _build_refine(request.root, answers=request.answers)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
+        return from_exception(exc)
+    response = RefineBuildResult(
+        refine_path=result.refine_path,
         applied=list(result.applied),
         deferred=list(result.deferred),
     )
@@ -1329,6 +1364,7 @@ REGISTRY: dict[str, Capability] = {
     "analyze-shape": analyze_shape_capability,
     "build-structure": build_structure_capability,
     "build-standard": build_standard_capability,
+    "build-refine": build_refine_capability,
     "fit": build_perfect_capability,
     "analyze-best-practices": analyze_best_practices_capability,
     "ats-view": ats_view_capability,
