@@ -6,13 +6,40 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from resume_kit_schemas import JobDescription, TrimCandidate, TrimKind
-from resume_kit_schemas.canonical import Experience, Resume
+from resume_kit_schemas import (
+    Experience,
+    JobDescription,
+    ResumeDocument,
+    TrimCandidate,
+    TrimKind,
+)
 from resume_kit_terms import AliasIndex, load_effective_alias_index
 
 from .rank_skills import _job_terms, _term_in_text
 
-_QUANTIFIED_RE = re.compile(r"\d")
+_QUANTIFIED_RE = re.compile(r"(?:\d|%|\$)")
+_DATE_ENDPOINT_RE = r"(?:[A-Za-z]+\s+)?\d{4}(?:-\d{1,2})?"
+_OPEN_ENDPOINT_RE = r"present|current|now|ongoing"
+_YEARS_RANGE_RE = re.compile(
+    rf"^\s*(?P<start>{_DATE_ENDPOINT_RE})\s*"
+    rf"(?:-|\u2013|\u2014|\bto\b)\s*"
+    rf"(?P<end>{_OPEN_ENDPOINT_RE}|{_DATE_ENDPOINT_RE})\s*$",
+    re.IGNORECASE,
+)
+_MONTHS = {
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
+}
 _SENIOR_TITLE_TERMS = frozenset(
     {
         "architect",
@@ -40,7 +67,7 @@ class _ExperienceScore:
 
 
 def rank_experience(
-    resume: Resume,
+    resume: ResumeDocument,
     job: JobDescription,
     *,
     count: int,
@@ -48,18 +75,18 @@ def rank_experience(
 ) -> list[TrimCandidate]:
     """Return low-value experience entries as ordered compress/trim candidates."""
 
-    if count <= 0 or not resume.work:
+    if count <= 0 or not resume.workExperience:
         return []
 
     index = alias_index if alias_index is not None else load_effective_alias_index(None)
     job_terms = _job_terms(job)
     scores: list[_ExperienceScore] = []
-    for work_index, experience in enumerate(resume.work):
+    for work_index, experience in enumerate(resume.workExperience):
         recency = _recency_score(experience)
         seniority = _seniority_score(experience.title)
         relevance = _relevance_score(experience, job_terms, index)
         quantified = _has_quantified_outcome(experience)
-        continuity_risk = _continuity_risk(resume.work, work_index)
+        continuity_risk = _continuity_risk(resume.workExperience, work_index)
         value = recency + seniority + relevance + (18.0 if quantified else 0.0)
         if continuity_risk:
             value += 10.0
@@ -96,7 +123,7 @@ def rank_experience(
                 TrimCandidate(
                     kind=TrimKind.DEFER,
                     dimension="experience_entries",
-                    path=f"work[{item.index}]",
+                    path=f"workExperience[{item.index}]",
                     score=item.score,
                     rationale=rationale,
                     deferred=True,
@@ -108,7 +135,7 @@ def rank_experience(
             TrimCandidate(
                 kind=TrimKind.COMPRESS,
                 dimension="experience_entries",
-                path=f"work[{item.index}]",
+                path=f"workExperience[{item.index}]",
                 score=item.score,
                 rationale=f"{rationale}; compress bullets before considering removal",
             )
@@ -117,7 +144,7 @@ def rank_experience(
             TrimCandidate(
                 kind=TrimKind.TRIM,
                 dimension="experience_entries",
-                path=f"work[{item.index}]",
+                path=f"workExperience[{item.index}]",
                 score=item.score,
                 rationale=f"{rationale}; remove only after compression is insufficient",
             )
@@ -126,9 +153,9 @@ def rank_experience(
 
 
 def _recency_score(experience: Experience) -> float:
-    end_month = _date_to_month(experience.endDate)
+    start_month, end_month = _years_months(experience.years)
     if end_month is None:
-        end_month = _date_to_month(experience.startDate)
+        end_month = start_month
     if end_month is None:
         return 6.0
     if end_month >= _PRESENT_MONTH:
@@ -164,8 +191,8 @@ def _relevance_score(
 
 def _has_quantified_outcome(experience: Experience) -> bool:
     return any(
-        bool(achievement.metrics) or _QUANTIFIED_RE.search(achievement.text) is not None
-        for achievement in experience.achievements
+        _QUANTIFIED_RE.search(bullet) is not None
+        for bullet in experience.description
     )
 
 
@@ -173,39 +200,48 @@ def _continuity_risk(experiences: list[Experience], index: int) -> bool:
     if len(experiences) <= 1:
         return False
     experience = experiences[index]
-    if experience.endDate == "present":
+    start_month, end_month = _years_months(experience.years)
+    if end_month is not None and end_month >= _PRESENT_MONTH:
         return True
     if index == 0 or index == len(experiences) - 1:
         return False
-    return (
-        _date_to_month(experience.startDate) is not None
-        and _date_to_month(experience.endDate) is not None
-    )
+    return start_month is not None and end_month is not None
 
 
 def _experience_text(experience: Experience) -> str:
-    parts = [experience.organization, experience.title]
-    if experience.summary is not None:
-        parts.append(experience.summary)
-    parts.extend(experience.skills)
-    parts.extend(experience.technologies)
-    for achievement in experience.achievements:
-        parts.append(achievement.text)
-        parts.extend(achievement.skills)
-        parts.extend(achievement.keywords)
+    parts = [experience.company, experience.title, *experience.description]
     return " ".join(parts)
+
+
+def _years_months(value: str) -> tuple[int | None, int | None]:
+    if not value.strip():
+        return None, None
+    match = _YEARS_RANGE_RE.match(value)
+    if match is None:
+        month = _date_to_month(value)
+        return month, month
+    return _date_to_month(match.group("start")), _date_to_month(match.group("end"))
 
 
 def _date_to_month(value: str | None) -> int | None:
     if value is None:
         return None
-    if value == "present":
-        return _PRESENT_MONTH
-    parts = value.split("-")
-    if not parts or not parts[0].isdigit():
+    value = value.strip()
+    if not value:
         return None
-    year = int(parts[0])
+    if value.lower() in {"present", "current", "now", "ongoing"}:
+        return _PRESENT_MONTH
+    year_match = re.search(r"(19|20)\d{2}", value)
+    if year_match is None:
+        return None
+    year = int(year_match.group(0))
     month = 1
+    lowered = value.lower()
+    for month_name, month_number in _MONTHS.items():
+        if month_name in lowered:
+            month = month_number
+            break
+    parts = value.split("-")
     if len(parts) >= 2 and parts[1].isdigit():
         month = int(parts[1])
     return year * 12 + (month - 1)

@@ -7,7 +7,7 @@ from resume_kit_policy import (
     ResumeShapePolicy,
     default_shape_policy,
 )
-from resume_kit_schemas.canonical import Achievement, Basics, Experience, Resume
+from resume_kit_schemas import Experience, PersonalInfo, ResumeDocument
 from resume_kit_schemas.evidence import CandidateEvidence, EvidenceKind
 from resume_kit_scoring.compress import (
     CompressionCandidate,
@@ -32,18 +32,18 @@ def _resume(
     *,
     summary: str = "Builds reliable systems.",
     bullet: str = "Built reliable APIs.",
-) -> Resume:
-    return Resume(
-        basics=Basics(
+) -> ResumeDocument:
+    return ResumeDocument(
+        personalInfo=PersonalInfo(
             name="Jane Engineer",
             email="jane@example.com",
-            summary=summary,
         ),
-        work=[
+        summary=summary,
+        workExperience=[
             Experience(
-                organization="Acme",
+                company="Acme",
                 title="Staff Engineer",
-                achievements=[Achievement(text=bullet)],
+                description=[bullet],
             )
         ],
     )
@@ -88,7 +88,7 @@ def test_compress_summary_returns_claim_preserving_candidate() -> None:
     )
 
     assert isinstance(candidate, CompressionCandidate)
-    assert candidate.path == "basics.summary"
+    assert candidate.path == "summary"
     assert candidate.claim_preserving is True
     assert len(candidate.rewritten.split()) <= 8
     assert "Python" in candidate.rewritten
@@ -113,7 +113,7 @@ def test_compress_bullet_returns_false_when_rewrite_fails_truth_gate() -> None:
     )
 
     assert isinstance(candidate, CompressionCandidate)
-    assert candidate.path == "work[0].achievements[0]"
+    assert candidate.path == "workExperience[0].description[0]"
     assert candidate.claim_preserving is False
     assert candidate.rewritten == "Mentored interns"
     assert "could not compress truthfully" in candidate.reason

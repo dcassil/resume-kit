@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from resume_kit_schemas import JobDescription, Requirement, TrimKind
-from resume_kit_schemas.canonical import Achievement, Basics, Experience, Resume
+from resume_kit_schemas import (
+    Experience,
+    JobDescription,
+    PersonalInfo,
+    Requirement,
+    ResumeDocument,
+    TrimKind,
+)
 from resume_kit_scoring.rank_experience import rank_experience
 
 
@@ -18,10 +24,10 @@ def _job(*keywords: str) -> JobDescription:
     )
 
 
-def _resume(*work: Experience) -> Resume:
-    return Resume(
-        basics=Basics(name="Jane Engineer", email="jane@example.com"),
-        work=list(work),
+def _resume(*work: Experience) -> ResumeDocument:
+    return ResumeDocument(
+        personalInfo=PersonalInfo(name="Jane Engineer", email="jane@example.com"),
+        workExperience=list(work),
     )
 
 
@@ -34,26 +40,30 @@ def _experience(
     skills: list[str] | None = None,
 ) -> Experience:
     return Experience(
-        organization=f"{title} Co",
+        company=f"{title} Co",
         title=title,
-        startDate=start,
-        endDate=end,
-        achievements=[Achievement(text=achievement)],
-        skills=skills or [],
+        years=f"{start}-{end}",
+        description=[achievement, *(skills or [])],
     )
 
 
 @pytest.mark.parametrize(
     ("count", "expected"),
     [
-        (2, [("work[1]", TrimKind.COMPRESS), ("work[1]", TrimKind.TRIM)]),
+        (
+            2,
+            [
+                ("workExperience[1]", TrimKind.COMPRESS),
+                ("workExperience[1]", TrimKind.TRIM),
+            ],
+        ),
         (
             4,
             [
-                ("work[1]", TrimKind.COMPRESS),
-                ("work[1]", TrimKind.TRIM),
-                ("work[2]", TrimKind.COMPRESS),
-                ("work[2]", TrimKind.TRIM),
+                ("workExperience[1]", TrimKind.COMPRESS),
+                ("workExperience[1]", TrimKind.TRIM),
+                ("workExperience[2]", TrimKind.COMPRESS),
+                ("workExperience[2]", TrimKind.TRIM),
             ],
         ),
     ],
@@ -87,8 +97,8 @@ def test_rank_experience_compresses_before_removing_same_role() -> None:
     candidates = rank_experience(resume, _job("Python"), count=2)
 
     assert [(candidate.path, candidate.kind) for candidate in candidates] == [
-        ("work[1]", TrimKind.COMPRESS),
-        ("work[1]", TrimKind.TRIM),
+        ("workExperience[1]", TrimKind.COMPRESS),
+        ("workExperience[1]", TrimKind.TRIM),
     ]
 
 
@@ -101,8 +111,8 @@ def test_rank_experience_defers_equal_score_ties_at_boundary() -> None:
     candidates = rank_experience(resume, _job("Python"), count=2)
 
     assert [(candidate.path, candidate.kind) for candidate in candidates] == [
-        ("work[0]", TrimKind.DEFER),
-        ("work[1]", TrimKind.DEFER),
+        ("workExperience[0]", TrimKind.DEFER),
+        ("workExperience[1]", TrimKind.DEFER),
     ]
     assert all(candidate.deferred for candidate in candidates)
 
@@ -121,7 +131,10 @@ def test_rank_experience_notes_continuity_risk_for_selected_middle_role() -> Non
 
     candidates = rank_experience(resume, _job("Python"), count=2)
 
-    assert [candidate.path for candidate in candidates] == ["work[1]", "work[1]"]
+    assert [candidate.path for candidate in candidates] == [
+        "workExperience[1]",
+        "workExperience[1]",
+    ]
     assert all("continuity risk" in candidate.rationale for candidate in candidates)
 
 

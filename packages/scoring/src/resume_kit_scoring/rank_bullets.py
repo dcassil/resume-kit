@@ -6,8 +6,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from resume_kit_schemas import JobDescription, TrimCandidate, TrimKind
-from resume_kit_schemas.canonical import Achievement, Resume
+from resume_kit_schemas import JobDescription, ResumeDocument, TrimCandidate, TrimKind
 from resume_kit_terms import AliasIndex, load_effective_alias_index, surface_form
 
 from .rank_skills import _job_terms, _term_in_text
@@ -68,13 +67,13 @@ _SCOPE_TERMS = frozenset(
 class _BulletScore:
     work_index: int
     achievement_index: int
-    achievement: Achievement
+    achievement: str
     score: float
     rationale: str
 
 
 def rank_bullets(
-    resume: Resume,
+    resume: ResumeDocument,
     job: JobDescription,
     *,
     count: int,
@@ -88,26 +87,26 @@ def rank_bullets(
     index = alias_index if alias_index is not None else load_effective_alias_index(None)
     job_terms = _job_terms(job)
     all_bullets = [
-        achievement
-        for experience in resume.work
-        for achievement in experience.achievements
+        bullet
+        for experience in resume.workExperience
+        for bullet in experience.description
     ]
     duplicate_surfaces = {
         surface
         for surface, occurrences in Counter(
-            surface_form(achievement.text) for achievement in all_bullets
+            surface_form(bullet) for bullet in all_bullets
         ).items()
         if surface and occurrences > 1
     }
 
     scores: list[_BulletScore] = []
-    for work_index, experience in enumerate(resume.work):
-        for achievement_index, achievement in enumerate(experience.achievements):
+    for work_index, experience in enumerate(resume.workExperience):
+        for achievement_index, achievement in enumerate(experience.description):
             score, rationale = _score_bullet(
                 achievement,
                 job_terms,
                 index,
-                surface_form(achievement.text) in duplicate_surfaces,
+                surface_form(achievement) in duplicate_surfaces,
             )
             scores.append(
                 _BulletScore(
@@ -131,7 +130,10 @@ def rank_bullets(
             TrimCandidate(
                 kind=TrimKind.DEFER if deferred else TrimKind.TRIM,
                 dimension="bullets_per_role",
-                path=f"work[{item.work_index}].achievements[{item.achievement_index}]",
+                path=(
+                    f"workExperience[{item.work_index}]"
+                    f".description[{item.achievement_index}]"
+                ),
                 score=item.score,
                 rationale=rationale,
                 deferred=deferred,
@@ -141,14 +143,14 @@ def rank_bullets(
 
 
 def _score_bullet(
-    achievement: Achievement,
+    achievement: str,
     job_terms: list[str],
     alias_index: AliasIndex,
     duplicate: bool,
 ) -> tuple[float, str]:
-    text = achievement.text
+    text = achievement
     tokens = _tokens(text)
-    quantified = bool(achievement.metrics) or _NUMBER_RE.search(text) is not None
+    quantified = _NUMBER_RE.search(text) is not None
     impact = bool(set(tokens) & _IMPACT_TERMS)
     scope = bool(set(tokens) & _SCOPE_TERMS)
     relevance_matches = sum(

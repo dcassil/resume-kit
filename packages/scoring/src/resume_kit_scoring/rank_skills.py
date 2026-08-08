@@ -7,11 +7,11 @@ from dataclasses import dataclass
 
 from resume_kit_schemas import (
     JobDescription,
+    ResumeDocument,
     TrimCandidate,
     TrimKind,
     sanitize_keywords,
 )
-from resume_kit_schemas.canonical import Resume, SkillGroup
 from resume_kit_terms import AliasIndex, load_effective_alias_index, match, surface_form
 
 _FOUNDATIONAL_SKILLS = frozenset(
@@ -82,13 +82,13 @@ _SPECIFIC_TECH_HINTS = frozenset(
 @dataclass(frozen=True)
 class _SkillScore:
     index: int
-    skill: SkillGroup
+    skill: str
     score: float
     rationale: str
 
 
 def rank_skills(
-    resume: Resume,
+    resume: ResumeDocument,
     job: JobDescription,
     *,
     count: int,
@@ -99,7 +99,8 @@ def rank_skills(
     The function proposes ordering only; it never mutates ``resume``.
     """
 
-    if count <= 0 or not resume.skills:
+    skills = resume.additional.technicalSkills
+    if count <= 0 or not skills:
         return []
 
     index = alias_index if alias_index is not None else load_effective_alias_index(None)
@@ -108,7 +109,7 @@ def rank_skills(
     seen_terms: set[str] = set()
     scores: list[_SkillScore] = []
 
-    for skill_index, skill in enumerate(resume.skills):
+    for skill_index, skill in enumerate(skills):
         labels = _skill_labels(skill)
         duplicate = _has_prior_duplicate(labels, seen_terms)
         seen_terms.update(
@@ -172,7 +173,7 @@ def rank_skills(
             TrimCandidate(
                 kind=TrimKind.DEFER if deferred else TrimKind.TRIM,
                 dimension="skills",
-                path=f"skills[{item.index}]",
+                path=f"additional.technicalSkills[{item.index}]",
                 score=item.score,
                 rationale=rationale,
                 deferred=deferred,
@@ -199,25 +200,16 @@ def _job_terms(job: JobDescription) -> list[str]:
     return list(deduped.values())
 
 
-def _resume_usage_text(resume: Resume) -> str:
+def _resume_usage_text(resume: ResumeDocument) -> str:
     parts: list[str] = []
-    if resume.basics.summary is not None:
-        parts.append(resume.basics.summary)
-    for experience in resume.work:
-        parts.append(experience.title)
-        if experience.summary is not None:
-            parts.append(experience.summary)
-        parts.extend(experience.skills)
-        parts.extend(experience.technologies)
-        parts.extend(achievement.text for achievement in experience.achievements)
-        for achievement in experience.achievements:
-            parts.extend(achievement.skills)
-            parts.extend(achievement.keywords)
+    parts.append(resume.summary)
+    for experience in resume.workExperience:
+        parts.extend(experience.description)
     return " ".join(parts)
 
 
-def _skill_labels(skill: SkillGroup) -> list[str]:
-    return [skill.name, *skill.keywords]
+def _skill_labels(skill: str) -> list[str]:
+    return [skill]
 
 
 def _has_prior_duplicate(labels: list[str], seen_terms: set[str]) -> bool:

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from resume_kit_schemas import JobDescription, Requirement, TrimKind
-from resume_kit_schemas.canonical import (
-    Achievement,
-    Basics,
+from resume_kit_schemas import (
+    AdditionalInfo,
     Experience,
-    Resume,
-    SkillGroup,
+    JobDescription,
+    PersonalInfo,
+    Requirement,
+    ResumeDocument,
+    TrimKind,
 )
 from resume_kit_scoring.rank_skills import rank_skills
 
@@ -24,33 +25,41 @@ def _job(*keywords: str) -> JobDescription:
     )
 
 
-def _resume(*skills: SkillGroup, summary: str = "Platform engineer.") -> Resume:
-    return Resume(
-        basics=Basics(
+def _resume(*skills: str, summary: str = "Platform engineer.") -> ResumeDocument:
+    return ResumeDocument(
+        personalInfo=PersonalInfo(
             name="Jane Engineer",
             email="jane@example.com",
-            summary=summary,
         ),
-        work=[
+        summary=summary,
+        workExperience=[
             Experience(
-                organization="Acme",
+                company="Acme",
                 title="Staff Engineer",
-                achievements=[Achievement(text="Built Python APIs for billing.")],
+                description=["Built Python APIs for billing."],
             )
         ],
-        skills=list(skills),
+        additional=AdditionalInfo(technicalSkills=list(skills)),
     )
 
 
-def _skill(name: str, *keywords: str) -> SkillGroup:
-    return SkillGroup(name=name, keywords=list(keywords or (name,)))
+def _skill(name: str) -> str:
+    return name
 
 
 @pytest.mark.parametrize(
     ("count", "expected_paths"),
     [
-        (1, ["skills[6]"]),
-        (4, ["skills[6]", "skills[4]", "skills[3]", "skills[5]"]),
+        (1, ["additional.technicalSkills[6]"]),
+        (
+            4,
+            [
+                "additional.technicalSkills[6]",
+                "additional.technicalSkills[4]",
+                "additional.technicalSkills[3]",
+                "additional.technicalSkills[5]",
+            ],
+        ),
     ],
 )
 def test_rank_skills_orders_lowest_value_rules_first(
@@ -77,7 +86,9 @@ def test_rank_skills_uses_alias_aware_job_match() -> None:
 
     candidates = rank_skills(resume, _job("k8s"), count=1)
 
-    assert [candidate.path for candidate in candidates] == ["skills[1]"]
+    assert [candidate.path for candidate in candidates] == [
+        "additional.technicalSkills[1]"
+    ]
 
 
 def test_rank_skills_defers_equal_score_ties_at_boundary() -> None:
@@ -85,7 +96,10 @@ def test_rank_skills_defers_equal_score_ties_at_boundary() -> None:
 
     candidates = rank_skills(resume, _job("Python"), count=1)
 
-    assert [candidate.path for candidate in candidates] == ["skills[0]", "skills[1]"]
+    assert [candidate.path for candidate in candidates] == [
+        "additional.technicalSkills[0]",
+        "additional.technicalSkills[1]",
+    ]
     assert [candidate.kind for candidate in candidates] == [
         TrimKind.DEFER,
         TrimKind.DEFER,

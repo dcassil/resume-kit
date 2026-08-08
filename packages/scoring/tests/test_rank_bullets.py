@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from resume_kit_schemas import JobDescription, Requirement, TrimKind
-from resume_kit_schemas.canonical import Achievement, Basics, Experience, Resume
+from resume_kit_schemas import (
+    Experience,
+    JobDescription,
+    PersonalInfo,
+    Requirement,
+    ResumeDocument,
+    TrimKind,
+)
 from resume_kit_scoring.rank_bullets import rank_bullets
 
 
@@ -18,14 +24,14 @@ def _job(*keywords: str) -> JobDescription:
     )
 
 
-def _resume(*bullets: str) -> Resume:
-    return Resume(
-        basics=Basics(name="Jane Engineer", email="jane@example.com"),
-        work=[
+def _resume(*bullets: str) -> ResumeDocument:
+    return ResumeDocument(
+        personalInfo=PersonalInfo(name="Jane Engineer", email="jane@example.com"),
+        workExperience=[
             Experience(
-                organization="Acme",
+                company="Acme",
                 title="Staff Engineer",
-                achievements=[Achievement(text=bullet) for bullet in bullets],
+                description=list(bullets),
             )
         ],
     )
@@ -34,13 +40,13 @@ def _resume(*bullets: str) -> Resume:
 @pytest.mark.parametrize(
     ("count", "expected_paths"),
     [
-        (1, ["work[0].achievements[1]"]),
+        (1, ["workExperience[0].description[1]"]),
         (
             3,
             [
-                "work[0].achievements[1]",
-                "work[0].achievements[2]",
-                "work[0].achievements[3]",
+                "workExperience[0].description[1]",
+                "workExperience[0].description[2]",
+                "workExperience[0].description[3]",
             ],
         ),
     ],
@@ -69,7 +75,9 @@ def test_rank_bullets_keeps_alias_relevant_bullet_above_unmatched_bullet() -> No
 
     candidates = rank_bullets(resume, _job("k8s"), count=1)
 
-    assert [candidate.path for candidate in candidates] == ["work[0].achievements[1]"]
+    assert [candidate.path for candidate in candidates] == [
+        "workExperience[0].description[1]"
+    ]
 
 
 def test_rank_bullets_defers_equal_score_ties_at_boundary() -> None:
@@ -78,8 +86,8 @@ def test_rank_bullets_defers_equal_score_ties_at_boundary() -> None:
     candidates = rank_bullets(resume, _job("Python"), count=1)
 
     assert [candidate.path for candidate in candidates] == [
-        "work[0].achievements[0]",
-        "work[0].achievements[1]",
+        "workExperience[0].description[0]",
+        "workExperience[0].description[1]",
     ]
     assert [candidate.kind for candidate in candidates] == [
         TrimKind.DEFER,

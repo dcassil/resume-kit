@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from resume_kit_policy import ResumeShapePolicy
+from resume_kit_schemas import ResumeDocument
 from resume_kit_schemas.budget import BudgetViolation
-from resume_kit_schemas.canonical import Resume
 from resume_kit_schemas.shape import ContentFate, ContentLedger
 
 _PERFECT_LEDGER_OK_FATES = frozenset(
@@ -33,7 +33,9 @@ _REASON_REQUIRED_FATES = frozenset(
 )
 
 
-def budget_enforce(resume: Resume, policy: ResumeShapePolicy) -> list[BudgetViolation]:
+def budget_enforce(
+    resume: ResumeDocument, policy: ResumeShapePolicy
+) -> list[BudgetViolation]:
     """Return quantified budget violations without modifying ``resume``."""
 
     budgets = policy.informational_budgets
@@ -45,7 +47,7 @@ def budget_enforce(resume: Resume, policy: ResumeShapePolicy) -> list[BudgetViol
             dimension="skills",
             location=None,
             limit=budgets.max_skills,
-            actual=len(resume.skills),
+            actual=len(resume.additional.technicalSkills),
         )
 
     if budgets.max_experience_entries is not None:
@@ -54,17 +56,17 @@ def budget_enforce(resume: Resume, policy: ResumeShapePolicy) -> list[BudgetViol
             dimension="experience_entries",
             location=None,
             limit=budgets.max_experience_entries,
-            actual=len(resume.work),
+            actual=len(resume.workExperience),
         )
 
     if budgets.max_bullets_per_role is not None:
-        for work_index, experience in enumerate(resume.work):
+        for work_index, experience in enumerate(resume.workExperience):
             _append_violation(
                 violations,
                 dimension="bullets_per_role",
-                location=f"work[{work_index}]",
+                location=f"workExperience[{work_index}]",
                 limit=budgets.max_bullets_per_role,
-                actual=len(experience.achievements),
+                actual=len(experience.description),
             )
 
     if budgets.max_summary_words is not None:
@@ -73,18 +75,21 @@ def budget_enforce(resume: Resume, policy: ResumeShapePolicy) -> list[BudgetViol
             dimension="summary_words",
             location=None,
             limit=budgets.max_summary_words,
-            actual=_word_count(resume.basics.summary),
+            actual=_word_count(resume.summary),
         )
 
     if budgets.max_bullet_words is not None:
-        for work_index, experience in enumerate(resume.work):
-            for achievement_index, achievement in enumerate(experience.achievements):
+        for work_index, experience in enumerate(resume.workExperience):
+            for achievement_index, bullet in enumerate(experience.description):
                 _append_violation(
                     violations,
                     dimension="bullet_words",
-                    location=f"work[{work_index}].achievements[{achievement_index}]",
+                    location=(
+                        f"workExperience[{work_index}]"
+                        f".description[{achievement_index}]"
+                    ),
                     limit=budgets.max_bullet_words,
-                    actual=_word_count(achievement.text),
+                    actual=_word_count(bullet),
                 )
 
     return violations

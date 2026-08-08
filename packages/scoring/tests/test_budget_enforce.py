@@ -8,12 +8,11 @@ from resume_kit_policy import (
     ResumeShapePolicy,
     default_shape_policy,
 )
-from resume_kit_schemas.canonical import (
-    Achievement,
-    Basics,
+from resume_kit_schemas import (
+    AdditionalInfo,
     Experience,
-    Resume,
-    SkillGroup,
+    PersonalInfo,
+    ResumeDocument,
 )
 from resume_kit_schemas.shape import ContentFate, ContentLedger, ContentLedgerEntry
 from resume_kit_scoring import budget_enforce, content_ledger_ok_perfect
@@ -28,26 +27,25 @@ def _resume(
     summary: str = "Builds reliable systems.",
     skills: int = 1,
     bullet_sets: list[list[str]] | None = None,
-) -> Resume:
+) -> ResumeDocument:
     work = [
         Experience(
-            organization=f"Company {work_index}",
+            company=f"Company {work_index}",
             title="Engineer",
-            achievements=[Achievement(text=bullet) for bullet in bullets],
+            description=list(bullets),
         )
         for work_index, bullets in enumerate(bullet_sets or [["Built APIs."]])
     ]
-    return Resume(
-        basics=Basics(
+    return ResumeDocument(
+        personalInfo=PersonalInfo(
             name="Jane Engineer",
             email="jane@example.com",
-            summary=summary,
         ),
-        work=work,
-        skills=[
-            SkillGroup(name=f"Group {index}", keywords=[f"Skill {index}"])
-            for index in range(skills)
-        ],
+        summary=summary,
+        workExperience=work,
+        additional=AdditionalInfo(
+            technicalSkills=[f"Skill {index}" for index in range(skills)]
+        ),
     )
 
 
@@ -78,7 +76,7 @@ def _resume(
             "bullets_per_role",
             _resume(bullet_sets=[["Built APIs.", "Shipped jobs.", "Led migrations."]]),
             InformationalShapeBudgets(max_bullets_per_role=2),
-            "work[0]",
+            "workExperience[0]",
             3,
         ),
         (
@@ -92,14 +90,14 @@ def _resume(
             "bullet_words",
             _resume(bullet_sets=[["one two three four"]]),
             InformationalShapeBudgets(max_bullet_words=3),
-            "work[0].achievements[0]",
+            "workExperience[0].description[0]",
             4,
         ),
     ],
 )
 def test_budget_enforce_reports_each_over_budget_dimension(
     dimension: str,
-    resume: Resume,
+    resume: ResumeDocument,
     budgets: InformationalShapeBudgets,
     expected_location: str | None,
     expected_actual: int,
@@ -139,7 +137,7 @@ def test_budget_enforce_reports_each_over_budget_dimension(
     ],
 )
 def test_budget_enforce_skips_clean_dimensions(
-    resume: Resume,
+    resume: ResumeDocument,
     budgets: InformationalShapeBudgets,
 ) -> None:
     assert budget_enforce(resume, _policy(budgets)) == []
@@ -186,13 +184,13 @@ def test_budget_enforce_emits_deterministic_order_and_locations() -> None:
     assert [(violation.dimension, violation.location) for violation in violations] == [
         ("skills", None),
         ("experience_entries", None),
-        ("bullets_per_role", "work[0]"),
-        ("bullets_per_role", "work[1]"),
+        ("bullets_per_role", "workExperience[0]"),
+        ("bullets_per_role", "workExperience[1]"),
         ("summary_words", None),
-        ("bullet_words", "work[0].achievements[0]"),
-        ("bullet_words", "work[0].achievements[1]"),
-        ("bullet_words", "work[1].achievements[0]"),
-        ("bullet_words", "work[1].achievements[1]"),
+        ("bullet_words", "workExperience[0].description[0]"),
+        ("bullet_words", "workExperience[0].description[1]"),
+        ("bullet_words", "workExperience[1].description[0]"),
+        ("bullet_words", "workExperience[1].description[1]"),
     ]
 
 
@@ -212,7 +210,7 @@ def test_content_ledger_ok_perfect_accepts_accounted_drops_and_compressions(
             ContentLedgerEntry(
                 token="Python",
                 fate=fate,
-                source_path="skills[0]",
+                source_path="additional.technicalSkills[0]",
                 reason="ranked below stronger evidence",
             )
         ]
@@ -227,7 +225,7 @@ def test_content_ledger_ok_perfect_accepts_accounted_drops_and_compressions(
         ContentLedgerEntry(
             token="Rust",
             fate=ContentFate.UNRESOLVED,
-            source_path="skills[0]",
+            source_path="additional.technicalSkills[0]",
         ),
         ContentLedgerEntry(
             token="Skills",
@@ -241,7 +239,11 @@ def test_content_ledger_ok_perfect_accepts_accounted_drops_and_compressions(
             source_path="metadata.added_tokens",
             reason="parser artifact",
         ),
-        ContentLedgerEntry(token=" ", fate=ContentFate.MOVED, target_path="skills[0]"),
+        ContentLedgerEntry(
+            token=" ",
+            fate=ContentFate.MOVED,
+            target_path="additional.technicalSkills[0]",
+        ),
     ],
 )
 def test_content_ledger_ok_perfect_rejects_unaccounted_losses(
@@ -266,7 +268,7 @@ def test_content_ledger_ok_perfect_requires_reason_for_drop_or_compression(
             ContentLedgerEntry(
                 token="Python",
                 fate=fate,
-                source_path="skills[0]",
+                source_path="additional.technicalSkills[0]",
             )
         ]
     )
@@ -286,7 +288,7 @@ def test_content_ledger_ok_perfect_requires_target_for_present_moved_or_deduped(
             ContentLedgerEntry(
                 token="Python",
                 fate=fate,
-                source_path="skills[0]",
+                source_path="additional.technicalSkills[0]",
             )
         ]
     )

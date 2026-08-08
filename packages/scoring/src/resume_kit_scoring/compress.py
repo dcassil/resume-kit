@@ -1,4 +1,4 @@
-"""Claim-gated compression candidates for canonical resume content."""
+"""Claim-gated compression candidates for resume document content."""
 
 from __future__ import annotations
 
@@ -10,19 +10,17 @@ from typing import cast
 from pydantic import BaseModel
 from resume_kit_evidence import validate_resume_truth
 from resume_kit_policy import ResumeShapePolicy
-from resume_kit_schemas.canonical import Resume
+from resume_kit_schemas import ResumeDocument
 from resume_kit_schemas.evidence import CandidateEvidence
 from resume_kit_schemas.provenance import ProvenanceStatus
 from resume_kit_schemas.results import TruthReport
 from resume_kit_terms import AliasIndex, load_effective_alias_index
 
 from .best_practices import summary_too_long
-from .projection import project_builddoc_from_canonical
 
 Phrasing = Callable[[str, int], str]
 
-_SUMMARY_PATH = "basics.summary"
-_SUMMARY_TRUTH_PATH = "summary"
+_SUMMARY_PATH = "summary"
 _FAILURE_STATUSES = frozenset(
     {
         ProvenanceStatus.UNSUPPORTED,
@@ -55,7 +53,7 @@ class CompressionCandidate(BaseModel):
 
 
 def compress_summary(
-    resume: Resume,
+    resume: ResumeDocument,
     evidence: list[CandidateEvidence],
     *,
     policy: ResumeShapePolicy,
@@ -65,18 +63,18 @@ def compress_summary(
     """Return a truth-gated shorter summary candidate, if the summary is over budget."""
 
     word_limit = policy.informational_budgets.max_summary_words
-    summary = resume.basics.summary
-    if word_limit is None or summary is None or not summary_too_long(summary, word_limit):
+    summary = resume.summary
+    if word_limit is None or not summary_too_long(summary, word_limit):
         return None
 
     rewritten = _rewrite(summary, word_limit, phrasing)
     candidate_resume = resume.model_copy(
-        update={"basics": resume.basics.model_copy(update={"summary": rewritten})},
+        update={"summary": rewritten},
         deep=True,
     )
     return _candidate(
         path=_SUMMARY_PATH,
-        truth_path=_SUMMARY_TRUTH_PATH,
+        truth_path=_SUMMARY_PATH,
         original=summary,
         rewritten=rewritten,
         word_limit=word_limit,
@@ -87,7 +85,7 @@ def compress_summary(
 
 
 def compress_bullet(
-    resume: Resume,
+    resume: ResumeDocument,
     evidence: list[CandidateEvidence],
     *,
     work_index: int,
@@ -96,14 +94,13 @@ def compress_bullet(
     alias_index: AliasIndex | None = None,
     phrasing: Phrasing | None = None,
 ) -> CompressionCandidate | None:
-    """Return a truth-gated shorter achievement candidate, if the bullet is over budget."""
+    """Return a truth-gated shorter bullet candidate, if it is over budget."""
 
     word_limit = policy.informational_budgets.max_bullet_words
     if word_limit is None:
         return None
 
-    achievement = resume.work[work_index].achievements[achievement_index]
-    original = achievement.text
+    original = resume.workExperience[work_index].description[achievement_index]
     if _word_count(original) <= word_limit:
         return None
 
@@ -114,11 +111,10 @@ def compress_bullet(
         achievement_index=achievement_index,
         rewritten=rewritten,
     )
-    path = f"work[{work_index}].achievements[{achievement_index}]"
-    truth_path = f"workExperience[{work_index}].description[{achievement_index}]"
+    path = f"workExperience[{work_index}].description[{achievement_index}]"
     return _candidate(
         path=path,
-        truth_path=truth_path,
+        truth_path=path,
         original=original,
         rewritten=rewritten,
         word_limit=word_limit,
@@ -155,7 +151,7 @@ def _candidate(
     original: str,
     rewritten: str,
     word_limit: int,
-    candidate_resume: Resume,
+    candidate_resume: ResumeDocument,
     evidence: list[CandidateEvidence],
     alias_index: AliasIndex | None,
 ) -> CompressionCandidate:
@@ -168,7 +164,10 @@ def _candidate(
     if truth_failure is not None:
         reason = f"could not compress truthfully: {truth_failure}"
     elif not changed:
-        reason = "could not compress truthfully: no shorter claim-preserving rewrite found"
+        reason = (
+            "could not compress truthfully: "
+            "no shorter claim-preserving rewrite found"
+        )
     elif not under_budget:
         reason = (
             "could not compress truthfully: rewrite still exceeds "
@@ -187,22 +186,23 @@ def _candidate(
 
 
 def _validate_candidate(
-    resume: Resume,
+    resume: ResumeDocument,
     evidence: list[CandidateEvidence],
     alias_index: AliasIndex | None,
 ) -> TruthReport:
-    builddoc = project_builddoc_from_canonical(resume)
     if _VALIDATE_ACCEPTS_ALIAS_INDEX:
         effective_alias_index = (
             alias_index if alias_index is not None else load_effective_alias_index()
         )
         validator = cast(Callable[..., TruthReport], validate_resume_truth)
-        return validator(builddoc, evidence, alias_index=effective_alias_index)
-    return validate_resume_truth(builddoc, evidence)
+        return validator(resume, evidence, alias_index=effective_alias_index)
+    return validate_resume_truth(resume, evidence)
 
 
 def _truth_failure_reason(report: TruthReport, truth_path: str) -> str | None:
-    matching_claims = [claim for claim in report.claims if claim.field_path == truth_path]
+    matching_claims = [
+        claim for claim in report.claims if claim.field_path == truth_path
+    ]
     if not matching_claims:
         return f"rewrite removed the claim at {truth_path}"
 
@@ -219,20 +219,18 @@ def _truth_failure_reason(report: TruthReport, truth_path: str) -> str | None:
 
 
 def _with_rewritten_bullet(
-    resume: Resume,
+    resume: ResumeDocument,
     *,
     work_index: int,
     achievement_index: int,
     rewritten: str,
-) -> Resume:
-    work = list(resume.work)
+) -> ResumeDocument:
+    work = list(resume.workExperience)
     experience = work[work_index]
-    achievements = list(experience.achievements)
-    achievements[achievement_index] = achievements[achievement_index].model_copy(
-        update={"text": rewritten}
-    )
-    work[work_index] = experience.model_copy(update={"achievements": achievements})
-    return resume.model_copy(update={"work": work}, deep=True)
+    description = list(experience.description)
+    description[achievement_index] = rewritten
+    work[work_index] = experience.model_copy(update={"description": description})
+    return resume.model_copy(update={"workExperience": work}, deep=True)
 
 
 def _normalize_spacing(text: str) -> str:
