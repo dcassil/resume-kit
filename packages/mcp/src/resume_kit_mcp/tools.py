@@ -26,6 +26,7 @@ from resume_kit_facade.models import (
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildPerfectRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -99,6 +100,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_analyze_shape",
     "resume_build_structure",
     "resume_build_standard",
+    "resume_build_perfect",
     "resume_analyze_best_practices",
     "resume_ats_view",
 )
@@ -861,20 +863,24 @@ async def project_set_active(arguments: ToolArguments) -> ToolResult:
     return await _call("set-active", request, arguments)
 
 
-def _optional_answers(arguments: ToolArguments) -> dict[str, str] | None:
-    value = arguments.get("answers")
+def _optional_string_map(arguments: ToolArguments, field: str) -> dict[str, str] | None:
+    value = arguments.get(field)
     if value is None:
         return None
     if not isinstance(value, dict):
-        raise _ValidationFailure("Field 'answers' must be an object.", field="answers")
-    answers: dict[str, str] = {}
+        raise _ValidationFailure(f"Field '{field}' must be an object.", field=field)
+    items: dict[str, str] = {}
     for key, item in value.items():
         if not isinstance(key, str) or not isinstance(item, str):
             raise _ValidationFailure(
-                "Field 'answers' must map strings to strings.", field="answers"
+                f"Field '{field}' must map strings to strings.", field=field
             )
-        answers[key] = item
-    return answers
+        items[key] = item
+    return items
+
+
+def _optional_answers(arguments: ToolArguments) -> dict[str, str] | None:
+    return _optional_string_map(arguments, "answers")
 
 
 async def resume_build_base(arguments: ToolArguments) -> ToolResult:
@@ -903,6 +909,22 @@ async def resume_build_standard(arguments: ToolArguments) -> ToolResult:
     except _ValidationFailure as exc:
         return _validation_error(exc)
     return await _call("build-standard", request, arguments)
+
+
+async def resume_build_perfect(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            BuildPerfectRequest,
+            {
+                "root": _optional_string(arguments, "root", "."),
+                "job": _optional_str(arguments, "job"),
+                "decisions": _optional_string_map(arguments, "decisions"),
+                "auto_fit": _optional_bool(arguments, "auto_fit"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("fit", request, arguments)
 
 
 async def resume_analyze_shape(arguments: ToolArguments) -> ToolResult:
@@ -1093,6 +1115,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_analyze_shape": resume_analyze_shape,
     "resume_build_structure": resume_build_structure,
     "resume_build_standard": resume_build_standard,
+    "resume_build_perfect": resume_build_perfect,
     "resume_analyze_best_practices": resume_analyze_best_practices,
     "resume_ats_view": resume_ats_view,
 }

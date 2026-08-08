@@ -120,6 +120,7 @@ from resume_kit_facade.models import (
     BaseBuildResult,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildPerfectRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -153,6 +154,8 @@ from resume_kit_facade.models import (
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.perfect import BuildPerfectResult
+from resume_kit_facade.perfect import build_perfect as _build_perfect
 from resume_kit_facade.project_config import (
     init_project,
     load_config,
@@ -1148,6 +1151,35 @@ async def build_standard_capability(
     return build_success(response, strict=options.strict)
 
 
+async def build_perfect_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Run the job-aware perfect-stage budget fit.
+
+    Deterministic and filesystem-local: never requires a provider and ignores
+    ``no_llm``. Delegates to :func:`resume_kit_facade.perfect.build_perfect`,
+    which ranks trim/compression candidates, routes committed changes through
+    the edit-session gate, writes the final resume when committed, and returns a
+    :class:`BuildPerfectResult`.
+    """
+    if not isinstance(request, BuildPerfectRequest):
+        return from_resume_kit_error(_bad_request(request, "BuildPerfectRequest"))
+    try:
+        result = _build_perfect(
+            request.root,
+            job=request.job,
+            decisions=request.decisions,
+            auto_fit=request.auto_fit,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
+        return from_exception(exc)
+    response = BuildPerfectResult.model_validate(result)
+    return build_success(response, strict=options.strict)
+
+
 async def analyze_shape_capability(
     request: object,
     options: CapabilityOptions,
@@ -1297,6 +1329,7 @@ REGISTRY: dict[str, Capability] = {
     "analyze-shape": analyze_shape_capability,
     "build-structure": build_structure_capability,
     "build-standard": build_standard_capability,
+    "fit": build_perfect_capability,
     "analyze-best-practices": analyze_best_practices_capability,
     "ats-view": ats_view_capability,
 }

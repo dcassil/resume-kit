@@ -36,6 +36,7 @@ from resume_kit_facade.models import (
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildPerfectRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -791,6 +792,28 @@ def build_standard(
     request = BuildStandardRequest(root=root, answers=io.load_answers(answers))
     options = _options(False, strict, False)
     _run(caps.build_standard_capability(request, options), output)
+
+
+@app.command(name="fit")
+def fit(
+    root: str = _Root,
+    job: str | None = typer.Option(
+        None,
+        "--job",
+        help="Optional active job path relative to resume-kit/.",
+    ),
+    auto_fit: bool = typer.Option(
+        False,
+        "--auto-fit/--no-auto-fit",
+        help="Automatically commit ranked budget-fit changes.",
+    ),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Run the job-aware perfect-stage budget fit."""
+    request = BuildPerfectRequest(root=root, job=job, auto_fit=auto_fit)
+    options = _options(False, strict, False)
+    _run(caps.build_perfect_capability(request, options), output)
 
 
 @app.command(name="analyze-shape")

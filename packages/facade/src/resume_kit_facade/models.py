@@ -158,6 +158,23 @@ class BuildStandardRequest:
 
 
 @dataclass(frozen=True)
+class BuildPerfectRequest:
+    """Inputs for the fit/build-perfect capability.
+
+    Deterministic, filesystem-local: runs the job-aware budget fit against the
+    resolved active resume and job under ``root``. ``decisions`` maps proposal
+    paths to review actions for the explicit decision path; ``auto_fit`` uses
+    ranked candidates to commit an automated fit through the same edit-session
+    gate.
+    """
+
+    root: str | Path = "."
+    job: str | None = None
+    decisions: dict[str, str] | None = None
+    auto_fit: bool = False
+
+
+@dataclass(frozen=True)
 class AnalyzeShapeRequest:
     """Inputs for the analyze-shape capability (RIT-I-0019, RIT-T-0138).
 

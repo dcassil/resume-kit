@@ -95,12 +95,13 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 34
+    assert len(REGISTRY) == 35
     assert "ats-view" in REGISTRY
     assert "build-base" in REGISTRY
     assert "analyze-shape" in REGISTRY
     assert "build-structure" in REGISTRY
     assert "build-standard" in REGISTRY
+    assert "fit" in REGISTRY
     assert "analyze-best-practices" in REGISTRY
     assert "validate-faithfulness" in REGISTRY
     assert "extract-resume-text" in REGISTRY
