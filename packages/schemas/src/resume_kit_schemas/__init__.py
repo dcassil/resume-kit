@@ -110,6 +110,7 @@ from .scoredoc import (
     ScoreSection,
     ZonedKeywordIndex,
 )
+from .trim import TrimCandidate, TrimKind
 
 __version__ = "0.0.0"
 
@@ -140,6 +141,9 @@ __all__ = [
     "ResolutionKind",
     # budget
     "BudgetViolation",
+    # trim
+    "TrimCandidate",
+    "TrimKind",
     # resume
     "ResumeDocument",
     "ResumeData",
