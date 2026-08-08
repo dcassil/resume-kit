@@ -38,6 +38,7 @@ from typing import Any
 
 from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
+from pydantic import Field
 from resume_kit_core.errors import CoreError, ErrorCode
 from resume_kit_core.response import InterfaceResponse
 from resume_kit_core.storage import ArtifactRef
@@ -51,6 +52,7 @@ from resume_kit_facade.models import (
     AtsViewRequest,
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
+    BuildPerfectRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -116,6 +118,24 @@ from resume_kit_api.models import (
     ValidateResumeTruthBody,
     _Options,
 )
+
+
+class BuildPerfectBody(_Options):
+    """Body for ``POST /fit`` — run the job-aware budget fit."""
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    job: str | None = Field(
+        default=None,
+        description="Optional active job path relative to resume-kit/.",
+    )
+    decisions: dict[str, str] | None = Field(
+        default=None,
+        description="Optional map of proposal paths to review actions.",
+    )
+    auto_fit: bool = Field(
+        default=False,
+        description="Automatically commit ranked budget-fit changes.",
+    )
 
 
 class _InMemoryArtifactStore:
@@ -444,6 +464,16 @@ def register_routes(app: FastAPI) -> None:
     async def build_standard(body: BuildStandardBody) -> Response:
         request = BuildStandardRequest(root=body.root, answers=body.answers)
         return _render(await REGISTRY["build-standard"](request, _options(body)))
+
+    @app.post("/fit")
+    async def build_perfect(body: BuildPerfectBody) -> Response:
+        request = BuildPerfectRequest(
+            root=body.root,
+            job=body.job,
+            decisions=body.decisions,
+            auto_fit=body.auto_fit,
+        )
+        return _render(await REGISTRY["fit"](request, _options(body)))
 
     @app.post("/analyze-shape")
     async def analyze_shape(body: AnalyzeShapeBody) -> Response:

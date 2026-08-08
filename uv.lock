@@ -1545,6 +1545,7 @@ name = "resume-kit-export"
 version = "0.0.0"
 source = { editable = "packages/export" }
 dependencies = [
+    { name = "pdfminer-six" },
     { name = "pydantic" },
     { name = "python-docx" },
     { name = "reportlab" },
@@ -1554,6 +1555,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "pdfminer-six" },
     { name = "pydantic", specifier = ">=2" },
     { name = "python-docx" },
     { name = "reportlab" },

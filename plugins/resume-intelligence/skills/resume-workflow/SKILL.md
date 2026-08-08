@@ -5,7 +5,8 @@ description: >
   Sequences the single-purpose skills in the one obvious order — ingest →
   baseline the resume (base → structure → standard, job-independent, REQUIRED before
   tailoring) → check against the job → (optionally) improve → (optionally)
-  second-agent review → validate truth → re-check for deltas → export — and names
+  second-agent review → validate truth → re-check for deltas → perfect fit →
+  export — and names
   the gate (what must exist) for each step, including that all job tailoring is
   gated behind a `standard` version (or a recorded override). This is a GUIDE: it
   points at the other skills, it does not call tools itself.
@@ -143,8 +144,16 @@ opt-in and never auto-runs.
    gate: the improved resume JSON + `active_job`. Compare against the step-4
    baseline to confirm the changes actually helped.
 
-9. **Export** — run **export-resume**.
-   gate: the final resume JSON. Produces the PDF/DOCX artifact to submit.
+9. **Perfect / fit** — run **perfect**.
+   gate: the tailored resume JSON + `active_job`. Runs the job-aware budget fit,
+   presents ranked trim/compression candidates, and commits only decision- or
+   ranked-budget-accounted removals plus claim-gated compressions. Writes the
+   final resume when the ledger gate passes.
+
+10. **Export** — run **export-resume**.
+   gate: the final resume JSON. Produces the PDF/DOCX artifact to submit. Export
+   enforces the `max_pages` page HARD GATE, so fitting is not considered
+   submission-ready until export passes.
 
 ## Supporting / maintenance
 

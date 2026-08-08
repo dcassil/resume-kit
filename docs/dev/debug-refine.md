@@ -11,7 +11,7 @@ toolkit itself.
 ## Overview
 
 ```
-trial pair → pipeline → tailored resume → review → triage → Metis backlog task(s) → dev log
+trial pair → pipeline → tailored resume → perfect fit → review → triage → Metis backlog task(s) → dev log
 ```
 
 The pipeline and review skills are already shipped. This runbook wires them together for dev use
@@ -64,7 +64,8 @@ Run each skill in order. The working directory for every skill invocation is `re
 | 6 | `inject-keywords` | `ChangeProposal` records reviewed through `resume-tool review-edits`; commit writes `working/<name>.tailored.json` |
 | 7 | `update-terminology` | terminology `ChangeProposal` records reviewed through the same `resume-tool review-edits` gate |
 | 8 | `validate-resume-truth` | truthfulness flags |
-| 9 | `export-resume` | `working/<session>/resume.pdf` (or `.md`) |
+| 9 | `perfect` / `resume-tool fit --auto-fit` | final job-specific `<name>-<job>-final.json`, with ranked/auto-fit removals logged in the content ledger |
+| 10 | `export-resume` | `working/<session>/resume.pdf` (or `.md`); export enforces the configured `max_pages` page hard gate |
 
 See `resume-workflow` for the authoritative step guide and flag options.
 

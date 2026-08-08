@@ -93,6 +93,13 @@ class ProjectConfig(BaseModel):
         standard_derived_from: The resume path ``standard_resume`` was derived
             from (by convention ``base_resume``), recording lineage. Only written
             together with ``standard_resume``.
+        final_resume: Path of the job-specific final resume JSON produced by the
+            perfect-stage budget fit. ``None`` until a final artifact is written.
+        final_derived_from: The resume path ``final_resume`` was derived from,
+            recording the tailored input lineage. Only written together with
+            ``final_resume``.
+        final_job_id: Stable job identifier used when producing
+            ``final_resume``. Only written together with ``final_resume``.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -110,6 +117,9 @@ class ProjectConfig(BaseModel):
     structure_derived_from: str | None = None
     standard_resume: str | None = None
     standard_derived_from: str | None = None
+    final_resume: str | None = None
+    final_derived_from: str | None = None
+    final_job_id: str | None = None
 
 
 def working_dir(root: str | Path) -> Path:
@@ -313,19 +323,22 @@ def set_version(
     structure_derived_from: str | None = None,
     standard: str | None = None,
     standard_derived_from: str | None = None,
+    final: str | None = None,
+    final_derived_from: str | None = None,
+    final_job_id: str | None = None,
 ) -> ProjectConfig:
     """Record version pointers plus lineage.
 
     Mirrors :func:`set_active`'s contract: loads the existing config (preserving
     unknown keys and any pointer not being changed), sets whichever of
-    ``base_resume`` / ``structure_resume`` / ``standard_resume`` (and their
-    ``*_derived_from``
-    companions) were supplied, and saves atomically. A ``*_derived_from`` given
-    without its matching pointer is a caller error (``ValueError``) so lineage
-    can never drift away from the version it describes. Additive: it never
-    touches ``active_resume`` (the original). Returns the updated config.
+    ``base_resume`` / ``structure_resume`` / ``standard_resume`` /
+    ``final_resume`` (and their lineage companions) were supplied, and saves
+    atomically. A lineage value given without its matching pointer is a caller
+    error (``ValueError``) so lineage can never drift away from the version it
+    describes. Additive: it never touches ``active_resume`` (the original).
+    Returns the updated config.
     """
-    if base is None and structure is None and standard is None:
+    if base is None and structure is None and standard is None and final is None:
         raise ValueError("set_version requires at least one version pointer.")
     if base_derived_from is not None and base is None:
         raise ValueError("base_derived_from given without a base.")
@@ -333,6 +346,10 @@ def set_version(
         raise ValueError("structure_derived_from given without a structure.")
     if standard_derived_from is not None and standard is None:
         raise ValueError("standard_derived_from given without a standard.")
+    if final_derived_from is not None and final is None:
+        raise ValueError("final_derived_from given without a final.")
+    if final_job_id is not None and final is None:
+        raise ValueError("final_job_id given without a final.")
     config = load_config(root)
     if base is not None:
         config.base_resume = _normalize_pointer(base)
@@ -343,5 +360,9 @@ def set_version(
     if standard is not None:
         config.standard_resume = _normalize_pointer(standard)
         config.standard_derived_from = _normalize_pointer(standard_derived_from)
+    if final is not None:
+        config.final_resume = _normalize_pointer(final)
+        config.final_derived_from = _normalize_pointer(final_derived_from)
+        config.final_job_id = final_job_id
     save_config(root, config)
     return config

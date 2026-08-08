@@ -42,6 +42,7 @@ from .best_practices import (
     ProvenanceKind,
     ResolutionKind,
 )
+from .budget import BudgetViolation
 from .change import (
     ChangeAction,
     ChangeProposal,
@@ -109,6 +110,7 @@ from .scoredoc import (
     ScoreSection,
     ZonedKeywordIndex,
 )
+from .trim import TrimCandidate, TrimKind
 
 __version__ = "0.0.0"
 
@@ -137,6 +139,11 @@ __all__ = [
     "FindingSeverity",
     "ProvenanceKind",
     "ResolutionKind",
+    # budget
+    "BudgetViolation",
+    # trim
+    "TrimCandidate",
+    "TrimKind",
     # resume
     "ResumeDocument",
     "ResumeData",

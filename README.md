@@ -83,7 +83,7 @@ view of the sections, entities/YoE, and zoned keywords an ATS is likely to parse
 (`resume-tool ats-view --resume <path>`), identical across the CLI, MCP, API, and
 facade surfaces.
 
-### Resume baselining (`original → base → structure → standard`)
+### Resume baselining and final fit (`original → base → structure → standard → refine → tailored → perfect`)
 
 Before any job-specific tailoring, a resume moves through a fixed, deterministic
 baselining lineage that produces four tracked versions:
@@ -127,6 +127,22 @@ baselining has run, downstream tailoring and edit sessions operate on the
 best-practices-improved `standard` version by default. The lineage is fully
 deterministic and offline: no LLM or network is touched on the baselining path.
 
+After the improve/refine loop produces a job-specific tailored resume, run the
+perfect fit pass before export:
+
+```bash
+resume-tool fit --root . --job jobs/job.json              # inspect ranked budget-fit decisions
+resume-tool fit --root . --job jobs/job.json --auto-fit   # commit logged auto-fit decisions
+```
+
+`perfect` is job-specific and non-destructive of the master lineage: it reads
+the resolved tailored input, writes `<name>-<job>-final.json`, and records every
+removal as either a ranked decision or a logged auto-fit change in the content
+ledger. The MCP surface is `resume_build_perfect` with the same `root`, `job`,
+`decisions`, and `auto_fit` inputs. Export remains the rendered page hard gate:
+the exporter enforces `shape_policy.informational_budgets.max_pages`, blocking
+over-length output unless the caller uses the explicit page-budget override.
+
 ### Project aliases and accepted terminology edits
 
 The deterministic matcher loads the packaged seed alias lexicon plus an optional
@@ -162,7 +178,20 @@ claims remain `CONTRADICTED`. `UNSUPPORTED` means missing evidence, not an
 active refutation; each claim carries a machine-readable `reason_code` such as
 `missing_evidence`, `strong_evidence_overlap`, or `refuted_by_evidence`.
 
+The full job-specific path is `original → base → structure → standard → refine
+→ tailored → perfect`: refine/tailor proposes and commits truthful
+job-alignment edits, while perfect only fits that tailored content to the
+configured shape and page budgets.
+
 ## Release Notes
+
+### Unreleased — perfect fit stage (RIT-T-0153)
+
+- Documents the job-specific `perfect` stage after tailoring: `resume-tool fit`
+  / `resume_build_perfect` writes `<name>-<job>-final.json` without mutating the
+  `original` / `base` / `structure` / `standard` lineage.
+- Clarifies that export enforces the rendered `max_pages` page hard gate after
+  the fit pass.
 
 ### Unreleased — canonical structure stage (RIT-I-0019)
 

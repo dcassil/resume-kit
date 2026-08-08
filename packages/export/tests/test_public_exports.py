@@ -7,6 +7,9 @@ def test_all_public_exports_importable() -> None:
     from resume_kit_export import (
         ExportFormat,
         ExportOptions,
+        PageBudgetResult,
+        check_page_budget,
+        count_pdf_pages,
         render,
         render_docx,
         render_pdf,
@@ -14,6 +17,9 @@ def test_all_public_exports_importable() -> None:
 
     assert ExportFormat is not None
     assert ExportOptions is not None
+    assert PageBudgetResult is not None
+    assert callable(check_page_budget)
+    assert callable(count_pdf_pages)
     assert callable(render)
     assert callable(render_docx)
     assert callable(render_pdf)
@@ -25,6 +31,9 @@ def test_all_names_in_dunder_all() -> None:
     assert resume_kit_export.__all__ == [
         "ExportFormat",
         "ExportOptions",
+        "PageBudgetResult",
+        "check_page_budget",
+        "count_pdf_pages",
         "render",
         "render_docx",
         "render_pdf",

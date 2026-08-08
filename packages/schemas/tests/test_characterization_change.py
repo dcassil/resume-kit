@@ -34,7 +34,7 @@ def test_list_original_allowed_for_reorder() -> None:
 
 @pytest.mark.parametrize("action", ["replace", "append", "add_skill"])
 def test_list_original_rejected_for_non_reorder(action: str) -> None:
-    with pytest.raises(ValidationError, match="only for the reorder action"):
+    with pytest.raises(ValidationError, match="only for reorder/remove actions"):
         ChangeProposal.model_validate(
             {
                 "path": "workExperience[0].description[0]",
