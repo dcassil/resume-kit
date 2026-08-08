@@ -44,9 +44,11 @@ class InformationalShapeBudgets(BaseModel):
 
     enforcement: Literal["informational_only"] = "informational_only"
     max_skills: int | None = Field(default=30, ge=1)
+    max_experience_entries: int | None = Field(default=None, ge=1)
     max_summary_words: int | None = Field(default=80, ge=1)
     max_summary_chars: int | None = Field(default=600, ge=1)
     max_bullets_per_role: int | None = Field(default=6, ge=1)
+    max_bullet_words: int | None = Field(default=None, ge=1)
     max_pages: int | None = Field(default=2, ge=1)
 
 

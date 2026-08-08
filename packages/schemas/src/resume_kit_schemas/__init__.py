@@ -42,6 +42,7 @@ from .best_practices import (
     ProvenanceKind,
     ResolutionKind,
 )
+from .budget import BudgetViolation
 from .change import (
     ChangeAction,
     ChangeProposal,
@@ -137,6 +138,8 @@ __all__ = [
     "FindingSeverity",
     "ProvenanceKind",
     "ResolutionKind",
+    # budget
+    "BudgetViolation",
     # resume
     "ResumeDocument",
     "ResumeData",

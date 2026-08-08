@@ -40,6 +40,8 @@ class ContentFate(StrEnum):
     DROPPED_AS_HEADING = "dropped_as_heading"
     DROPPED_AS_PARSER_ARTIFACT = "dropped_as_parser_artifact"
     DROPPED_BY_EXPLICIT_DECISION = "dropped_by_explicit_decision"
+    DROPPED_BY_RANKED_BUDGET = "dropped_by_ranked_budget"
+    COMPRESSED = "compressed"
     UNRESOLVED = "unresolved"
 
 

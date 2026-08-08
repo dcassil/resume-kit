@@ -10,6 +10,7 @@ from resume_kit_policy import (
     ResumeShapePolicy,
     default_shape_policy,
     load_shape_policy,
+    overlay_shape_policy,
 )
 from resume_kit_schemas.canonical import CanonicalSection
 
@@ -37,6 +38,8 @@ def test_default_shape_policy_loads() -> None:
     assert policy.fallback_section is CanonicalSection.OTHER
     assert policy.informational_budgets.enforcement == "informational_only"
     assert isinstance(policy.informational_budgets, InformationalShapeBudgets)
+    assert policy.informational_budgets.max_experience_entries is None
+    assert policy.informational_budgets.max_bullet_words is None
 
 
 def test_alias_table_maps_known_headings() -> None:
@@ -111,3 +114,20 @@ def test_project_override_overlays_default_policy(tmp_path: Path) -> None:
     assert policy.informational_budgets.max_skills == 45
     assert policy.informational_budgets.max_summary_words == 70
     assert policy.informational_budgets.enforcement == "informational_only"
+
+
+def test_overlay_shape_policy_overrides_new_budget_fields() -> None:
+    policy = overlay_shape_policy(
+        default_shape_policy(),
+        {
+            "informational_budgets": {
+                "max_experience_entries": 4,
+                "max_bullet_words": 28,
+            }
+        },
+    )
+
+    assert policy.informational_budgets.max_experience_entries == 4
+    assert policy.informational_budgets.max_bullet_words == 28
+    assert policy.informational_budgets.max_skills == 30
+    assert policy.informational_budgets.max_bullets_per_role == 6

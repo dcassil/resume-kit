@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2",
     "resume-kit-core",
     "resume-kit-schemas",
+    "pdfminer.six",
     "reportlab",
     "python-docx",
 ]
