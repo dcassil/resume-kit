@@ -38,9 +38,10 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "check-gaps",
         "check-ats-view",
         "check-best-practices",
-        # Baseline / structure (original → base → structure → standard)
+        # Baseline / structure (original → base → structure → refine)
         "update-structure",
         "update-shape",
+        "update-refine",
         "update-best-practices",
         # Improve
         "update-keywords",
@@ -54,6 +55,7 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "export-resume",
         "learn-terminology",
         "resume-workflow",
+        "perfect",
         # Review (agent-driven, advice-only)
         "review-resume",
         # Preference learning (agent-driven, no CLI/MCP surface)

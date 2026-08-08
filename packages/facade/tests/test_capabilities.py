@@ -119,6 +119,7 @@ def test_registry_contains_all_capabilities() -> None:
         "analyze-shape",
         "build-structure",
         "build-standard",
+        "build-refine",
         "fit",
         "analyze-best-practices",
         "ats-view",

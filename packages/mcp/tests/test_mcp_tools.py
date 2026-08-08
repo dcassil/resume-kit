@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_facade.project_config import init_project, set_active, working_dir
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.server import TOOLS
 from resume_kit_mcp.tools import HANDLERS, TOOL_NAMES
@@ -123,6 +124,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_analyze_shape",
         "resume_build_structure",
         "resume_build_standard",
+        "resume_build_refine",
         "resume_build_perfect",
         "resume_analyze_best_practices",
         "resume_ats_view",
@@ -130,6 +132,44 @@ def test_registers_exactly_the_stable_tools() -> None:
     assert set(TOOL_NAMES) == expected
     assert set(HANDLERS) == expected
     assert {tool.name for tool in TOOLS} == expected
+
+
+def _baseline_project(root: Path) -> Path:
+    init_project(root)
+    base = working_dir(root)
+    resume = ResumeDocument.model_validate(
+        {
+            "personalInfo": {
+                "name": "Jordan Lee",
+                "title": "Senior Backend Engineer",
+                "email": "jordan@example.com",
+                "phone": "555-0100",
+                "location": "Austin, TX",
+            },
+            "summary": (
+                "Responsible for building Python APIs, Docker services, and "
+                "PostgreSQL analytics."
+            ),
+            "workExperience": [
+                {
+                    "id": 1,
+                    "title": "Senior Software Engineer",
+                    "company": "Acme Labs",
+                    "years": "2021-2025",
+                    "description": [
+                        "Responsible for Python APIs with FastAPI and PostgreSQL.",
+                        "Containerized services with Docker and automated CI pipelines.",
+                    ],
+                }
+            ],
+            "additional": {"technicalSkills": ["Python", "FastAPI", "PostgreSQL", "Docker"]},
+        }
+    )
+    (base / "resumes" / "jordan-original.json").write_text(
+        resume.model_dump_json(), encoding="utf-8"
+    )
+    set_active(root, resume="resumes/jordan-original.json")
+    return root
 
 
 @pytest.mark.parametrize(
@@ -176,6 +216,34 @@ async def test_each_deterministic_tool_returns_json_envelope(
     assert payload["errors"] == []
     assert payload["requires_human_input"] is False
     assert isinstance(payload["data"], data_kind)
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected_key", "legacy_key"),
+    [
+        ("resume_build_standard", "standard_path", "refine_path"),
+        ("resume_build_refine", "refine_path", "standard_path"),
+    ],
+)
+async def test_build_wording_tools_return_alias_specific_schema(
+    tmp_path: Path,
+    tool_name: str,
+    expected_key: str,
+    legacy_key: str,
+) -> None:
+    root = _baseline_project(tmp_path / tool_name)
+    base = await HANDLERS["resume_build_base"]({"root": str(root)})
+    _assert_envelope(base)
+    assert base["errors"] == []
+
+    payload = await HANDLERS[tool_name]({"root": str(root)})
+
+    _assert_envelope(payload)
+    assert payload["errors"] == []
+    data = payload["data"]
+    assert isinstance(data, dict)
+    assert data[expected_key] == "resumes/jordan-refine.json"
+    assert legacy_key not in data
 
 
 async def test_warnings_remain_separate_from_errors() -> None:

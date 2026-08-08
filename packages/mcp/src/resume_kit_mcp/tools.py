@@ -27,6 +27,7 @@ from resume_kit_facade.models import (
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildPerfectRequest,
+    BuildRefineRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -100,6 +101,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_analyze_shape",
     "resume_build_structure",
     "resume_build_standard",
+    "resume_build_refine",
     "resume_build_perfect",
     "resume_analyze_best_practices",
     "resume_ats_view",
@@ -898,6 +900,7 @@ async def resume_build_base(arguments: ToolArguments) -> ToolResult:
 
 
 async def resume_build_standard(arguments: ToolArguments) -> ToolResult:
+    """Deprecated alias for resume_build_refine."""
     try:
         request = _make_request(
             BuildStandardRequest,
@@ -909,6 +912,20 @@ async def resume_build_standard(arguments: ToolArguments) -> ToolResult:
     except _ValidationFailure as exc:
         return _validation_error(exc)
     return await _call("build-standard", request, arguments)
+
+
+async def resume_build_refine(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            BuildRefineRequest,
+            {
+                "root": _optional_string(arguments, "root", "."),
+                "answers": _optional_answers(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("build-refine", request, arguments)
 
 
 async def resume_build_perfect(arguments: ToolArguments) -> ToolResult:
@@ -1115,6 +1132,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_analyze_shape": resume_analyze_shape,
     "resume_build_structure": resume_build_structure,
     "resume_build_standard": resume_build_standard,
+    "resume_build_refine": resume_build_refine,
     "resume_build_perfect": resume_build_perfect,
     "resume_analyze_best_practices": resume_analyze_best_practices,
     "resume_ats_view": resume_ats_view,

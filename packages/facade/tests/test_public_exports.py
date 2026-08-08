@@ -17,6 +17,7 @@ def test_all_public_exports_importable() -> None:
         BaseBuildResult,
         BuildBaseRequest,
         BuildCandidateEvidenceRequest,
+        BuildRefineRequest,
         BuildStandardRequest,
         BuildStructureRequest,
         CapabilityOptions,
@@ -43,6 +44,7 @@ def test_all_public_exports_importable() -> None:
         ReconcileSessionResult,
         RecordEditFeedbackRequest,
         RecordEditFeedbackResult,
+        RefineBuildResult,
         RefreshPreferencesRequest,
         SelectBestResumeRequest,
         SessionPromptRequest,
@@ -62,6 +64,7 @@ def test_all_public_exports_importable() -> None:
         ats_view_capability,
         build_base_capability,
         build_candidate_evidence_capability,
+        build_refine_capability,
         build_standard_capability,
         build_structure_capability,
         check_ats_structure,
@@ -95,12 +98,13 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 35
+    assert len(REGISTRY) == 36
     assert "ats-view" in REGISTRY
     assert "build-base" in REGISTRY
     assert "analyze-shape" in REGISTRY
     assert "build-structure" in REGISTRY
     assert "build-standard" in REGISTRY
+    assert "build-refine" in REGISTRY
     assert "fit" in REGISTRY
     assert "analyze-best-practices" in REGISTRY
     assert "validate-faithfulness" in REGISTRY
@@ -167,17 +171,20 @@ def test_all_public_exports_importable() -> None:
     assert callable(analyze_shape_capability)
     assert callable(build_structure_capability)
     assert callable(build_standard_capability)
+    assert callable(build_refine_capability)
     assert callable(analyze_best_practices_capability)
     assert callable(ats_view_capability)
     assert BuildBaseRequest is not None
     assert AnalyzeShapeRequest is not None
     assert BuildStructureRequest is not None
     assert BuildStandardRequest is not None
+    assert BuildRefineRequest is not None
     assert AnalyzeBestPracticesRequest is not None
     assert AtsViewRequest is not None
     assert BaseBuildResult is not None
     assert StructureBuildResult is not None
     assert StandardBuildResult is not None
+    assert RefineBuildResult is not None
 
     assert callable(align_resume)
     assert callable(build_candidate_evidence_capability)
@@ -222,5 +229,8 @@ def test_all_names_in_dunder_all() -> None:
     assert "REGISTRY" in all_names
     assert "CapabilityOptions" in all_names
     assert "ExportResumeRequest" in all_names
+    assert "BuildRefineRequest" in all_names
+    assert "RefineBuildResult" in all_names
+    assert "build_refine_capability" in all_names
     assert "export_resume" in all_names
     assert "extract_resume" in all_names

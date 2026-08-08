@@ -53,6 +53,7 @@ from resume_kit_facade.models import (
     BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     BuildPerfectRequest,
+    BuildRefineRequest,
     BuildStandardRequest,
     BuildStructureRequest,
     CapabilityOptions,
@@ -91,6 +92,7 @@ from resume_kit_api.models import (
     AtsViewBody,
     BuildBaseBody,
     BuildCandidateEvidenceBody,
+    BuildRefineBody,
     BuildStandardBody,
     BuildStructureBody,
     CheckAtsStructureBody,
@@ -464,6 +466,11 @@ def register_routes(app: FastAPI) -> None:
     async def build_standard(body: BuildStandardBody) -> Response:
         request = BuildStandardRequest(root=body.root, answers=body.answers)
         return _render(await REGISTRY["build-standard"](request, _options(body)))
+
+    @app.post("/build-refine")
+    async def build_refine(body: BuildRefineBody) -> Response:
+        request = BuildRefineRequest(root=body.root, answers=body.answers)
+        return _render(await REGISTRY["build-refine"](request, _options(body)))
 
     @app.post("/fit")
     async def build_perfect(body: BuildPerfectBody) -> Response:
