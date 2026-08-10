@@ -203,7 +203,10 @@ tell the user — never fill gaps with invented content.
   `validate-faithfulness` emits a `NON_ASCII` **warning** for them. Do NOT
   silently rewrite them in the `-original.json` (that would violate the gates and
   can trip `ALTERED_FIELD`/`DROPPED_SPANS`) — preserve verbatim; normalization is
-  an *alignment/export* decision, not a conversion one.
+  an *alignment/export* decision, not a conversion one. **The resulting `NON_ASCII`
+  warning on `-original.json` is expected and correct, not a defect — it will
+  persist on every resume that genuinely contains such characters until export.
+  Do NOT normalize `-original.json` to silence it; normalization belongs at export.**
 - **Sub-headed groupings** like "Ventures & Consulting" / "Professional
   Experience" that bucket multiple roles: put each role as its own
   `workExperience` entry, and preserve any intro/among-the-group text as a small
