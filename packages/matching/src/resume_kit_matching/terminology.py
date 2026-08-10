@@ -12,8 +12,11 @@ Invariants (REQ-1001):
 
 - Only ``alias`` hits yield suggestions. An ``exact`` hit needs no mirroring; a
   no-match keyword stays a gap and is never turned into a suggestion here.
-- Location-finding is whole-term (each string leaf is tokenised into ``\\w``
-  runs and each token compared via the shared matcher), never a substring probe.
+- Location-finding is whole-term: each string leaf is tokenised into ``\\w``
+  runs and scanned as contiguous token WINDOWS (bounded by the longest alias
+  surface form in the index) compared via the shared matcher, never a substring
+  probe. The window lets multi-token surface forms (``continuous integration``)
+  be recognised while the contiguous-boundary guarantee is preserved.
 - Output is deterministic: suggestions and their locations are sorted, so
   identical inputs produce an identical list with no set-order leakage.
 
@@ -28,8 +31,8 @@ from resume_kit_schemas import TerminologyAlignment
 from resume_kit_terms import match, surface_form
 
 from .keywords import (
-    _TOKEN_RE,
     _alias_index,
+    _alias_windows,
     _JdKeywordsInput,
     _ResumeInput,
     _to_jd_keywords_dict,
@@ -104,14 +107,17 @@ def analyze_terminology_alignment(
         # current wording into one suggestion with all its locations.
         grouped: dict[str, tuple[str, list[str]]] = {}
         for path, text in leaves:
-            for token in _TOKEN_RE.findall(text):
-                result = match(keyword, token, alias_index)
+            for window in _alias_windows(text, alias_index.max_member_tokens):
+                result = match(keyword, window, alias_index)
                 if not (result.matched and result.kind == "alias"):
                     continue
                 # An exact surface match is reported as ``exact`` by ``match``,
-                # so an already-mirrored token never reaches here — no guard
-                # needed, but assert the intent for the reader.
-                current = surface_form(token)
+                # so an already-mirrored window never reaches here — no guard
+                # needed, but assert the intent for the reader. The window is a
+                # contiguous token run, so multi-token surface forms
+                # (``continuous integration``) are reported as the current
+                # wording, not a single token fragment.
+                current = surface_form(window)
                 canonical = result.canonical if result.canonical is not None else ""
                 existing = grouped.get(current)
                 if existing is None:

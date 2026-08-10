@@ -56,6 +56,20 @@ def test_multiword_alias_normalizes(tmp_path: Path) -> None:
     assert index.canonical_for("row-level security") == index.canonical_for("RLS")
 
 
+def test_max_member_tokens_single_token_index_is_one(tmp_path: Path) -> None:
+    # An index whose members are all single tokens bounds the n-gram window to 1.
+    path = _write_lexicon(tmp_path, {"Kubernetes": ["k8s"]})
+    index = AliasIndex.load(path)
+    assert index.max_member_tokens == 1
+
+
+def test_max_member_tokens_reflects_longest_member(tmp_path: Path) -> None:
+    # A three-token member ('row level security') widens the bound to 3.
+    path = _write_lexicon(tmp_path, {"RLS": ["row-level security"]})
+    index = AliasIndex.load(path)
+    assert index.max_member_tokens == 3
+
+
 def test_ambiguous_alias_rejected(tmp_path: Path) -> None:
     # An alias resolving to two canonicals would be non-deterministic.
     path = _write_lexicon(tmp_path, {"Go": ["golang"], "Golfing": ["golang"]})

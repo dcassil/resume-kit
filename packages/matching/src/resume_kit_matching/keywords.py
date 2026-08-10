@@ -114,6 +114,30 @@ def _alias_index() -> AliasIndex:
 _TOKEN_RE = re.compile(r"\w+")
 
 
+def _alias_windows(text: str, max_tokens: int) -> list[str]:
+    """Yield contiguous whole-token windows of *text*, widths 1..*max_tokens*.
+
+    Tokens are ``\\w`` runs (mirroring :data:`_TOKEN_RE`), and each window is the
+    tokens joined by a single space — the exact surface form the shared matcher
+    compares against. Widths are bounded by *max_tokens*, which callers derive
+    from :attr:`AliasIndex.max_member_tokens` so the scan can assemble every
+    multi-token alias the lexicon holds and NOTHING wider. Because every window
+    is a run of adjacent tokens, the contiguous-boundary guarantee is preserved:
+    a keyword can only match a phrase actually written as a contiguous span, so
+    substring / derivational / cross-gap false positives cannot arise.
+    """
+    tokens = _TOKEN_RE.findall(text)
+    width_cap = max(1, max_tokens)
+    windows: list[str] = []
+    for start in range(len(tokens)):
+        for width in range(1, width_cap + 1):
+            end = start + width
+            if end > len(tokens):
+                break
+            windows.append(" ".join(tokens[start:end]))
+    return windows
+
+
 def _match_keyword_in_text(keyword: str, text: str) -> MatchResult | None:
     """Return the highest-precedence synonym-aware match for *keyword* in *text*.
 
@@ -125,8 +149,13 @@ def _match_keyword_in_text(keyword: str, text: str) -> MatchResult | None:
     - Exact / multi-word hits go through the original word-boundary regex
       (:func:`_keyword_in_text`), so ``machine learning`` matches only as a
       contiguous phrase and ``python`` never matches inside ``pythonic``.
-    - Synonym widening tokenizes *text* into ``\\w`` runs and compares each
-      whole token via the shared matcher, never a substring.
+    - Synonym widening tokenizes *text* into ``\\w`` runs and compares
+      contiguous whole-token WINDOWS via the shared matcher, never a substring.
+      The window size is bounded by :attr:`AliasIndex.max_member_tokens` — the
+      longest alias surface form the lexicon actually holds — so multi-token
+      aliases (``continuous integration`` ↔ ``ci``) can be assembled while the
+      contiguous-boundary guarantee still rules out substring/derivational
+      false positives. The window never widens past what the index can match.
 
     Stem-only matches are intentionally **not** accepted here: Snowball stemming
     collapses derivational forms the upstream engine keeps distinct (``python``
@@ -151,8 +180,8 @@ def _match_keyword_in_text(keyword: str, text: str) -> MatchResult | None:
     # Alias groups are curated true synonyms, so this never introduces the
     # substring/derivational false positives that raw stemming would.
     alias_index = _alias_index()
-    for token in _TOKEN_RE.findall(text):
-        result = match(keyword, token, alias_index)
+    for window in _alias_windows(text, alias_index.max_member_tokens):
+        result = match(keyword, window, alias_index)
         if result.matched and result.kind == "alias":
             return result
     return None
