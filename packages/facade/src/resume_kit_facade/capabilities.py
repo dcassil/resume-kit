@@ -101,6 +101,7 @@ from resume_kit_schemas import (
 from resume_kit_scoring import analyze_best_practices as _analyze_best_practices
 from resume_kit_scoring import analyze_resume_shape as _analyze_resume_shape
 from resume_kit_scoring import build_ats_view as _build_ats_view
+from resume_kit_scoring import normalize_resume_input as _normalize_resume_input
 from resume_kit_scoring import project_scoredoc as _project_scoredoc
 
 from resume_kit_facade import edit_session as _edit_session
@@ -1282,8 +1283,15 @@ async def analyze_best_practices_capability(
     if not isinstance(request, AnalyzeBestPracticesRequest):
         return from_resume_kit_error(_bad_request(request, "AnalyzeBestPracticesRequest"))
     try:
-        scoredoc = _project_scoredoc(request.resume, reference_date=_BEST_PRACTICES_REF_DATE)
-        report: BestPracticesReport = _analyze_best_practices(request.resume, scoredoc)
+        # Single normalization seam (RIT-T-0163): a canonical ``structure``
+        # payload is projected via the same bridge ``build_refine`` uses so its
+        # experience bullets survive; a BuildDoc payload passes through. This
+        # keeps the read-only path and build_refine's internal analyzer in
+        # agreement instead of diverging on the canonical format.
+        resume = _normalize_resume_input(request.resume)
+        scoredoc = _project_scoredoc(resume, reference_date=_BEST_PRACTICES_REF_DATE)
+        report: BestPracticesReport = _analyze_best_practices(resume, scoredoc)
+        report = report.model_copy(update={"resume_version": request.resume_version})
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure

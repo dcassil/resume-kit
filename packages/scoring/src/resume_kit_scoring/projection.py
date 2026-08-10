@@ -12,7 +12,7 @@ See RIT-T-0104 (design) and RIT-A-0002 for the contract.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Protocol
 
@@ -538,6 +538,38 @@ def project_builddoc_from_canonical(resume: CanonicalResume) -> ResumeDocument:
         sectionMeta=section_meta,
         customSections=custom_sections,
     )
+
+
+def is_canonical_resume_payload(raw: object) -> bool:
+    """Return ``True`` when ``raw`` is a canonical :class:`Resume` JSON payload.
+
+    The canonical ``Resume`` form (the ``structure`` version's on-disk shape)
+    carries a ``basics`` block and does not use ``ResumeDocument``'s
+    ``personalInfo`` key. ``ResumeDocument.model_validate`` would accept such a
+    payload leniently and silently drop the experience bullets (they live under
+    canonical ``work[].achievements``, not ``workExperience[].description``),
+    which is exactly the read-only best-practices misread this guards against.
+    """
+    if not isinstance(raw, Mapping):
+        return False
+    return "basics" in raw and "personalInfo" not in raw
+
+
+def normalize_resume_input(raw: object) -> ResumeDocument:
+    """Coerce a raw resume JSON payload into the BuildDoc read model.
+
+    A canonical ``Resume`` payload (the ``structure`` version) is projected via
+    :func:`project_builddoc_from_canonical` — the same bridge ``build_refine``
+    uses — so its experience bullets survive into the analyzable read model.
+    Any other payload is validated directly as a :class:`ResumeDocument`.
+
+    This is the single normalization seam every read-only surface routes raw
+    resume input through, guaranteeing the read-only best-practices path and the
+    ``build_refine`` internal analyzer read canonical structure identically.
+    """
+    if is_canonical_resume_payload(raw):
+        return project_builddoc_from_canonical(CanonicalResume.model_validate(raw))
+    return ResumeDocument.model_validate(raw)
 
 
 def project_scoredoc(resume: ResumeDocument, *, reference_date: date) -> ScoreDoc:

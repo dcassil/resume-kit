@@ -216,9 +216,15 @@ class AnalyzeBestPracticesRequest:
     analysis) and returns the generic, job-independent
     :class:`~resume_kit_schemas.BestPracticesReport`. Never requires a provider
     and ignores ``no_llm``; introduces no per-item LLM calls (NFR-001).
+
+    ``resume_version`` stamps the emitted
+    :class:`~resume_kit_schemas.BestPracticesReport` so the report records which
+    resume version was scored (RIT-T-0164). Surfaces pass the resolved version
+    identity (e.g. the ``base`` / ``structure`` / ``refine`` pointer) when known.
     """
 
     resume: ResumeDocument
+    resume_version: str | None = None
 
 
 @dataclass(frozen=True)

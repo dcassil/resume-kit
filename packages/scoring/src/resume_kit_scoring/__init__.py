@@ -24,6 +24,8 @@ from resume_kit_scoring.compress import (
     compress_summary,
 )
 from resume_kit_scoring.projection import (
+    is_canonical_resume_payload,
+    normalize_resume_input,
     project_builddoc_from_canonical,
     project_scoredoc,
 )
@@ -70,6 +72,8 @@ __all__ = [
     "rank_bullets",
     "rank_experience",
     "rank_skills",
+    "is_canonical_resume_payload",
+    "normalize_resume_input",
     "project_builddoc_from_canonical",
     "project_scoredoc",
     "summary_too_long",

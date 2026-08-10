@@ -871,7 +871,10 @@ def analyze_best_practices(
     strict: bool = _Strict,
 ) -> None:
     """Run the generic (job-independent) best-practices score on a resume."""
-    request = AnalyzeBestPracticesRequest(resume=io.load_resume(resume))
+    request = AnalyzeBestPracticesRequest(
+        resume=io.load_resume_normalized(resume),
+        resume_version=resume,
+    )
     options = _options(False, strict, False)
     _run(caps.analyze_best_practices_capability(request, options), output)
 

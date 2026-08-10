@@ -15,6 +15,7 @@ from pathlib import Path
 import typer
 from pydantic import BaseModel, ValidationError
 from resume_kit_core.storage import ArtifactRef
+from resume_kit_facade import normalize_resume_input
 from resume_kit_schemas import (
     CandidateEvidence,
     JobDescription,
@@ -71,6 +72,25 @@ def load_model[ModelT: BaseModel](source: str, model: type[ModelT]) -> ModelT:
 def load_resume(source: str) -> ResumeDocument:
     """Load a :class:`ResumeDocument` from JSON at ``source``."""
     return load_model(source, ResumeDocument)
+
+
+def load_resume_normalized(source: str) -> ResumeDocument:
+    """Load a resume that may be a canonical ``structure`` payload.
+
+    Routes the raw JSON through the shared :func:`normalize_resume_input` seam so
+    a canonical ``Resume`` payload is projected (experience bullets preserved)
+    rather than leniently validated into an empty ``ResumeDocument`` — the
+    read-only best-practices misread guarded against by RIT-T-0163.
+    """
+    raw = _load_json_text(source)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise _fail(f"Invalid JSON in {source}: {exc}") from exc
+    try:
+        return normalize_resume_input(payload)
+    except ValidationError as exc:
+        raise _fail(f"Invalid resume JSON in {source}: {exc}") from exc
 
 
 def load_job(source: str) -> JobDescription:

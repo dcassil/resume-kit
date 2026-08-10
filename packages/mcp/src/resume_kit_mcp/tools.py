@@ -16,6 +16,7 @@ from resume_kit_core import (
 )
 from resume_kit_core.storage import ArtifactRef
 from resume_kit_export.models import ExportFormat
+from resume_kit_facade import normalize_resume_input as _normalize_resume_input
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AddEvidenceRequest,
@@ -329,6 +330,19 @@ def _validated(
 
 def _resume(value: object, field: str) -> object:
     return _validated(_VALIDATE_RESUME, value, field)
+
+
+def _resume_normalized(value: object, field: str) -> object:
+    """Parse a resume that may be a canonical ``structure`` payload.
+
+    Routes through the shared :func:`normalize_resume_input` seam so a canonical
+    ``Resume`` payload is projected (bullets preserved) rather than leniently
+    validated into an empty ``ResumeDocument`` (RIT-T-0163).
+    """
+    try:
+        return _normalize_resume_input(value)
+    except ValueError as exc:
+        raise _ValidationFailure(str(exc), field=field) from exc
 
 
 def _job(value: object, field: str) -> object:
@@ -976,7 +990,10 @@ async def resume_analyze_best_practices(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
             AnalyzeBestPracticesRequest,
-            {"resume": _resume(_required(arguments, "resume"), "resume")},
+            {
+                "resume": _resume_normalized(_required(arguments, "resume"), "resume"),
+                "resume_version": _optional_str(arguments, "resume_version"),
+            },
         )
     except _ValidationFailure as exc:
         return _validation_error(exc)

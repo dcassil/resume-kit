@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 #: Schema/format version for the best-practices report envelope.
 BEST_PRACTICES_SCHEMA_VERSION = 1
@@ -171,6 +171,22 @@ class BestPracticesFinding(BaseModel):
             " (reserved for truth-class failures)."
         ),
     )
+
+    @computed_field(  # type: ignore[prop-decorator]
+        description=(
+            "Stable rule identifier, mirrored from ``rule_code`` under the generic"
+            " ``code`` key so consumers that read ``code`` never see null (RIT-T-0164)."
+        ),
+    )
+    @property
+    def code(self) -> str:
+        """Alias of :attr:`rule_code` for surfaces/consumers keying on ``code``.
+
+        Serialized (never null) so a reader that expects a generic ``code`` field
+        gets the stable rule identifier instead of ``None``; ``rule_code`` remains
+        the canonical field and is left unchanged.
+        """
+        return self.rule_code
 
     @model_validator(mode="after")
     def _check_resolution_and_severity(self) -> BestPracticesFinding:
