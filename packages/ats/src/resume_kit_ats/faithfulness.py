@@ -341,7 +341,9 @@ def check_faithfulness(
                 severity="warning",
                 message=(
                     "Non-ASCII character(s) detected in the JSON — some ATS "
-                    "systems may mis-parse them."
+                    "systems may mis-parse them. This is informational for a "
+                    "faithful -original.json: preserve the characters verbatim "
+                    "and normalize at export, not here."
                 ),
                 items=non_ascii,
             )
