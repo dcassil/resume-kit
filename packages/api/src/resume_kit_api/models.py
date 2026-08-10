@@ -12,6 +12,8 @@ provider-not-configured envelope.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 from resume_kit_export.models import ExportFormat, ExportOptions
 from resume_kit_feedback import Candidate, FeatureContext
@@ -390,9 +392,16 @@ class AnalyzeBestPracticesBody(_Options):
 
     Pure and deterministic (RIT-T-0117): returns the generic, job-independent
     ``BestPracticesReport`` for the resume.
+
+    ``resume`` is accepted as a raw JSON object so a canonical ``structure``
+    payload survives to the shared normalization seam (RIT-T-0163) instead of
+    being leniently coerced into an empty ``ResumeDocument`` at the transport
+    boundary. ``resume_version`` optionally stamps the emitted report with the
+    scored version identity (RIT-T-0164).
     """
 
-    resume: ResumeDocument
+    resume: dict[str, Any]
+    resume_version: str | None = None
 
 
 class AtsViewBody(_Options):

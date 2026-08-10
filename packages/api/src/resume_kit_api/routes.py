@@ -42,6 +42,7 @@ from pydantic import Field
 from resume_kit_core.errors import CoreError, ErrorCode
 from resume_kit_core.response import InterfaceResponse
 from resume_kit_core.storage import ArtifactRef
+from resume_kit_facade import normalize_resume_input
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
     AddEvidenceRequest,
@@ -494,7 +495,10 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/analyze-best-practices")
     async def analyze_best_practices(body: AnalyzeBestPracticesBody) -> Response:
-        request = AnalyzeBestPracticesRequest(resume=body.resume)
+        request = AnalyzeBestPracticesRequest(
+            resume=normalize_resume_input(body.resume),
+            resume_version=body.resume_version,
+        )
         return _render(await REGISTRY["analyze-best-practices"](request, _options(body)))
 
     @app.post("/ats-view")

@@ -212,3 +212,57 @@ def test_project_builddoc_from_canonical_round_trips_redundant_sections() -> Non
     assert builddoc.workExperience[0].description == ["Built reliable APIs."]
     assert builddoc.workExperience[0].years == "2020 - 2024"
     assert builddoc.additional.technicalSkills == ["Python", "TypeScript", "React", "AWS"]
+
+
+def test_is_canonical_resume_payload_discriminates_by_basics() -> None:
+    """Canonical payloads carry ``basics`` and no ``personalInfo`` (RIT-T-0163)."""
+    from resume_kit_scoring import is_canonical_resume_payload
+
+    assert is_canonical_resume_payload({"basics": {"name": "A"}, "work": []})
+    assert not is_canonical_resume_payload({"personalInfo": {"name": "A"}})
+    # A payload carrying both keys is treated as a BuildDoc (personalInfo wins).
+    assert not is_canonical_resume_payload({"basics": {}, "personalInfo": {}})
+    assert not is_canonical_resume_payload("not-a-mapping")
+
+
+def test_normalize_resume_input_projects_canonical_preserving_bullets() -> None:
+    """A canonical payload is projected so experience bullets survive (RIT-T-0163)."""
+    from resume_kit_scoring import normalize_resume_input
+
+    canonical = {
+        "basics": {
+            "name": "Jane Engineer",
+            "headline": "Engineer",
+            "email": "jane@example.com",
+        },
+        "work": [
+            {
+                "organization": "Acme",
+                "title": "Engineer",
+                "startDate": "2020",
+                "endDate": "2024",
+                "achievements": [{"text": "Built reliable APIs."}],
+            }
+        ],
+    }
+    doc = normalize_resume_input(canonical)
+    assert isinstance(doc, ResumeDocument)
+    assert doc.personalInfo.name == "Jane Engineer"
+    assert doc.workExperience[0].description == ["Built reliable APIs."]
+
+
+def test_normalize_resume_input_passes_builddoc_through() -> None:
+    """A BuildDoc payload validates directly, not via canonical projection."""
+    from resume_kit_scoring import normalize_resume_input
+
+    payload = {
+        "personalInfo": {"name": "Bob"},
+        "workExperience": [
+            {"id": 1, "title": "Eng", "company": "X", "years": "2020-2024",
+             "description": ["Did a thing."]}
+        ],
+    }
+    doc = normalize_resume_input(payload)
+    assert isinstance(doc, ResumeDocument)
+    assert doc.personalInfo.name == "Bob"
+    assert doc.workExperience[0].description == ["Did a thing."]

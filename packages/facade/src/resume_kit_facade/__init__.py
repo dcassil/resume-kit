@@ -8,6 +8,8 @@ substrate.
 
 __version__ = "0.0.0"
 
+from resume_kit_scoring import normalize_resume_input
+
 from resume_kit_facade.alias_scope import use_alias_file
 from resume_kit_facade.capabilities import (
     REGISTRY,
@@ -156,6 +158,7 @@ __all__ = [
     # options
     "CapabilityOptions",
     # alias scoping helper
+    "normalize_resume_input",
     "use_alias_file",
     # working-directory config contract
     "ProjectConfig",
