@@ -2,15 +2,16 @@
 id: score-gated-missing-requirement
 level: initiative
 title: "Score-gated missing-requirement interview: elicit-and-prove loop with durable answer memory"
+short_code: "RIT-I-0022"
 created_at: 2026-08-10T22:59:56.969370+00:00
-updated_at: 2026-08-10T22:59:56.969370+00:00
+updated_at: 2026-08-10T23:09:41.941709+00:00
 parent: RIT-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -146,12 +147,13 @@ mirroring how the other learning writes are surfaced.
 Injectable classification currently proves from the MASTER resume (see `resume_kit_matching/keywords.py`:
 without a master, `injectable` is always empty — RIT-T-0126). For a confirmed "yes" to become an
 injectable, truthful edit, its captured `CandidateEvidence` must be usable as proof by `update-keywords`.
-Decide explicitly between:
-- (a) **Fold confirmed evidence into a master-equivalent proof source** the gap/injectable step already
-  consults (smallest change if the proof source is a single seam), or
-- (b) **Give `CandidateEvidence` a first-class proof path** in the injectable check / `update-keywords`.
-Prefer whichever touches the fewest seams; this is the one place "thin" is at risk, so it gets a
-dedicated design task rather than being assumed trivial.
+**Decision (locked): option (a) — fold confirmed evidence into a master-equivalent proof source** that the
+gap/injectable step already consults, because it touches the fewest seams and reuses the existing
+master-as-proof path rather than introducing a second proof mechanism. The captured evidence is projected
+into the same proof surface `analyze_keyword_gaps` already reads, so a confirmed "yes" simply becomes
+injectable through the existing route — no new proof path in `update-keywords`. (Option (b), a first-class
+`CandidateEvidence` proof path, was rejected as more surface area for no thinness gain.) This remains the
+one place "thin" is at risk, so it keeps a dedicated task to get the fold-in seam right.
 
 **3. Interview skill (prose orchestration, ~no code).**
 `interview-missing-job-description` reads the active JD + `KeywordGapAnalysis`, builds the question queue
@@ -199,11 +201,12 @@ per the initiative HITL rule.** Proposed task breakdown (with model/effort per t
    dedupe rule (global vs context-scoped). *Recommended Agent: opus + medium* (small but it is the durable
    data contract other pieces depend on; get the dedupe/context-scope semantics right).
 
-2. **T1a — Evidence-as-proof integration decision + implementation.** Decide (a) master-equivalent fold-in
-   vs (b) first-class `CandidateEvidence` proof path so a confirmed "yes" is injectable via
-   `update-keywords`; implement the smaller-seam option. This is the load-bearing integration; keep it
-   minimal. *Recommended Agent: opus + high* (touches the injectable/proof seam that other tailoring relies
-   on; a wrong choice creates compounding rework — the one place to reason carefully).
+2. **T1a — Evidence-as-proof integration (fold-in).** Implement the LOCKED option (a): project confirmed
+   `CandidateEvidence` into the master-equivalent proof source that `analyze_keyword_gaps` already consults,
+   so a confirmed "yes" becomes injectable through the existing route with no new proof path in
+   `update-keywords`. This is the load-bearing integration; keep it minimal. *Recommended Agent: opus + high*
+   (touches the injectable/proof seam that other tailoring relies on; a wrong choice creates compounding
+   rework — the one place to reason carefully).
 
 3. **T2 — `interview-missing-job-description` skill.** The interactive driver: JD-priority question queue,
    four-choice semantics (with grounding capture on "yes" and the correct non-durable handling of "need
