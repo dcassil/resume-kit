@@ -43,6 +43,7 @@ from resume_kit_schemas import (
 from resume_kit_schemas.canonical import (
     Award,
     Certification,
+    CustomContentSection,
     Link,
     LinkType,
     Location,
@@ -433,6 +434,30 @@ def _custom_item_section(
     )
 
 
+def _preserved_custom_section(
+    preserved: CustomContentSection,
+    *,
+    order: int,
+) -> tuple[SectionMeta, CustomSection] | None:
+    lines = _unique_text(preserved.lines)
+    if not lines:
+        return None
+    key = re.sub(r"[^a-z0-9]+", "-", preserved.heading.strip().casefold()).strip("-")
+    key = key or f"custom-{order}"
+    return (
+        SectionMeta(
+            id=key,
+            key=key,
+            displayName=preserved.heading,
+            sectionType=SectionType.STRING_LIST,
+            isDefault=False,
+            isVisible=True,
+            order=order,
+        ),
+        CustomSection(sectionType=SectionType.STRING_LIST, strings=lines),
+    )
+
+
 def _certification_names(values: list[Certification]) -> list[str]:
     names: list[str] = []
     for value in values:
@@ -508,6 +533,16 @@ def project_builddoc_from_canonical(resume: CanonicalResume) -> ResumeDocument:
         ),
     ]
     for spec in custom_specs:
+        if spec is None:
+            continue
+        meta, section = spec
+        section_meta.append(meta)
+        custom_sections[meta.key] = section
+
+    # Round-trip the canonical "other" holding slot (RIT-T-0161) back to BuildDoc
+    # custom sections so preserved content survives the projection unchanged.
+    for offset, preserved in enumerate(resume.custom):
+        spec = _preserved_custom_section(preserved, order=10 + offset)
         if spec is None:
             continue
         meta, section = spec

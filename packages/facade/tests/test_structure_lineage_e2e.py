@@ -70,7 +70,12 @@ def test_original_base_structure_standard_lineage_e2e(tmp_path: Path) -> None:
     assert ShapeFindingFamily.CANONICAL_FIELD_DUPLICATE in families
     assert ShapeFindingFamily.EMBEDDED_HEADING_LINE in families
     assert ShapeFindingFamily.SECTION_ORDER_VIOLATION in families
-    assert "custom_section_unmapped" in structure_result.deferred
+    # RIT-T-0161: "other"/unmapped custom content is now faithfully preserved in
+    # the canonical holding slot rather than deferred, so the section resolves
+    # (applied) instead of blocking on a user decision. The analyzer still
+    # surfaces the CUSTOM_SECTION_UNMAPPED finding for visibility.
+    assert "custom_section_unmapped" not in structure_result.deferred
+    assert "custom_section_unmapped" in structure_result.applied
     assert any(
         finding.section == "Domains & Industries"
         and finding.family is ShapeFindingFamily.CUSTOM_SECTION_UNMAPPED

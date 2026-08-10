@@ -346,6 +346,24 @@ class Reference(NamedSectionItem):
     """Canonical reference entry."""
 
 
+class CustomContentSection(CanonicalBaseModel):
+    """Faithful holding slot for content with no first-class canonical section.
+
+    The shape canonicalizer routes "other"/custom sections that have no auto or
+    explicit canonical target here rather than dropping them (RIT-T-0161). Content
+    is preserved verbatim as ``lines`` under the original ``heading`` so the
+    content ledger can account for it and nothing is silently lost.
+    """
+
+    heading: str
+    lines: list[str] = Field(default_factory=list)
+
+    @field_validator("heading")
+    @classmethod
+    def _heading_must_have_text(cls, value: str) -> str:
+        return _validate_required_text(value)
+
+
 class Resume(CanonicalBaseModel):
     """Canonical source-of-truth resume."""
 
@@ -361,3 +379,4 @@ class Resume(CanonicalBaseModel):
     languages: list[Language] = Field(default_factory=list)
     interests: list[Interest] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+    custom: list[CustomContentSection] = Field(default_factory=list)

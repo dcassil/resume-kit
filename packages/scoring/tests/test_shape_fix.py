@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from resume_kit_policy import default_shape_policy
-from resume_kit_schemas.canonical import SkillGroup
+from resume_kit_schemas.canonical import CanonicalSection, SkillGroup
 from resume_kit_schemas.resume import ResumeDocument
 from resume_kit_schemas.shape import (
     ContentFate,
@@ -186,6 +186,68 @@ def test_redundant_skill_sections_are_canonicalized_and_fully_accounted() -> Non
         for entry in result.ledger.entries
     )
     assert any(entry.fate is ContentFate.DEDUPED for entry in result.ledger.entries)
+
+
+def test_other_custom_section_and_summary_pass_ledger_gate() -> None:
+    # RIT-T-0161: content routed to "other" (no auto/explicit canonical target)
+    # plus summary content must reach ledger_ok True without dropping content.
+    before = _resume(
+        custom_sections={
+            "Community": {
+                "sectionType": "stringList",
+                "strings": ["Mentored bootcamp students", "Organized local meetups"],
+            }
+        }
+    )
+
+    result = _apply(before)
+
+    assert content_ledger_ok(result.ledger)
+    assert claims_preserved_across_sections(before, result.resume)
+    # No token is silently dropped: every entry is an accounted fate.
+    assert all(entry.fate is not ContentFate.UNRESOLVED for entry in result.ledger.entries)
+    # The "other" content is preserved as a canonical custom slot (faithful, not dropped).
+    preserved_text = " ".join(
+        line for section in result.resume.custom for line in section.lines
+    )
+    assert "Mentored bootcamp students" in preserved_text
+    # Summary content lands on basics.summary (shape-stage target exists).
+    assert result.resume.basics.summary == "Builds reliable product platforms."
+    assert any(
+        entry.fate is ContentFate.PRESERVED_AS_OTHER for entry in result.ledger.entries
+    )
+
+
+def test_custom_to_skills_mapping_is_satisfiable_and_tokenized() -> None:
+    # RIT-T-0162: explicit custom->skills mapping with a comma-delimited line.
+    before = _resume(
+        custom_sections={
+            "Core Competencies": {
+                "sectionType": "stringList",
+                "strings": ["Python, CI/CD, A/B testing", "Distributed Systems"],
+            }
+        }
+    )
+    report = analyze_resume_shape(before, default_shape_policy())
+    result = apply_shape_transforms(
+        before,
+        report,
+        {"Core Competencies": CanonicalSection.SKILLS},
+    )
+
+    # B1: mapping is satisfiable (claim sets computed symmetrically).
+    assert content_ledger_ok(result.ledger)
+    assert claims_preserved_across_sections(before, result.resume)
+
+    # B2: discrete tokens, delimiter-aware; "CI/CD" and "A/B testing" not over-split;
+    # neither the heading nor the whole comma-line survives as a single skill.
+    keywords = result.resume.skills[0].keywords
+    assert "Python" in keywords
+    assert "CI/CD" in keywords
+    assert "A/B testing" in keywords
+    assert "Distributed Systems" in keywords
+    assert "Python, CI/CD, A/B testing" not in keywords
+    assert "Core Competencies" not in keywords
 
 
 def test_prose_heavy_mapped_section_is_deferred_and_refused_by_ledger() -> None:

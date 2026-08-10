@@ -42,6 +42,11 @@ class ContentFate(StrEnum):
     DROPPED_BY_EXPLICIT_DECISION = "dropped_by_explicit_decision"
     DROPPED_BY_RANKED_BUDGET = "dropped_by_ranked_budget"
     COMPRESSED = "compressed"
+    # Accounted: content the canonical schema does not model with a first-class
+    # section is faithfully preserved in the canonical ``Resume.custom`` holding
+    # slot rather than dropped. Distinct from UNRESOLVED, which means the content
+    # genuinely still needs a user mapping decision (RIT-T-0161).
+    PRESERVED_AS_OTHER = "preserved_as_other"
     UNRESOLVED = "unresolved"
 
 
