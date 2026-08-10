@@ -6,13 +6,14 @@ import re
 from collections.abc import Iterable, Mapping
 
 from resume_kit_matching.keywords import _TOKEN_RE
-from resume_kit_policy import default_shape_policy, normalize_section_heading
+from resume_kit_policy import normalize_section_heading
 from resume_kit_schemas.canonical import (
     Achievement,
     Award,
     Basics,
     CanonicalSection,
     Certification,
+    CustomContentSection,
     Education,
     Experience,
     Language,
@@ -68,6 +69,7 @@ _LEDGER_OK_FATES = frozenset(
         ContentFate.PRESENT_AFTER,
         ContentFate.MOVED,
         ContentFate.DEDUPED,
+        ContentFate.PRESERVED_AS_OTHER,
         ContentFate.DROPPED_AS_HEADING,
         ContentFate.DROPPED_AS_PARSER_ARTIFACT,
         ContentFate.DROPPED_BY_EXPLICIT_DECISION,
@@ -78,6 +80,7 @@ _TARGET_REQUIRED_FATES = frozenset(
         ContentFate.PRESENT_AFTER,
         ContentFate.MOVED,
         ContentFate.DEDUPED,
+        ContentFate.PRESERVED_AS_OTHER,
     }
 )
 
@@ -136,8 +139,11 @@ def apply_shape_transforms(
         target = decision_targets.get(display_name) or report_targets.get(display_name)
         explicit = display_name in decision_targets
         if target is None or target is CanonicalSection.OTHER:
-            builder.unresolved_custom_section(section, display_name, source_path)
-            deferred_sections.add(display_name)
+            # No first-class canonical home: preserve the content faithfully in
+            # the canonical ``custom`` holding slot so the ledger accounts for it
+            # (RIT-T-0161) rather than counting it as dropped/unresolved.
+            builder.preserve_custom_section(section, display_name, source_path)
+            applied_sections.add(display_name)
             continue
         if not explicit and target not in _AUTO_CUSTOM_TARGETS:
             builder.unresolved_custom_section(section, display_name, source_path)
@@ -158,6 +164,7 @@ def apply_shape_transforms(
         certifications=builder.certifications,
         awards=builder.awards,
         languages=builder.languages,
+        custom=builder.custom_sections,
     )
     return ShapeFixResult(
         resume=canonical,
@@ -209,6 +216,7 @@ class _CanonicalBuilder:
         self.certifications: list[Certification] = []
         self.awards: list[Award] = []
         self.languages: list[Language] = []
+        self.custom_sections: list[CustomContentSection] = []
         self._certification_keys: dict[str, str] = {}
         self._award_keys: dict[str, str] = {}
         self._language_keys: dict[str, str] = {}
@@ -525,21 +533,26 @@ class _CanonicalBuilder:
                 continue
             if not _has_text(value):
                 continue
-            key = _claim_key(value)
-            existing = self._skill_sources.get(key)
-            if existing is not None:
-                self._record_text(
-                    value,
-                    ContentFate.DEDUPED,
-                    source,
-                    existing,
-                    reason="exact duplicate skill",
-                )
-                continue
-            target_path = f"skills[0].keywords[{len(self._skill_keywords)}]"
-            self._skill_keywords[key] = value
-            self._skill_sources[key] = target_path
-            self._record_text(value, ContentFate.MOVED, source, target_path)
+            # A single string may carry a delimited list of skills
+            # ("Python, CI/CD, A/B testing"). Split into discrete skills so the
+            # canonical keyword surface matches the scored keyword surface, while
+            # preserving slash-bearing skills ("CI/CD") intact (RIT-T-0162 B2).
+            for skill in _split_skill_line(value):
+                key = _claim_key(skill)
+                existing = self._skill_sources.get(key)
+                if existing is not None:
+                    self._record_text(
+                        skill,
+                        ContentFate.DEDUPED,
+                        source,
+                        existing,
+                        reason="exact duplicate skill",
+                    )
+                    continue
+                target_path = f"skills[0].keywords[{len(self._skill_keywords)}]"
+                self._skill_keywords[key] = skill
+                self._skill_sources[key] = target_path
+                self._record_text(skill, ContentFate.MOVED, source, target_path)
 
     def add_named_items(
         self,
@@ -621,6 +634,37 @@ class _CanonicalBuilder:
         self.languages.append(Language(name=value))
         self._language_keys[key] = target_path
         self._record_text(value, ContentFate.MOVED, source_path, target_path)
+
+    def preserve_custom_section(
+        self,
+        section: CustomSection,
+        display_name: str,
+        source_path: str,
+    ) -> None:
+        """Preserve an untargeted custom section in the canonical ``custom`` slot.
+
+        Content that has no first-class canonical home is kept verbatim so the
+        ledger can account for it (fate ``PRESERVED_AS_OTHER``) instead of
+        reporting it as dropped/unresolved (RIT-T-0161).
+        """
+        custom_index = len(self.custom_sections)
+        lines: list[str] = []
+        for path, text in _custom_texts(section, source_path):
+            if _is_heading_artifact(text, display_name):
+                self._record_text(text, ContentFate.DROPPED_AS_HEADING, path, None)
+                continue
+            if _is_parser_artifact(text):
+                self._record_text(text, ContentFate.DROPPED_AS_PARSER_ARTIFACT, path, None)
+                continue
+            if not _has_text(text):
+                continue
+            target_path = f"custom[{custom_index}].lines[{len(lines)}]"
+            lines.append(text)
+            self._record_text(text, ContentFate.PRESERVED_AS_OTHER, path, target_path)
+        if lines:
+            self.custom_sections.append(
+                CustomContentSection(heading=display_name, lines=lines)
+            )
 
     def unresolved_custom_section(
         self,
@@ -785,48 +829,70 @@ def _global_claim_set(resume: ResumeDocument | Resume) -> dict[str, frozenset[st
 
 
 def _builddoc_claim_set(resume: ResumeDocument) -> dict[str, frozenset[str]]:
-    skills = set(_clean_claims(resume.additional.technicalSkills))
+    # "skills_and_custom" is ONE combined claim universe covering both the skills
+    # surface and any custom-section string content. Folding them together keeps
+    # the gate symmetric across an explicit custom->skills remapping: content that
+    # moves from a custom section into skills stays in the same universe rather
+    # than appearing lost on one side and added on the other (RIT-T-0162 B1). Both
+    # sides derive tokens through the identical ``_split_skill_line`` tokenization.
+    skills: set[str] = set()
+    for value in resume.additional.technicalSkills:
+        skills.update(_skill_claims_from_value(value))
     display_names = _custom_display_names(resume.sectionMeta)
-    policy = default_shape_policy()
     for key, section in resume.customSections.items():
         display_name = display_names.get(key, key)
-        if policy.canonical_section_for_heading(display_name) is not CanonicalSection.SKILLS:
-            continue
         skills.update(_custom_skill_claims(section, display_name))
     return {
         "employers": frozenset(_clean_claims(exp.company for exp in resume.workExperience)),
         "titles": frozenset(_clean_claims(exp.title for exp in resume.workExperience)),
         "degrees": frozenset(_clean_claims(edu.degree for edu in resume.education)),
-        "skills": frozenset(skills),
+        "skills_and_custom": frozenset(skills),
     }
 
 
 def _canonical_claim_set(resume: Resume) -> dict[str, frozenset[str]]:
     skills: set[str] = set()
     for group in resume.skills:
-        skills.update(_clean_claims(group.keywords))
+        for keyword in group.keywords:
+            skills.update(_skill_claims_from_value(keyword))
     for exp in resume.work:
         skills.update(_clean_claims(exp.skills))
         skills.update(_clean_claims(exp.technologies))
     for project in resume.projects:
         skills.update(_clean_claims(project.skills))
         skills.update(_clean_claims(project.technologies))
+    for custom in resume.custom:
+        for line in custom.lines:
+            skills.update(_skill_claims_from_value(line))
     return {
         "employers": frozenset(_clean_claims(exp.organization for exp in resume.work)),
         "titles": frozenset(_clean_claims(exp.title for exp in resume.work)),
         "degrees": frozenset(_clean_claims(edu.degree for edu in resume.education)),
-        "skills": frozenset(skills),
+        "skills_and_custom": frozenset(skills),
     }
+
+
+def _skill_claims_from_value(value: str | None) -> set[str]:
+    if not _has_text(value):
+        return set()
+    assert value is not None
+    return {_normalize_claim(skill) for skill in _split_skill_line(value)}
 
 
 def _custom_skill_claims(section: CustomSection, display_name: str) -> set[str]:
+    # Include every custom string-list section's content in the combined
+    # skills+custom universe, tokenized through the shared splitter, so both the
+    # skills-mapped and preserved-as-other outcomes stay symmetric (RIT-T-0162 B1).
     if section.sectionType is not SectionType.STRING_LIST:
         return set()
-    return {
-        _normalize_claim(value)
-        for value in section.strings or []
-        if _has_text(value) and not _is_heading_artifact(value, display_name)
-    }
+    claims: set[str] = set()
+    for value in section.strings or []:
+        if not _has_text(value) or _is_heading_artifact(value, display_name):
+            continue
+        if _is_parser_artifact(value):
+            continue
+        claims.update(_skill_claims_from_value(value))
+    return claims
 
 
 def _clean_claims(values: Iterable[str | None]) -> list[str]:
@@ -853,6 +919,21 @@ def _has_text(value: str | None) -> bool:
 
 def _tokens(text: str) -> list[str]:
     return [token.casefold() for token in _TOKEN_RE.findall(text)]
+
+
+# Skill-list delimiters: commas, semicolons, pipes, bullets, and newlines split
+# a line into discrete skills. Slashes are deliberately NOT delimiters so that
+# established skills ("CI/CD", "A/B testing") survive intact (RIT-T-0162 B2).
+_SKILL_SPLIT_RE = re.compile(r"[,;|•·\n]+")
+
+
+def _split_skill_line(value: str) -> list[str]:
+    """Split one skills entry into discrete, trimmed skill tokens.
+
+    Delimiter/list-aware and slash-preserving. Never invents content: it only
+    splits what is genuinely present and drops empty fragments.
+    """
+    return [part.strip() for part in _SKILL_SPLIT_RE.split(value) if part.strip()]
 
 
 def _is_heading_artifact(value: str, heading: str) -> bool:
