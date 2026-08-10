@@ -186,6 +186,12 @@ class AliasIndex:
         self._group_for_member: dict[str, set[str]] = {}
         # Normalized member -> normalized canonical, for provenance.
         self._canonical_of: dict[str, str] = {}
+        # Largest token-count of any member surface form in this index. Callers
+        # that scan text with an n-gram window use this to BOUND the window to
+        # exactly what the lexicon can match — never wider — so multi-token
+        # aliases (e.g. ``responsive design``) can be assembled while a
+        # single-token lexicon still scans one token at a time.
+        self._max_member_tokens: int = 1
 
         for raw_canonical, raw_aliases in mapping.items():
             canonical = normalize(raw_canonical)
@@ -210,11 +216,28 @@ class AliasIndex:
                     )
                 self._canonical_of[member] = canonical
                 self._group_for_member[member] = members
+                # normalize() is per-token, so a member's token count is stable
+                # between its normalized and surface forms — count it here.
+                token_count = len(member.split(" ")) if member else 1
+                if token_count > self._max_member_tokens:
+                    self._max_member_tokens = token_count
 
     @classmethod
     def load(cls, path: Path | None = None) -> AliasIndex:
         """Build an :class:`AliasIndex` from the lexicon file at *path*."""
         return cls(load_alias_lexicon(path))
+
+    @property
+    def max_member_tokens(self) -> int:
+        """Return the largest token-count of any member surface form.
+
+        A single-token-only index returns ``1``. Callers scanning text with an
+        n-gram window multiply nothing beyond this: the window is bounded BY THE
+        INDEX, so it can assemble multi-token aliases the lexicon actually holds
+        while never widening past them (which would risk substring/derivational
+        false positives).
+        """
+        return self._max_member_tokens
 
     def canonical_for(self, term: str) -> str | None:
         """Return the normalized canonical for *term*, or ``None`` if unknown.
