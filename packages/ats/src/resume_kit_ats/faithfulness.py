@@ -43,7 +43,6 @@ CHECKS and severity:
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from resume_kit_schemas import (
     FaithfulnessCode,
@@ -53,7 +52,7 @@ from resume_kit_schemas import (
 )
 from resume_kit_terms import surface_form
 
-from resume_kit_ats.engine import _NON_ASCII_PATTERN, _extract_all_text
+from resume_kit_ats.engine import _NON_ASCII_PATTERN
 
 # Whole-word token boundary over an already surface-folded string (surface_form
 # leaves only lowercase ``[a-z0-9]`` runs separated by single spaces).
@@ -146,10 +145,100 @@ def _json_section_count(resume: ResumeDocument) -> int:
     return count
 
 
+def _content_strings(resume: ResumeDocument) -> list[str]:
+    """Return the deliberate set of user-content strings to tokenize.
+
+    The faithfulness scan must compare *document content* against the source —
+    not schema machinery. Flattening ``resume.model_dump()`` blindly (the old
+    behaviour) walked serialized enum members and structural literals as if they
+    were user text, producing phantom ADDED_TOKENS:
+
+    * ``sectionType`` serializes to its :class:`SectionType` enum value
+      (``"text"``/``"stringList"``/``"itemList"``/``"personalInfo"``);
+    * ``descriptionStyles`` serializes to the ``DescriptionStyle`` literal
+      (``"bullet"``/``"plain"``) — the source of the phantom ``bullet`` token;
+    * ``sectionMeta`` holds ids/keys/type metadata, not authored content.
+
+    Conversely, ``customSections`` is a ``dict[str, CustomSection]`` whose KEYS
+    hold the user's section heading (there is no ``displayName`` on
+    :class:`CustomSection`). ``model_dump`` flattening only ever visited dict
+    *values*, so a heading stored solely in the key was invisible and reported
+    as a dropped span.
+
+    This function walks the typed model and collects only authored content
+    strings — INCLUDING customSection dict keys — while EXCLUDING enum-typed and
+    structural fields by schema knowledge (never a string denylist). It is the
+    single source of truth for both the ADDED_TOKENS (candidate) and dropped /
+    altered (reference) scans, so include/exclude rules stay symmetric.
+    """
+    parts: list[str] = []
+
+    info = resume.personalInfo
+    parts.extend(
+        s
+        for s in (
+            info.name,
+            info.title,
+            info.email,
+            info.phone,
+            info.location,
+            info.website,
+            info.linkedin,
+            info.github,
+        )
+        if s
+    )
+
+    if resume.summary:
+        parts.append(resume.summary)
+
+    for entry in resume.workExperience:
+        parts.extend(
+            s
+            for s in (entry.title, entry.company, entry.location, entry.years)
+            if s
+        )
+        parts.extend(entry.description)
+
+    for edu in resume.education:
+        parts.extend(
+            s
+            for s in (edu.institution, edu.degree, edu.years, edu.description)
+            if s
+        )
+
+    for project in resume.personalProjects:
+        parts.extend(s for s in (project.name, project.role, project.years) if s)
+        parts.extend(project.description)
+
+    additional = resume.additional
+    parts.extend(additional.technicalSkills)
+    parts.extend(additional.languages)
+    parts.extend(additional.certificationsTraining)
+    parts.extend(additional.awards)
+
+    for heading, section in resume.customSections.items():
+        # The dict KEY is the user's section heading — authored content.
+        if heading:
+            parts.append(heading)
+        if section.text:
+            parts.append(section.text)
+        if section.strings:
+            parts.extend(section.strings)
+        for item in section.items or ():
+            parts.extend(
+                s
+                for s in (item.title, item.subtitle, item.location, item.years)
+                if s
+            )
+            parts.extend(item.description)
+
+    return parts
+
+
 def _json_flat_text(resume: ResumeDocument) -> str:
-    """Flatten every string value of the resume into one text block."""
-    data: dict[str, Any] = resume.model_dump()
-    return _extract_all_text(data)
+    """Flatten the deliberate user-content string set into one text block."""
+    return " ".join(_content_strings(resume))
 
 
 def _high_signal_fields(resume: ResumeDocument) -> list[tuple[str, str]]:

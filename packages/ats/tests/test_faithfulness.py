@@ -144,3 +144,89 @@ def test_non_ascii_punctuation_passes_with_only_warning() -> None:
     assert FaithfulnessCode.DROPPED_SPANS not in _error_codes(report)
     assert FaithfulnessCode.ALTERED_FIELD not in _error_codes(report)
     assert report.passed is True
+
+
+def _added_tokens(report: FaithfulnessReport) -> set[str]:
+    for f in report.findings:
+        if f.code == FaithfulnessCode.ADDED_TOKENS:
+            return set(f.items)
+    return set()
+
+
+# --- RIT-T-0131: content-string set realignment ---------------------------
+
+
+def test_custom_sections_do_not_leak_schema_tokens() -> None:
+    """F1: schema machinery (descriptionStyles/sectionType) must not be scanned.
+
+    ``bullet`` / ``stringList`` / ``text`` / ``itemList`` are enum / literal
+    members serialized by ``model_dump`` — they are NOT user content and must
+    never appear in ADDED_TOKENS for a document that does not contain them.
+    """
+    source = (
+        "Experience\n"
+        "Senior Engineer, Acme Corp, 2020 - Present\n"
+        "- Built scalable payment systems for global commerce\n"
+        "Domains and Industries\n"
+        "Fintech and Healthcare\n"
+    )
+    resume = ResumeDocument.model_validate(
+        {
+            "summary": "",
+            "workExperience": [
+                {
+                    "title": "Senior Engineer",
+                    "company": "Acme Corp",
+                    "years": "2020 - Present",
+                    "description": [
+                        "Built scalable payment systems for global commerce"
+                    ],
+                }
+            ],
+            "customSections": {
+                "Domains and Industries": {
+                    "sectionType": "stringList",
+                    "strings": ["Fintech and Healthcare"],
+                }
+            },
+        }
+    )
+    report = check_faithfulness(source, resume)
+    added = _added_tokens(report)
+    # Phantom schema/enum/example tokens must be absent.
+    assert "bullet" not in added
+    assert "stringlist" not in added
+    assert "text" not in added
+    assert "itemlist" not in added
+    assert "personalinfo" not in added
+
+
+def test_key_only_custom_section_heading_not_dropped() -> None:
+    """F2: a heading stored ONLY in the customSection dict key is preserved.
+
+    ``CustomSection`` has no ``displayName``; the dict KEY holds the heading.
+    Scanning only values reported the heading as a DROPPED_SPANS error and
+    hard-failed the gate. Scanning keys must recognize it as preserved.
+    """
+    source = (
+        "Domains and Industries\n"
+        "Financial services technology platforms\n"
+    )
+    resume = ResumeDocument.model_validate(
+        {
+            "summary": "",
+            "customSections": {
+                # Heading lives ONLY here — not duplicated into any value.
+                "Domains and Industries": {
+                    "sectionType": "stringList",
+                    "strings": ["Financial services technology platforms"],
+                }
+            },
+        }
+    )
+    report = check_faithfulness(source, resume)
+    assert FaithfulnessCode.DROPPED_SPANS not in _error_codes(report)
+    # And no phantom-fabrication of the heading either.
+    added = _added_tokens(report)
+    assert "domains" not in added
+    assert "industries" not in added
