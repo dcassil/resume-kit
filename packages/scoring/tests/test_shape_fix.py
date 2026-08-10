@@ -61,6 +61,46 @@ def _apply(resume: ResumeDocument) -> ShapeFixResult:
     return apply_shape_transforms(resume, report)
 
 
+def test_empty_company_entry_canonicalizes_without_raising() -> None:
+    """RIT-T-0156 B1: an empty ``company`` (legal in ResumeDocument) must not
+    crash canonicalization. Date-grouped umbrella headings carry the group in
+    ``title`` and leave ``company`` empty."""
+    resume = ResumeDocument.model_validate(
+        {
+            "personalInfo": {
+                "name": "Jane Engineer",
+                "email": "jane@example.com",
+                "phone": "555-0100",
+                "title": "Staff Engineer",
+            },
+            "summary": "Builds reliable product platforms.",
+            "workExperience": [
+                {
+                    "id": 1,
+                    "title": "Ventures & Consulting",
+                    "company": "",
+                    "years": "2020-2024",
+                    "description": ["Advised early-stage teams."],
+                }
+            ],
+            "education": [
+                {
+                    "institution": "State University",
+                    "degree": "BS Computer Science",
+                    "years": "2016",
+                }
+            ],
+            "additional": {"technicalSkills": []},
+            "customSections": {},
+        }
+    )
+
+    result = _apply(resume)
+
+    assert result.resume.work[0].organization == ""
+    assert result.resume.work[0].title == "Ventures & Consulting"
+
+
 def test_content_ledger_ok_accepts_accounted_tokens() -> None:
     ledger = ContentLedger(
         entries=[

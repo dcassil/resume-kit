@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from enum import IntEnum
 
+from pydantic import ValidationError
+
 from resume_kit_core.errors import (
     CoreError,
     CoreWarning,
@@ -143,6 +145,40 @@ def from_resume_kit_error(exc: ResumeKitError) -> InterfaceResponse[None]:
     return InterfaceResponse.failure([exc.error])
 
 
+def from_validation_error(exc: ValidationError) -> InterfaceResponse[None]:
+    """Map a pydantic ``ValidationError`` to a ``validation`` failure (RIT-T-0156).
+
+    A schema validation failure is a *validation*-class error, not an opaque
+    internal error: it names the offending field(s) and entry so the caller can
+    act on it. Unlike :func:`from_exception`, the field locations and messages
+    are safe to surface (they describe the schema contract, not secret content).
+    """
+    errors = exc.errors()
+    fields = [
+        ".".join(str(part) for part in err.get("loc", ())) for err in errors
+    ]
+    field_summary = ", ".join(field for field in fields if field)
+    detail = f" ({field_summary})" if field_summary else ""
+    message = (
+        f"{len(errors)} schema validation error(s) in "
+        f"{exc.title}{detail}"
+    )
+    return InterfaceResponse.failure(
+        [
+            CoreError(
+                code=ErrorCode.VALIDATION_FAILED,
+                message=message,
+                details={
+                    "exception_type": type(exc).__name__,
+                    "model": exc.title,
+                    "fields": field_summary,
+                    "error_count": str(len(errors)),
+                },
+            )
+        ]
+    )
+
+
 def from_exception(
     exc: BaseException,
     *,
@@ -150,10 +186,17 @@ def from_exception(
 ) -> InterfaceResponse[None]:
     """Map an unexpected exception to an internal-error failure.
 
-    Deliberately does NOT embed the exception's string or any content in the
-    envelope, to avoid leaking secrets or user data.  Only the exception's
-    type name is recorded for diagnostics.
+    A pydantic ``ValidationError`` is reclassified as a ``validation`` failure
+    (see :func:`from_validation_error`) so schema-contract violations surface a
+    specific, actionable field-naming message instead of the opaque
+    ``internal_error``. Everything else remains an internal error.
+
+    For non-validation exceptions this deliberately does NOT embed the
+    exception's string or any content in the envelope, to avoid leaking secrets
+    or user data.  Only the exception's type name is recorded for diagnostics.
     """
+    if isinstance(exc, ValidationError):
+        return from_validation_error(exc)
     error = CoreError(
         code=ErrorCode.INTERNAL_ERROR,
         message=message,

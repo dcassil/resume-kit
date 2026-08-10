@@ -92,6 +92,26 @@ class TestErrorMapping:
         assert resp.errors[0].details["exception_type"] == "ValueError"
         assert exit_code_for(resp) == ExitCode.INTERNAL_ERROR
 
+    def test_validation_error_maps_to_validation_not_internal(self) -> None:
+        """RIT-T-0156 B2: a pydantic ValidationError in the build path must
+        surface as a validation-class error naming the offending field, not the
+        opaque internal_error."""
+        from pydantic import BaseModel, ValidationError
+
+        class _Model(BaseModel):
+            organization: str
+
+        try:
+            _Model.model_validate({"organization": 123})
+        except ValidationError as exc:
+            resp = from_exception(exc)
+
+        assert resp.errors[0].code == ErrorCode.VALIDATION_FAILED
+        assert resp.errors[0].code != ErrorCode.INTERNAL_ERROR
+        # The message names the offending field/entry.
+        assert "organization" in resp.errors[0].message
+        assert exit_code_for(resp) == ExitCode.INVALID_INPUT
+
 
 class TestNeedsInput:
     def test_human_input_response(self) -> None:
