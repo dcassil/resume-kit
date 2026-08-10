@@ -24,6 +24,7 @@ from resume_kit_core.interface import (
     exit_code_for,
     from_exception,
     from_resume_kit_error,
+    from_validation_error,
 )
 
 # Provider contracts
@@ -64,6 +65,7 @@ __all__ = [
     "exit_code_for",
     "from_exception",
     "from_resume_kit_error",
+    "from_validation_error",
     # providers
     "CompletionProvider",
     "CompletionRequest",

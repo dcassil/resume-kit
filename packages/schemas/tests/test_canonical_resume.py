@@ -96,11 +96,6 @@ def test_basics_cardinality(kwargs: dict[str, str]) -> None:
     "kwargs",
     [
         {
-            "organization": "",
-            "title": "Engineer",
-            "achievements": [Achievement(text="Built APIs.")],
-        },
-        {
             "organization": "Example Co",
             "title": "",
             "achievements": [Achievement(text="Built APIs.")],
@@ -111,6 +106,18 @@ def test_basics_cardinality(kwargs: dict[str, str]) -> None:
 def test_experience_cardinality(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         Experience(**kwargs)
+
+
+def test_experience_allows_empty_organization() -> None:
+    """RIT-T-0156 B1: empty ``organization`` is legal (mirrors the source
+    schema's ``company: str = ""`` for date-grouped umbrella headings). Only
+    ``title`` is required-non-empty."""
+    entry = Experience(
+        organization="",
+        title="Ventures & Consulting",
+        achievements=[Achievement(text="Advised early-stage teams.")],
+    )
+    assert entry.organization == ""
 
 
 def test_achievement_requires_text() -> None:

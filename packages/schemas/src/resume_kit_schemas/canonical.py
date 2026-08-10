@@ -203,7 +203,11 @@ class Basics(CanonicalBaseModel):
 class Experience(CanonicalBaseModel):
     """Canonical work experience entry."""
 
-    organization: str
+    # Empty organization is intentionally legal, mirroring the source schema
+    # ``ResumeDocument.Experience.company`` (which defaults to "" for date-grouped
+    # umbrella headings / career-break lines where the group is carried in ``title``).
+    # See RIT-T-0156. Only ``title`` is required-non-empty here.
+    organization: str = ""
     title: str
     employmentType: EmploymentType | None = None
     location: Location | str | None = None
@@ -215,7 +219,7 @@ class Experience(CanonicalBaseModel):
     technologies: list[str] = Field(default_factory=list)
     links: list[Link] = Field(default_factory=list)
 
-    @field_validator("organization", "title")
+    @field_validator("title")
     @classmethod
     def _required_fields_must_have_text(cls, value: str) -> str:
         return _validate_required_text(value)
