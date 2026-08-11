@@ -95,11 +95,6 @@ def test_basics_cardinality(kwargs: dict[str, str]) -> None:
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {
-            "organization": "Example Co",
-            "title": "",
-            "achievements": [Achievement(text="Built APIs.")],
-        },
         {"organization": "Example Co", "title": "Engineer"},
     ],
 )
@@ -110,14 +105,25 @@ def test_experience_cardinality(kwargs: dict[str, object]) -> None:
 
 def test_experience_allows_empty_organization() -> None:
     """RIT-T-0156 B1: empty ``organization`` is legal (mirrors the source
-    schema's ``company: str = ""`` for date-grouped umbrella headings). Only
-    ``title`` is required-non-empty."""
+    schema's ``company: str = ""`` for date-grouped umbrella headings)."""
     entry = Experience(
         organization="",
         title="Ventures & Consulting",
         achievements=[Achievement(text="Advised early-stage teams.")],
     )
     assert entry.organization == ""
+
+
+@pytest.mark.parametrize("payload", [{"title": ""}, {}])
+def test_experience_allows_empty_or_omitted_title(payload: dict[str, object]) -> None:
+    """RIT-T-0182: date-bucketed work entries may not have a discrete title."""
+    entry = Experience(
+        organization="Ventures Collective",
+        achievements=[Achievement(text="Advised early-stage teams.")],
+        **payload,
+    )
+
+    assert entry.title == ""
 
 
 def test_achievement_requires_text() -> None:

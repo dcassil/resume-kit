@@ -205,7 +205,7 @@ def atomic_write_json(path: Path, value: object) -> None:
     the config save contract.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(value, indent=2, sort_keys=True)
+    payload = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
     with NamedTemporaryFile(
         mode="w",
         encoding="utf-8",

@@ -44,10 +44,11 @@ Run the shared **Prerequisites gate** -
    resume-only ATS structural fixes behind the claim-preservation gate. This
    writes `resume-kit/resumes/<name>-base.json`.
 4. **Build canonical no-custom `structure`.** Run **update-shape**
-   (`build-structure --omit-custom-sections`) as the no-custom Flow 1
-   projection. It must account for every source token through the content
-   ledger, mark omitted custom content as preserved in learning evidence rather
-   than retaining a canonical custom holding section, and write
+   (`build-structure`) as the no-custom Flow 1 projection. `build-structure`
+   auto-seeds full-resume evidence idempotently before omitting custom sections,
+   then accounts for every source token through the content ledger, marks
+   omitted custom content as preserved in learning evidence rather than
+   retaining a canonical custom holding section, and writes
    `resume-kit/resumes/<name>-structure.json` only when its hard gates pass.
 5. **Score best practices.** Run **check-best-practices** on the `structure`
    artifact. Split findings into `auto_suggestible` and `needs_user_input`.
@@ -73,11 +74,12 @@ Run after `parse-resume` / `set-active`, before `build-base` and
 `{"root": "."}`.
 
 The rest of the flow uses the existing surfaces: `resume-tool build-base`,
-`resume-tool build-structure --omit-custom-sections`,
-`resume-tool analyze-best-practices`, and `resume-tool build-refine`; MCP tools
-`resume_build_base`, `resume_build_structure` with
-`{"omit_custom_sections": true}`, `resume_analyze_best_practices`, and
-`resume_build_refine`.
+`resume-tool build-structure`, `resume-tool analyze-best-practices`, and
+`resume-tool build-refine`; MCP tools `resume_build_base`,
+`resume_build_structure`, `resume_analyze_best_practices`, and
+`resume_build_refine`. The old `--omit-custom-sections` flag and
+`omit_custom_sections` request field are accepted as no-op compatibility
+aliases; omit-plus-seed is now the default.
 
 ## Truth posture
 

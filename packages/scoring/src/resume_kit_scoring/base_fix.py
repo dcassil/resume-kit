@@ -33,7 +33,6 @@ _MONTH_RE = re.compile(
     r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*", re.IGNORECASE
 )
 _BULLET_RE = re.compile(r"[•‣◦⁃∙]")
-_NON_ASCII_RE = re.compile(r"[^\x00-\x7F]")
 
 
 @dataclass
@@ -69,12 +68,11 @@ def _strip_span(data: dict[str, Any], span: str) -> dict[str, Any]:
 
 
 def _normalize_formatting(data: dict[str, Any]) -> dict[str, Any]:
-    """Tabs -> space, unicode bullets -> '-', drop non-ASCII."""
+    """Tabs -> space, unicode bullets -> '-'."""
 
     def clean(text: str) -> str:
         text = text.replace("\t", " ")
         text = _BULLET_RE.sub("-", text)
-        text = _NON_ASCII_RE.sub("", text)
         return re.sub(r"\s{2,}", " ", text)
 
     return {key: _walk_strings(value, clean) for key, value in data.items()}
@@ -167,6 +165,10 @@ _AUTO_AFFORDANCES = {
     FixAffordance.AUTO_SAFE_NORMALIZE,
 }
 
+# The shared ATS finding still marks this as auto-safe for downstream/export
+# contexts, but base must preserve faithful non-ASCII verbatim (RIT-T-0187).
+_BASE_DO_NOT_APPLY_CODES = {"FORMATTING_NON_ASCII"}
+
 
 def apply_auto_fixes(
     resume: ResumeDocument, report: AtsStructureReport
@@ -184,6 +186,9 @@ def apply_auto_fixes(
     deferred: list[str] = []
 
     for finding in report.findings:
+        if finding.code in _BASE_DO_NOT_APPLY_CODES:
+            deferred.append(finding.code)
+            continue
         if finding.fix_affordance not in _AUTO_AFFORDANCES:
             deferred.append(finding.code)
             continue

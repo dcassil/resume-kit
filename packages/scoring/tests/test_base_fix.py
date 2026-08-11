@@ -5,9 +5,16 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+import pytest
 from resume_kit_ats.engine import check_ats_structure
 from resume_kit_policy import default_shape_policy
-from resume_kit_schemas import ResumeDocument
+from resume_kit_schemas import (
+    AtsStructureFinding,
+    AtsStructureReport,
+    FindingSeverity,
+    FixAffordance,
+    ResumeDocument,
+)
 from resume_kit_schemas.shape import ShapeFindingFamily
 from resume_kit_scoring import analyze_resume_shape, apply_auto_fixes, content_preserved
 
@@ -115,6 +122,53 @@ def test_clean_resume_no_fixes() -> None:
     result = _fix(resume)
     assert result.applied == []
     assert result.resume.model_dump() == resume.model_dump()
+
+
+def test_non_ascii_formatting_is_preserved_at_base() -> None:
+    resume = ResumeDocument.model_validate(
+        {
+            "personalInfo": {"name": "J", "email": "j@x.com", "phone": "5"},
+            "summary": "Jane’s résumé work — São Paulo systems · precise.",
+            "workExperience": [
+                {"title": "A", "company": "X", "years": "2020-2022", "description": []}
+            ],
+            "education": [{"institution": "M", "degree": "BS", "years": "2015"}],
+            "additional": {"technicalSkills": ["Python"]},
+        }
+    )
+    result = _fix(resume)
+
+    assert "FORMATTING_NON_ASCII" not in result.applied
+    assert "FORMATTING_NON_ASCII" in result.deferred
+    assert result.resume.summary == resume.summary
+
+
+def test_claim_altering_auto_fix_still_fails() -> None:
+    resume = ResumeDocument.model_validate(
+        {
+            "personalInfo": {"name": "J", "email": "j@x.com", "phone": "5"},
+            "summary": "Engineer.",
+            "workExperience": [
+                {"title": "A", "company": "Acme", "years": "2020-2022", "description": []}
+            ],
+            "education": [{"institution": "M", "degree": "BS", "years": "2015"}],
+            "additional": {"technicalSkills": ["Python"]},
+        }
+    )
+    report = AtsStructureReport(
+        findings=[
+            AtsStructureFinding(
+                code="BAD_AUTO_STRIP",
+                message="Bad auto strip.",
+                severity=FindingSeverity.RECOMMENDATION,
+                fix_affordance=FixAffordance.AUTO_SAFE_STRIP,
+                metadata={"match": "Acme"},
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="altered a claim"):
+        apply_auto_fixes(resume, report)
 
 
 def test_content_preserved_only_allows_summary_and_experience_bullet_rewrites() -> None:

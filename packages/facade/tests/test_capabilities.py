@@ -21,6 +21,7 @@ from resume_kit_facade.models import (
     AddEvidenceRequest,
     AlignResumeRequest,
     AtsViewRequest,
+    BuildBaseRequest,
     BuildCandidateEvidenceRequest,
     CapabilityOptions,
     CheckResumeAtsRequest,
@@ -658,3 +659,32 @@ async def test_export_resume_uses_default_store_when_none_injected() -> None:
     response = await caps.export_resume(request, CapabilityOptions())
     assert response.ok
     assert len(response.artifacts) == 1
+
+
+@pytest.mark.asyncio
+async def test_internal_error_writes_project_diagnostics_without_response_leak(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_build_base(root: str | Path, *, mode: str = "auto") -> object:
+        raise RuntimeError("local diagnostic secret abc123")
+
+    monkeypatch.setattr(caps, "_build_base", fail_build_base)
+
+    response = await caps.build_base_capability(
+        BuildBaseRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+
+    dumped = str(response.model_dump())
+    assert not response.ok
+    assert response.errors[0].code == caps.ErrorCode.INTERNAL_ERROR
+    assert response.errors[0].details == {"exception_type": "RuntimeError"}
+    assert "local diagnostic secret" not in dumped
+    assert "abc123" not in dumped
+
+    diagnostics = tmp_path / "resume-kit" / ".cache" / "errors.log"
+    text = diagnostics.read_text(encoding="utf-8")
+    assert "exception_type=RuntimeError" in text
+    assert "Traceback (most recent call last)" in text
+    assert "RuntimeError: local diagnostic secret abc123" in text

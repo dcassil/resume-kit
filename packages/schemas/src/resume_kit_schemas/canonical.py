@@ -206,9 +206,12 @@ class Experience(CanonicalBaseModel):
     # Empty organization is intentionally legal, mirroring the source schema
     # ``ResumeDocument.Experience.company`` (which defaults to "" for date-grouped
     # umbrella headings / career-break lines where the group is carried in ``title``).
-    # See RIT-T-0156. Only ``title`` is required-non-empty here.
+    # See RIT-T-0156.
     organization: str = ""
-    title: str
+    # Empty title is intentionally legal, mirroring the source schema
+    # ``ResumeDocument.Experience.title`` for date-bucketed work entries with no
+    # discrete role title. See RIT-T-0182.
+    title: str = ""
     employmentType: EmploymentType | None = None
     location: Location | str | None = None
     startDate: ResumeDate | None = None
@@ -218,11 +221,6 @@ class Experience(CanonicalBaseModel):
     skills: list[str] = Field(default_factory=list)
     technologies: list[str] = Field(default_factory=list)
     links: list[Link] = Field(default_factory=list)
-
-    @field_validator("title")
-    @classmethod
-    def _required_fields_must_have_text(cls, value: str) -> str:
-        return _validate_required_text(value)
 
     @model_validator(mode="after")
     def _must_have_summary_or_achievement(self) -> Experience:
@@ -351,12 +349,11 @@ class Reference(NamedSectionItem):
 
 
 class CustomContentSection(CanonicalBaseModel):
-    """Faithful holding slot for content with no first-class canonical section.
+    """Compatibility holding slot for non-first-class canonical content.
 
-    The shape canonicalizer routes "other"/custom sections that have no auto or
-    explicit canonical target here rather than dropping them (RIT-T-0161). Content
-    is preserved verbatim as ``lines`` under the original ``heading`` so the
-    content ledger can account for it and nothing is silently lost.
+    Current structure builds omit source custom sections from canonical output
+    after seeding them into evidence. The field remains in the schema so older
+    artifacts can still be parsed.
     """
 
     heading: str

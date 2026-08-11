@@ -10,7 +10,11 @@ here.  Everything depends inward on ``resume_kit_core`` value types only.
 
 from __future__ import annotations
 
+import logging
+import traceback
+from datetime import UTC, datetime
 from enum import IntEnum
+from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -22,6 +26,9 @@ from resume_kit_core.errors import (
 )
 from resume_kit_core.response import InterfaceResponse, ProvenanceRef, Question
 from resume_kit_core.storage import ArtifactRef
+
+_LOGGER = logging.getLogger(__name__)
+_DIAGNOSTICS_LOG_RELATIVE = Path("resume-kit") / ".cache" / "errors.log"
 
 # ---------------------------------------------------------------------------
 # Exit-code policy
@@ -200,6 +207,7 @@ def from_exception(
     exc: BaseException,
     *,
     message: str = "An internal error occurred.",
+    project_root: str | Path | None = None,
 ) -> InterfaceResponse[None]:
     """Map an unexpected exception to an internal-error failure.
 
@@ -211,15 +219,72 @@ def from_exception(
     For non-validation exceptions this deliberately does NOT embed the
     exception's string or any content in the envelope, to avoid leaking secrets
     or user data.  Only the exception's type name is recorded for diagnostics.
+
+    The full exception is still recorded out-of-band to local diagnostics sinks
+    controlled by the caller: stderr always, and ``resume-kit/.cache/errors.log``
+    when ``project_root`` is supplied.  Diagnostics writes are best-effort and
+    never affect the returned response.
     """
     if isinstance(exc, ValidationError):
         return from_validation_error(exc)
+    _record_internal_exception(exc, project_root=project_root)
     error = CoreError(
         code=ErrorCode.INTERNAL_ERROR,
         message=message,
         details={"exception_type": type(exc).__name__},
     )
     return InterfaceResponse.failure([error])
+
+
+def _record_internal_exception(
+    exc: BaseException,
+    *,
+    project_root: str | Path | None = None,
+) -> None:
+    """Best-effort local diagnostics for an internal-error exception."""
+    _log_exception_to_stderr(exc)
+    if project_root is None:
+        return
+    try:
+        path = Path(project_root) / _DIAGNOSTICS_LOG_RELATIVE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(_format_exception_record(exc))
+    except Exception as logging_exc:  # noqa: BLE001 - diagnostics must not fail responses
+        _log_exception_to_stderr(logging_exc)
+
+
+def _log_exception_to_stderr(exc: BaseException) -> None:
+    """Emit exception diagnostics through ``logging`` to the current stderr."""
+    try:
+        record = _LOGGER.makeRecord(
+            _LOGGER.name,
+            logging.ERROR,
+            __file__,
+            0,
+            "Unhandled exception mapped to internal_error.",
+            (),
+            (type(exc), exc, exc.__traceback__),
+        )
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+        )
+        handler.handle(record)
+    except Exception:
+        return
+
+
+def _format_exception_record(exc: BaseException) -> str:
+    timestamp = datetime.now(UTC).isoformat()
+    traceback_text = "".join(
+        traceback.format_exception(type(exc), exc, exc.__traceback__)
+    )
+    return (
+        f"[{timestamp}] internal_error "
+        f"exception_type={type(exc).__name__}\n"
+        f"{traceback_text}\n"
+    )
 
 
 def build_needs_input(

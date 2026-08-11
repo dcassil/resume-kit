@@ -49,6 +49,7 @@ from resume_kit_scoring import (
     project_scoredoc,
 )
 
+from resume_kit_facade.evidence_seed import seed_full_resume_evidence
 from resume_kit_facade.project_config import (
     ProjectConfig,
     atomic_write_json,
@@ -234,9 +235,15 @@ def build_structure(
     """Produce the canonical ``structure`` version from ``base`` or original.
 
     The structure pass is deterministic and non-destructive. It resolves
-    ``base ?? original``, applies report-driven shape transforms, and writes the
-    canonical ``Resume`` only when both hard gates pass. Gate failure returns the
-    report and ledger details without writing an artifact or mutating config.
+    ``base ?? original``, idempotently seeds full-resume evidence for receipt
+    checks, applies report-driven no-custom shape transforms, and writes the
+    canonical ``Resume`` only when both hard gates pass. Gate failure returns
+    the report and ledger details without writing an artifact or mutating the
+    structure pointer.
+
+    ``omit_custom_sections`` is retained as a backward-compatible no-op; custom
+    sections are always omitted from canonical output and preserved through
+    evidence receipts instead.
     """
     config = load_config(root)
     source_rel = config.base_resume or config.active_resume
@@ -256,16 +263,18 @@ def build_structure(
     decision_map: Mapping[str, ShapeDecision] = (
         decisions if decisions is not None else answers or {}
     )
-    custom_handoff_policy = (
-        CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE
-        if omit_custom_sections
-        else CustomHandoffPolicy.PRESERVE_IN_CANONICAL_CUSTOM
+    _ = omit_custom_sections
+    seed = seed_full_resume_evidence(
+        root,
+        resume=source,
+        evidence_file=config.active_evidence or config.evidence_file,
     )
+    config = seed.config
     fix = apply_shape_transforms(
         source,
         report,
         decision_map,
-        custom_handoff_policy=custom_handoff_policy,
+        custom_handoff_policy=CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE,
     )
     evidence_receipts = evidence_receipts_from_active_evidence(
         _load_active_evidence(root, config)

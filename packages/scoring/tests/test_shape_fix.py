@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from resume_kit_evidence import build_candidate_evidence
 from resume_kit_policy import default_shape_policy
 from resume_kit_schemas import CandidateEvidence, EvidenceKind
 from resume_kit_schemas.canonical import CanonicalSection, SkillGroup
@@ -208,7 +209,7 @@ def test_moving_technical_skills_custom_section_preserves_claims() -> None:
     result = _apply(before)
 
     assert result.resume.skills[0].keywords == ["Python", "TypeScript"]
-    assert claims_preserved_across_sections(before, result.resume)
+    assert claims_preserved_across_sections(before, result.resume, result.ledger)
 
 
 def test_claims_preserved_across_sections_refuses_added_skill() -> None:
@@ -248,7 +249,7 @@ def test_redundant_skill_sections_are_canonicalized_and_fully_accounted() -> Non
     assert result.resume.work[0].achievements[0].text == "Built reliable APIs."
     assert result.resume.skills[0].keywords == ["Python", "TypeScript", "React", "AWS"]
     assert content_ledger_ok(result.ledger)
-    assert claims_preserved_across_sections(before, result.resume)
+    assert claims_preserved_across_sections(before, result.resume, result.ledger)
     assert any(
         entry.fate is ContentFate.DROPPED_AS_HEADING and entry.token == "technical"
         for entry in result.ledger.entries
@@ -257,8 +258,9 @@ def test_redundant_skill_sections_are_canonicalized_and_fully_accounted() -> Non
 
 
 def test_other_custom_section_and_summary_pass_ledger_gate() -> None:
-    # RIT-T-0161: content routed to "other" (no auto/explicit canonical target)
-    # plus summary content must reach ledger_ok True without dropping content.
+    # RIT-T-0188: content routed to "other" (no auto/explicit canonical target)
+    # is omitted from canonical custom output and accounted through evidence.
+    # Summary content still lands on basics.summary.
     before = _resume(
         custom_sections={
             "Community": {
@@ -270,19 +272,22 @@ def test_other_custom_section_and_summary_pass_ledger_gate() -> None:
 
     result = _apply(before)
 
-    assert content_ledger_ok(result.ledger)
-    assert claims_preserved_across_sections(before, result.resume)
+    assert not content_ledger_ok(result.ledger)
+    assert content_ledger_ok(
+        result.ledger,
+        evidence_receipts=evidence_receipts_from_active_evidence(
+            build_candidate_evidence(before)
+        ),
+    )
+    assert claims_preserved_across_sections(before, result.resume, result.ledger)
     # No token is silently dropped: every entry is an accounted fate.
     assert all(entry.fate is not ContentFate.UNRESOLVED for entry in result.ledger.entries)
-    # The "other" content is preserved as a canonical custom slot (faithful, not dropped).
-    preserved_text = " ".join(
-        line for section in result.resume.custom for line in section.lines
-    )
-    assert "Mentored bootcamp students" in preserved_text
+    assert result.resume.custom == []
     # Summary content lands on basics.summary (shape-stage target exists).
     assert result.resume.basics.summary == "Builds reliable product platforms."
     assert any(
-        entry.fate is ContentFate.PRESERVED_AS_OTHER for entry in result.ledger.entries
+        entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+        for entry in result.ledger.entries
     )
 
 

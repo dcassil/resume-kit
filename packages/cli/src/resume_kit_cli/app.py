@@ -952,7 +952,7 @@ def build_structure(
     omit_custom_sections: bool = typer.Option(
         False,
         "--omit-custom-sections",
-        help="Omit unmapped custom sections from structure and ledger them to evidence.",
+        help="Deprecated no-op; build-structure always omits custom sections to evidence.",
     ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,
@@ -1115,7 +1115,7 @@ def review_edits_reconcile(
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
-    """Re-hash intentional manual edits to the working resume."""
+    """Return the active edit session through the reconcile compatibility path."""
     request = ReconcileSessionRequest(root=root)
     options = _options(False, strict, False)
     _run(caps.reconcile_session_capability(request, options), output)

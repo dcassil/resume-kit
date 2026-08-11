@@ -206,9 +206,10 @@ class BuildStructureRequest:
     Deterministic, filesystem-local: runs the ``base -> structure`` canonical
     shape build under ``root``. Optional ``answers`` map source-section display
     names to canonical section names. Ambiguous or unsupported mappings remain
-    deferred by the engine. ``omit_custom_sections`` is an opt-in Flow 1
-    projection mode: source custom content is ledgered as preserved in evidence
-    instead of retained in the canonical custom holding slot.
+    deferred by the engine. Source custom content is always omitted from
+    canonical output, first seeded into durable evidence, then ledgered as
+    preserved in evidence. ``omit_custom_sections`` is retained only as a
+    backward-compatible no-op alias for the default behavior.
     """
 
     root: str | Path = "."
@@ -590,7 +591,7 @@ class SessionStatusRequest:
 
 @dataclass(frozen=True)
 class ReconcileSessionRequest:
-    """Inputs for accepting an intentional out-of-band working-file edit."""
+    """Inputs for the edit-session reconcile compatibility operation."""
 
     root: str | Path = "."
 
@@ -604,8 +605,6 @@ class EditSessionState(BaseModel):
     active_job: str
     working_path: str
     review_session: ReviewSession
-    original_hash: str
-    committed_hash: str | None = None
 
 
 class EditSessionChangeStatus(BaseModel):
@@ -635,7 +634,6 @@ class EditSessionStatus(BaseModel):
     pending_change_ids: list[str] = Field(default_factory=list)
     deferred_change_ids: list[str] = Field(default_factory=list)
     truth_summary: dict[ProvenanceStatus, int] = Field(default_factory=dict)
-    committed_hash: str | None = None
 
 
 class AliasGrowthEntry(BaseModel):
@@ -667,11 +665,9 @@ class CommitSessionResult(BaseModel):
 
 
 class ReconcileSessionResult(BaseModel):
-    """Result of re-hashing a manually edited working resume."""
+    """Result of the edit-session reconcile compatibility operation."""
 
     state: EditSessionState
-    previous_hash: str | None = None
-    reconciled_hash: str | None = None
 
 
 @dataclass(frozen=True)

@@ -97,6 +97,72 @@ def test_clean_resume_base_equals_original_content(tmp_path: Path) -> None:
     assert ResumeDocument.model_validate(base) == ResumeDocument.model_validate(clean)
 
 
+def test_build_base_preserves_non_ascii_verbatim(tmp_path: Path) -> None:
+    summary = "Jane’s résumé work — São Paulo systems · precise."
+    resume = {
+        "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "555"},
+        "summary": summary,
+        "workExperience": [
+            {"title": "A", "company": "X", "years": "2020 - 2022", "description": ["Built."]}
+        ],
+        "education": [{"institution": "M", "degree": "BS", "years": "2016"}],
+        "additional": {"technicalSkills": ["Python"]},
+    }
+    _setup(tmp_path, resume)
+
+    result = build_base(tmp_path, mode="auto")
+
+    assert "FORMATTING_NON_ASCII" not in result.applied
+    assert "FORMATTING_NON_ASCII" in result.deferred
+    base_text = (working_dir(tmp_path) / "resumes" / "jane-base.json").read_text(
+        encoding="utf-8"
+    )
+    assert summary in base_text
+    base = ResumeDocument.model_validate(json.loads(base_text))
+    assert base.summary == summary
+
+
+@pytest.mark.parametrize(
+    "work_entry",
+    [
+        {
+            "company": "Ventures Collective",
+            "years": "2020 - 2024",
+            "description": ["Advised early-stage teams."],
+        },
+        {
+            "title": "",
+            "company": "Ventures Collective",
+            "years": "2020 - 2024",
+            "description": ["Advised early-stage teams."],
+        },
+    ],
+)
+def test_build_structure_allows_titleless_work_experience(
+    tmp_path: Path, work_entry: dict[str, object]
+) -> None:
+    resume = {
+        "personalInfo": {"name": "Jane", "email": "j@x.com", "phone": "555"},
+        "workExperience": [work_entry],
+    }
+    _setup(tmp_path, resume)
+
+    result = build_structure(tmp_path)
+
+    assert result.structure_path == "resumes/jane-structure.json"
+    assert result.ledger_ok
+    assert result.claims_ok
+    structure = Resume.model_validate(
+        json.loads(
+            (working_dir(tmp_path) / "resumes" / "jane-structure.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    )
+    assert structure.work[0].title == ""
+    assert structure.work[0].organization == "Ventures Collective"
+
+
 # --- base -> standard walkthrough write path (RIT-T-0118) ---
 
 

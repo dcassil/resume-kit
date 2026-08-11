@@ -21,7 +21,6 @@ from resume_kit_facade.project_config import (
     init_project,
     load_config,
     load_evidence_file,
-    save_config,
     save_evidence_file,
     set_active,
     working_dir,
@@ -37,7 +36,6 @@ from resume_kit_schemas import (
 from resume_kit_schemas.canonical import Resume
 from resume_kit_schemas.shape import ContentFate
 from resume_kit_scoring import (
-    CustomHandoffPolicy,
     analyze_resume_shape,
     apply_shape_transforms,
     content_ledger_ok,
@@ -201,11 +199,7 @@ def test_no_custom_handoff_omits_custom_output_and_ledgers_evidence() -> None:
     resume = _full_source_resume()
     report = analyze_resume_shape(resume, default_shape_policy())
 
-    result = apply_shape_transforms(
-        resume,
-        report,
-        custom_handoff_policy=CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE,
-    )
+    result = apply_shape_transforms(resume, report)
     evidence = build_candidate_evidence(resume)
 
     assert result.resume.custom == []
@@ -221,7 +215,9 @@ def test_no_custom_handoff_omits_custom_output_and_ledgers_evidence() -> None:
     assert any(item.content == "Mentored bootcamp students" for item in evidence)
 
 
-def test_flow1_omit_build_fails_when_active_evidence_is_empty(tmp_path: Path) -> None:
+def test_direct_build_structure_auto_seeds_and_omits_custom_sections(
+    tmp_path: Path,
+) -> None:
     resume = _full_source_resume()
     init_project(tmp_path)
     original_rel = "resumes/ada-original.json"
@@ -230,25 +226,30 @@ def test_flow1_omit_build_fails_when_active_evidence_is_empty(tmp_path: Path) ->
         encoding="utf-8",
     )
     set_active(tmp_path, resume=original_rel)
-    evidence_rel = "learning/candidate-evidence.json"
-    save_evidence_file(working_dir(tmp_path) / evidence_rel, [])
-    config = load_config(tmp_path)
-    config.evidence_file = evidence_rel
-    config.active_evidence = evidence_rel
-    save_config(tmp_path, config)
     build_base(tmp_path, mode="auto")
 
-    result = build_structure(tmp_path, omit_custom_sections=True)
+    result = build_structure(tmp_path)
 
-    assert result.structure_path is None
-    assert not result.ledger_ok
+    assert result.structure_path == "resumes/ada-structure.json"
+    assert result.ledger_ok
     assert result.claims_ok
     assert any(
         entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
         and entry.source_path == "customSections.community.strings[0]"
         for entry in result.ledger.entries
     )
-    assert not (working_dir(tmp_path) / "resumes" / "ada-structure.json").exists()
+    structure = Resume.model_validate_json(
+        (working_dir(tmp_path) / "resumes" / "ada-structure.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert structure.custom == []
+    evidence = load_evidence_file(
+        working_dir(tmp_path) / "learning" / "candidate-evidence.json"
+    )
+    assert any(item.content == "Mentored bootcamp students" for item in evidence)
+    config = load_config(tmp_path)
+    assert config.active_evidence == "learning/candidate-evidence.json"
 
 
 @pytest.mark.asyncio
@@ -349,6 +350,7 @@ async def test_flow1_omit_build_exports_one_skills_section_and_preserves_evidenc
         CapabilityOptions(no_llm=True),
     )
     assert seeded.ok
+    seeded_ids = [item.id for item in seeded.data.evidence]
     build_base(tmp_path, mode="auto")
 
     result = build_structure(tmp_path, omit_custom_sections=True)
@@ -374,6 +376,7 @@ async def test_flow1_omit_build_exports_one_skills_section_and_preserves_evidenc
     evidence = load_evidence_file(
         working_dir(tmp_path) / "learning" / "candidate-evidence.json"
     )
+    assert [item.id for item in evidence] == seeded_ids
     assert any(item.content == "Mentored bootcamp students" for item in evidence)
 
     renderable = project_builddoc_from_canonical(structure)

@@ -127,8 +127,6 @@ def open_session(
         active_job=active_job,
         working_path=_working_path_string(active_resume),
         review_session=review,
-        original_hash=_sha256_file(original_path),
-        committed_hash=None,
     )
     feedback: list[EditFeedback] = []
     if mode == "auto":
@@ -154,15 +152,13 @@ def archive_session(root: str | Path) -> Path | None:
     return archive
 
 
-def load_session(root: str | Path, *, check_tamper: bool = True) -> EditSessionState:
-    """Load the active session, optionally enforcing tamper detection."""
+def load_session(root: str | Path) -> EditSessionState:
+    """Load the active session and verify it still targets the active documents."""
     path = _session_path(root)
     if not path.exists():
         _raise_gate("missing_session", "No active edit session exists.")
     state = EditSessionState.model_validate_json(path.read_text(encoding="utf-8"))
     _ensure_bound_to_active(root, state)
-    if check_tamper:
-        _check_tamper(root, state)
     return state
 
 
@@ -314,7 +310,6 @@ def commit_session(
     after_match, after_ats = _score(root, updated_resume, state.active_job)
     working_path = _state_working_path(root, state)
     atomic_write_json(working_path, updated_resume.model_dump(mode="json"))
-    state = state.model_copy(update={"committed_hash": _sha256_file(working_path)})
     _write_state(working_dir(root), state)
     return CommitSessionResult(
         state=state,
@@ -336,18 +331,8 @@ def session_status(root: str | Path) -> EditSessionStatus:
 
 
 def reconcile_session(root: str | Path) -> ReconcileSessionResult:
-    """Accept the current working file hash as intentional manual state."""
-    state = load_session(root, check_tamper=False)
-    working_path = _state_working_path(root, state)
-    previous = state.committed_hash
-    current = _sha256_file(working_path) if working_path.exists() else None
-    state = state.model_copy(update={"committed_hash": current})
-    _write_state(working_dir(root), state)
-    return ReconcileSessionResult(
-        state=state,
-        previous_hash=previous,
-        reconciled_hash=current,
-    )
+    """Return the active session; retained as a compatibility no-op."""
+    return ReconcileSessionResult(state=load_session(root))
 
 
 def grow_aliases_from_accepted_terminology(
@@ -1144,7 +1129,6 @@ def _status(state: EditSessionState) -> EditSessionStatus:
         pending_change_ids=pending_change_ids,
         deferred_change_ids=deferred_change_ids,
         truth_summary=truth,
-        committed_hash=state.committed_hash,
     )
 
 
@@ -1168,24 +1152,6 @@ def _score(
         return report, report.ats_score
     except Exception:  # noqa: BLE001 - scoring is advisory for commit results
         return None, None
-
-
-def _check_tamper(root: str | Path, state: EditSessionState) -> None:
-    working_path = _state_working_path(root, state)
-    if not working_path.exists():
-        return
-    expected = state.committed_hash or state.original_hash
-    actual = _sha256_file(working_path)
-    if actual != expected:
-        _raise_gate(
-            "working_resume_tampered",
-            "working resume was edited outside the session; re-open or reconcile",
-            {
-                "working_path": state.working_path,
-                "expected_hash": expected,
-                "actual_hash": actual,
-            },
-        )
 
 
 def _ensure_bound_to_active(root: str | Path, state: EditSessionState) -> None:
@@ -1239,14 +1205,6 @@ def _working_path_string(active_resume: str) -> str:
 
 def _load_resume(path: Path) -> ResumeDocument:
     return ResumeDocument.model_validate_json(path.read_text(encoding="utf-8"))
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _section_of(change: ChangeProposal) -> str:

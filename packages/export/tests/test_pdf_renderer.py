@@ -131,6 +131,29 @@ def test_render_pdf_empty_optional_fields() -> None:
         assert absent not in text, f"unexpected section: {absent!r}"
 
 
+def test_render_pdf_titleless_experience_smoke() -> None:
+    resume = ResumeDocument(
+        personalInfo=PersonalInfo(name="Grace Hopper", email="grace@example.com"),
+        workExperience=[
+            Experience(
+                title="",
+                company="Ventures Collective",
+                location="Remote",
+                years="2020-2024",
+                description=["Advised early-stage teams."],
+            )
+        ],
+    )
+
+    text = extract_text(io.BytesIO(render_pdf(resume)))
+
+    assert "Experience" in text
+    assert "Ventures Collective" in text
+    assert "Remote" in text
+    assert "2020-2024" in text
+    assert "Advised early-stage teams" in text
+
+
 def test_render_pdf_dedupes_custom_skills_section() -> None:
     payload = _full_resume().model_dump(mode="json")
     payload["customSections"] = {
