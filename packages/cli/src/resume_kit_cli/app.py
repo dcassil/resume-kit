@@ -1043,7 +1043,12 @@ def review_edits_prompt(
 
 @review_edits_app.command(name="decide")
 def review_edits_decide(
-    path: str = typer.Option(..., "--path", help="ChangeProposal path to decide."),
+    path: str | None = typer.Option(None, "--path", help="ChangeProposal path to decide."),
+    change_id: str | None = typer.Option(
+        None,
+        "--change-id",
+        help="Stable change_id from review-edits status.",
+    ),
     action: ReviewAction = _ReviewAction,
     reason_code: EditFeedbackReasonCode | None = _FeedbackReasonCode,
     note: str | None = typer.Option(None, "--note", help="Optional free-text note."),
@@ -1059,6 +1064,7 @@ def review_edits_decide(
     """Record a decision for one proposed change."""
     request = DecideChangeRequest(
         path=path,
+        change_id=change_id,
         action=action,
         reason_code=reason_code,
         note=note,

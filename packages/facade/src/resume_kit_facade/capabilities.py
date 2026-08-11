@@ -908,6 +908,7 @@ async def decide_change_capability(
         state, feedback = _edit_session.decide_change(
             root=request.root,
             path=request.path,
+            change_id=request.change_id,
             action=request.action,
             reason_code=request.reason_code,
             note=request.note,

@@ -14,7 +14,7 @@ import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 from uuid import uuid4
 
 from resume_kit_alignment import ReviewController, apply_diffs
@@ -50,6 +50,7 @@ from resume_kit_terms import (
 from resume_kit_facade.models import (
     AliasGrowthEntry,
     CommitSessionResult,
+    EditSessionChangeStatus,
     EditSessionState,
     EditSessionStatus,
     ReconcileSessionResult,
@@ -174,22 +175,31 @@ def prompt_session(root: str | Path) -> object:
 def decide_change(
     *,
     root: str | Path,
-    path: str,
+    path: str | None,
     action: ReviewAction,
     reason_code: EditFeedbackReasonCode | None,
     note: str | None,
     edited_content: str | None,
+    change_id: str | None = None,
 ) -> tuple[EditSessionState, EditFeedback]:
     """Record one decision through ``ReviewController`` and persist it."""
     state = load_session(root)
-    change = _find_change(state, path)
+    selected_change_id, change = _find_change(state, path=path, change_id=change_id)
     section = state.review_session.current_section
     target_section = _section_of(change)
     if section != target_section:
         _raise_gate(
             "wrong_section",
-            f"Change '{path}' is in section '{target_section}', current section is '{section}'.",
-            {"path": path, "current_section": section, "target_section": target_section},
+            (
+                f"Change '{selected_change_id}' is in section '{target_section}', "
+                f"current section is '{section}'."
+            ),
+            {
+                "change_id": selected_change_id,
+                "path": change.path,
+                "current_section": section,
+                "target_section": target_section,
+            },
         )
 
     decision = ReviewDecision(
@@ -221,6 +231,7 @@ def decide_change(
     return state, _feedback_for_decision(
         state=state,
         change=change,
+        change_id=selected_change_id,
         action=action,
         reason_code=reason_code,
         note=note,
@@ -401,6 +412,7 @@ def _auto_resolve(state: EditSessionState) -> tuple[EditSessionState, list[EditF
             _feedback_for_decision(
                 state=auto_state,
                 change=change,
+                change_id=_key_for_change(_change_keys(auto_state), change),
                 action=ReviewAction.APPROVE,
                 reason_code=None,
                 note="auto",
@@ -780,22 +792,36 @@ def _accepted_add_skill_targets(changes: list[ChangeProposal]) -> list[str]:
 
 
 def _terminal_decision_keys(state: EditSessionState) -> set[str]:
+    return _terminal_decision_keys_for_review(
+        state.review_session.pending_changes,
+        state.review_session.decisions,
+    )
+
+
+def _terminal_decision_keys_for_review(
+    changes: list[ChangeProposal],
+    decisions: list[ReviewDecision],
+) -> set[str]:
     keys: set[str] = set()
-    change_keys = _change_keys(state)
-    for decision in state.review_session.decisions:
+    change_keys = _change_keys_for_changes(changes)
+    for decision in decisions:
         if decision.action not in _TERMINAL:
             continue
         for change in decision.changes:
-            key = _key_for_change(change_keys, change)
+            key = _key_for_change(change_keys, change, excluded=keys)
             if key is not None:
                 keys.add(key)
     return keys
 
 
 def _change_keys(state: EditSessionState) -> dict[str, ChangeProposal]:
+    return _change_keys_for_changes(state.review_session.pending_changes)
+
+
+def _change_keys_for_changes(changes: list[ChangeProposal]) -> dict[str, ChangeProposal]:
     seen: dict[tuple[str, str], int] = {}
     keyed: dict[str, ChangeProposal] = {}
-    for change in state.review_session.pending_changes:
+    for change in changes:
         base = (change.path, change.action)
         index = seen.get(base, 0)
         seen[base] = index + 1
@@ -804,12 +830,18 @@ def _change_keys(state: EditSessionState) -> dict[str, ChangeProposal]:
     return keyed
 
 
-def _key_for_change(change_keys: dict[str, ChangeProposal], target: ChangeProposal) -> str | None:
+def _key_for_change(
+    change_keys: dict[str, ChangeProposal],
+    target: ChangeProposal,
+    *,
+    excluded: set[str] | None = None,
+) -> str | None:
+    excluded = excluded or set()
     for key, change in change_keys.items():
-        if change == target:
+        if key not in excluded and change == target:
             return key
     for key, change in change_keys.items():
-        if change.path == target.path and change.action == target.action:
+        if key not in excluded and change.path == target.path and change.action == target.action:
             return key
     return None
 
@@ -884,25 +916,66 @@ def _section_has_undecided_change(
     decisions: list[ReviewDecision],
     section: str,
 ) -> bool:
-    decided = {
-        (change.path, change.action)
-        for decision in decisions
-        if decision.action in _TERMINAL
-        for change in decision.changes
-    }
+    decided = _terminal_decision_keys_for_review(changes, decisions)
+    keyed = _change_keys_for_changes(changes)
     return any(
-        _section_of(change) == section and (change.path, change.action) not in decided
-        for change in changes
+        _section_of(change) == section and key not in decided
+        for key, change in keyed.items()
     )
 
 
-def _find_change(state: EditSessionState, path: str) -> ChangeProposal:
-    matches = [change for change in state.review_session.pending_changes if change.path == path]
+def _find_change(
+    state: EditSessionState,
+    *,
+    path: str | None,
+    change_id: str | None,
+) -> tuple[str, ChangeProposal]:
+    if not path and not change_id:
+        _raise_gate(
+            "missing_change_selector",
+            "Deciding an edit-session change requires --path or --change-id.",
+        )
+    keyed = _change_keys(state)
+    logged = _terminal_decision_keys(state)
+    if change_id is not None:
+        change = keyed.get(change_id)
+        if change is None:
+            _raise_gate(
+                "unknown_change",
+                f"No pending change has change_id '{change_id}'.",
+                {"change_id": change_id},
+            )
+        assert change is not None
+        if path is not None and change.path != path:
+            _raise_gate(
+                "selector_mismatch",
+                f"Change '{change_id}' targets path '{change.path}', not '{path}'.",
+                {"change_id": change_id, "path": path, "target_path": change.path},
+            )
+        if change_id in logged:
+            _raise_gate(
+                "already_decided",
+                f"Change '{change_id}' already has a terminal logged decision.",
+                {"change_id": change_id, "path": change.path},
+            )
+        return change_id, change
+
+    assert path is not None
+    matches = [(key, change) for key, change in keyed.items() if change.path == path]
     if not matches:
         _raise_gate("unknown_change", f"No pending change targets path '{path}'.")
-    for change in matches:
-        if _key_for_change(_change_keys(state), change) not in _terminal_decision_keys(state):
-            return change
+    undecided = [(key, change) for key, change in matches if key not in logged]
+    if len(undecided) > 1:
+        _raise_gate(
+            "ambiguous_change",
+            f"Path '{path}' has multiple pending changes; pass change_id.",
+            {
+                "path": path,
+                "change_ids": [key for key, _change in undecided],
+            },
+        )
+    if undecided:
+        return undecided[0]
     return matches[0]
 
 
@@ -910,6 +983,7 @@ def _feedback_for_decision(
     *,
     state: EditSessionState,
     change: ChangeProposal,
+    change_id: str | None,
     action: ReviewAction,
     reason_code: EditFeedbackReasonCode | None,
     note: str | None,
@@ -938,7 +1012,7 @@ def _feedback_for_decision(
         final=kept_text,
     )
     return EditFeedback(
-        edit_id=_edit_id(state, change, action),
+        edit_id=_edit_id(state, change, action, change_id=change_id),
         resume_id=state.active_resume,
         job_id=state.active_job,
         section=_section_of(change),
@@ -1004,9 +1078,12 @@ def _edit_id(
     state: EditSessionState,
     change: ChangeProposal,
     action: ReviewAction,
+    *,
+    change_id: str | None,
 ) -> str:
+    selector = change_id or _key_for_change(_change_keys(state), change) or change.path
     digest = hashlib.sha256(
-        f"{state.session_id}\n{change.path}\n{change.action}\n{action.value}".encode()
+        f"{state.session_id}\n{selector}\n{change.path}\n{change.action}\n{action.value}".encode()
     ).hexdigest()[:16]
     return f"edit-{digest}"
 
@@ -1014,17 +1091,36 @@ def _edit_id(
 def _status(state: EditSessionState) -> EditSessionStatus:
     logged = _terminal_decision_keys(state)
     keyed = _change_keys(state)
-    decided = [change.path for key, change in keyed.items() if key in logged]
-    pending = [
-        change.path
-        for key, change in keyed.items()
-        if key not in logged and not (state.mode == "auto" and not _auto_can_apply(state, change))
-    ]
-    deferred = [
-        change.path
-        for key, change in keyed.items()
-        if key not in logged and state.mode == "auto" and not _auto_can_apply(state, change)
-    ]
+    decided: list[str] = []
+    pending: list[str] = []
+    deferred: list[str] = []
+    decided_change_ids: list[str] = []
+    pending_change_ids: list[str] = []
+    deferred_change_ids: list[str] = []
+    changes: list[EditSessionChangeStatus] = []
+    for key, change in keyed.items():
+        status: Literal["decided", "pending", "deferred"]
+        if key in logged:
+            status = "decided"
+            decided.append(change.path)
+            decided_change_ids.append(key)
+        elif state.mode == "auto" and not _auto_can_apply(state, change):
+            status = "deferred"
+            deferred.append(change.path)
+            deferred_change_ids.append(key)
+        else:
+            status = "pending"
+            pending.append(change.path)
+            pending_change_ids.append(key)
+        changes.append(
+            EditSessionChangeStatus(
+                change_id=key,
+                path=change.path,
+                action=change.action,
+                section=_section_of(change),
+                status=status,
+            )
+        )
     truth: dict[ProvenanceStatus, int] = {status: 0 for status in ProvenanceStatus}
     for item in state.review_session.claim_provenance:
         truth[item.status] += 1
@@ -1043,6 +1139,10 @@ def _status(state: EditSessionState) -> EditSessionStatus:
         decided=decided,
         pending=pending,
         deferred=deferred,
+        changes=changes,
+        decided_change_ids=decided_change_ids,
+        pending_change_ids=pending_change_ids,
+        deferred_change_ids=deferred_change_ids,
         truth_summary=truth,
         committed_hash=state.committed_hash,
     )

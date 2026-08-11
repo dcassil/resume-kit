@@ -285,6 +285,97 @@ async def test_add_skill_list_value_expands_and_lands(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_same_path_changes_are_decidable_by_change_id(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    changes = [
+        ChangeProposal(
+            path="additional.technicalSkills",
+            action="add_skill",
+            original=None,
+            value="Python",
+            reason="Add a JD-required skill approved by the reviewer.",
+        ),
+        ChangeProposal(
+            path="additional.technicalSkills",
+            action="add_skill",
+            original=None,
+            value="FastAPI",
+            reason="Add a JD-required skill approved by the reviewer.",
+        ),
+    ]
+    await _open(tmp_path, changes=changes)
+
+    status_response = await caps.REGISTRY["session-status"](
+        SessionStatusRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+    assert not status_response.errors
+    assert status_response.data is not None
+    assert status_response.data.pending == [
+        "additional.technicalSkills",
+        "additional.technicalSkills",
+    ]
+    change_ids = status_response.data.pending_change_ids
+    assert change_ids == [
+        "additional.technicalSkills|add_skill",
+        "additional.technicalSkills|add_skill#2",
+    ]
+    assert [
+        (item.change_id, item.path, item.status)
+        for item in status_response.data.changes
+    ] == [
+        (
+            "additional.technicalSkills|add_skill",
+            "additional.technicalSkills",
+            "pending",
+        ),
+        (
+            "additional.technicalSkills|add_skill#2",
+            "additional.technicalSkills",
+            "pending",
+        ),
+    ]
+
+    ambiguous = await caps.REGISTRY["decide-change"](
+        DecideChangeRequest(
+            root=tmp_path,
+            path="additional.technicalSkills",
+            action=ReviewAction.APPROVE,
+        ),
+        CapabilityOptions(),
+    )
+    assert ambiguous.errors
+    assert ambiguous.errors[0].details["gate_code"] == "ambiguous_change"
+    assert ambiguous.errors[0].details["change_ids"] == change_ids
+
+    for change_id in change_ids:
+        decided = await caps.REGISTRY["decide-change"](
+            DecideChangeRequest(
+                root=tmp_path,
+                change_id=change_id,
+                action=ReviewAction.APPROVE,
+            ),
+            CapabilityOptions(),
+        )
+        assert not decided.errors
+
+    committed = await caps.REGISTRY["commit-session"](
+        CommitSessionRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+
+    assert not committed.errors
+    assert committed.data is not None
+    assert [item.value for item in committed.data.applied] == ["Python", "FastAPI"]
+    written = json.loads(
+        (working_dir(tmp_path) / "working" / "daniel.tailored.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert written["additional"]["technicalSkills"] == ["Python", "FastAPI"]
+
+
+@pytest.mark.asyncio
 async def test_add_skill_rejection_is_reported_not_silent_noop(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     change = ChangeProposal(
