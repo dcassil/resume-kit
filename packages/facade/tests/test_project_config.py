@@ -137,6 +137,58 @@ def test_set_active_leaves_wd_relative_and_absolute_unchanged(tmp_path: Path) ->
     assert result.active_resume_source == "/abs/path/x.docx"
 
 
+def test_set_active_persists_alias_file(tmp_path: Path) -> None:
+    # RIT-T-0167: set_active persists config.alias_file and round-trips.
+    init_project(tmp_path)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    result = set_active(tmp_path, alias_file="learning/synonyms.json")
+    assert result.alias_file == "learning/synonyms.json"
+
+    on_disk = json.loads(config_path(tmp_path).read_text(encoding="utf-8"))
+    assert on_disk["alias_file"] == "learning/synonyms.json"
+
+
+def test_set_active_alias_file_only_is_allowed(tmp_path: Path) -> None:
+    # RIT-T-0167: alias_file alone (no resume/job) is a valid set-active call.
+    init_project(tmp_path)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    result = set_active(tmp_path, alias_file="learning/synonyms.json")
+    assert result.alias_file == "learning/synonyms.json"
+    assert result.active_resume is None
+    assert result.active_job is None
+
+
+def test_set_active_normalizes_alias_file_working_dir_prefix(tmp_path: Path) -> None:
+    # RIT-T-0167 + RIT-T-0127: cwd-relative alias_file is normalized like other pointers.
+    init_project(tmp_path)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    result = set_active(tmp_path, alias_file="resume-kit/learning/synonyms.json")
+    assert result.alias_file == "learning/synonyms.json"
+    resolved = working_dir(tmp_path) / result.alias_file
+    assert "resume-kit/resume-kit" not in str(resolved)
+
+
+def test_set_active_missing_alias_file_is_rejected(tmp_path: Path) -> None:
+    # RIT-T-0167: an alias_file that does not resolve to a file is a caller error.
+    init_project(tmp_path)
+    with pytest.raises(ValueError):
+        set_active(tmp_path, alias_file="learning/does-not-exist.json")
+
+
+def test_set_active_preserves_alias_file_when_updating_other_pointers(tmp_path: Path) -> None:
+    # RIT-T-0167 idempotency: setting a resume does not drop a prior alias_file.
+    init_project(tmp_path)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    set_active(tmp_path, alias_file="learning/synonyms.json")
+    result = set_active(tmp_path, resume="resumes/x-original.json")
+    assert result.alias_file == "learning/synonyms.json"
+    assert result.active_resume == "resumes/x-original.json"
+
+
 def test_set_active_source_without_document_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         set_active(tmp_path, resume_source="/orphan.docx")
@@ -203,6 +255,38 @@ async def test_set_active_capability_orphan_source_errors(tmp_path: Path) -> Non
         SetActiveRequest(resume_source="/orphan.docx", root=str(tmp_path)), _OPTIONS
     )
     assert response.errors != []
+
+
+@pytest.mark.asyncio
+async def test_set_active_capability_persists_alias_file(tmp_path: Path) -> None:
+    # RIT-T-0167: the capability wires alias_file through to config persistence.
+    await caps.init_project_capability(InitProjectRequest(root=str(tmp_path)), _OPTIONS)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    response = await caps.set_active_capability(
+        SetActiveRequest(alias_file="learning/synonyms.json", root=str(tmp_path)),
+        _OPTIONS,
+    )
+    assert response.errors == []
+    assert isinstance(response.data, ProjectConfig)
+    assert response.data.alias_file == "learning/synonyms.json"
+
+
+@pytest.mark.asyncio
+async def test_set_active_capability_invalid_alias_file_is_validation_error(
+    tmp_path: Path,
+) -> None:
+    # RIT-T-0167: an invalid alias_file surfaces as a validation error, NOT a
+    # masked internal error (RIT-T-0156 boundary).
+    from resume_kit_core.errors import ErrorCode
+
+    await caps.init_project_capability(InitProjectRequest(root=str(tmp_path)), _OPTIONS)
+    response = await caps.set_active_capability(
+        SetActiveRequest(alias_file="learning/nope.json", root=str(tmp_path)),
+        _OPTIONS,
+    )
+    assert response.errors != []
+    assert response.errors[0].code == ErrorCode.VALIDATION_FAILED
 
 
 # --- RIT-T-0113: version lineage (original -> base -> standard) ---------------

@@ -143,6 +143,23 @@ def from_resume_kit_error(exc: ResumeKitError) -> InterfaceResponse[None]:
     return InterfaceResponse.failure([exc.error])
 
 
+def from_validation_error(exc: ValueError) -> InterfaceResponse[None]:
+    """Map a caller-input :class:`ValueError` to a ``validation`` failure.
+
+    Deterministic capabilities raise ``ValueError`` for bad *caller input*
+    (e.g. an orphan source, a missing alias file). Those are the caller's fault,
+    not an internal fault, so they must surface as ``VALIDATION_FAILED`` with an
+    actionable message rather than being masked as ``INTERNAL_ERROR`` by
+    :func:`from_exception`. The exception message IS actionable caller-facing
+    text (it describes what input was wrong), so it is included verbatim.
+    """
+    error = CoreError(
+        code=ErrorCode.VALIDATION_FAILED,
+        message=str(exc) or "Invalid input.",
+    )
+    return InterfaceResponse.failure([error])
+
+
 def from_exception(
     exc: BaseException,
     *,

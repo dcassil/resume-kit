@@ -744,16 +744,27 @@ def set_active(
     job_source: str | None = typer.Option(
         None, "--job-source", help="Original source file the active job came from."
     ),
+    alias_file: str | None = typer.Option(
+        None,
+        "--alias-file",
+        help=(
+            "Project alias (synonym-index) JSON path to persist as config.alias_file. "
+            "Accepts the working-dir-relative form (learning/synonyms.json) or the "
+            "cwd-relative form (resume-kit/learning/synonyms.json); both normalize to "
+            "the same pointer. Must resolve to an existing file."
+        ),
+    ),
     root: str = _Root,
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
-    """Record active resume/job pointers plus source paths through the schema."""
+    """Record active resume/job/alias pointers plus source paths through the schema."""
     request = SetActiveRequest(
         resume=resume,
         resume_source=resume_source,
         job=job,
         job_source=job_source,
+        alias_file=alias_file,
         root=root,
     )
     options = _options(False, strict, False)

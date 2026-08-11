@@ -275,23 +275,42 @@ def set_active(
     resume_source: str | None = None,
     job: str | None = None,
     job_source: str | None = None,
+    alias_file: str | None = None,
 ) -> ProjectConfig:
-    """Record active resume/job pointers and their source paths through the schema.
+    """Record active resume/job/alias pointers and source paths through the schema.
 
     Loads the existing config (preserving unknown keys and any pointer not being
-    changed), sets whichever of ``active_resume`` / ``active_job`` (and their
-    ``*_source`` companions) were supplied, and saves atomically.  A source is
-    only written when its pointer is also supplied — a ``--source`` without the
-    matching document is a caller error and raises ``ValueError`` — so the
-    recorded source can never drift away from the document it describes.
+    changed), sets whichever of ``active_resume`` / ``active_job`` / ``alias_file``
+    (and the ``*_source`` companions) were supplied, and saves atomically.  A
+    source is only written when its pointer is also supplied — a ``--source``
+    without the matching document is a caller error and raises ``ValueError`` —
+    so the recorded source can never drift away from the document it describes.
+
+    ``alias_file`` is the project synonym index (RIT-T-0165 / RIT-I-0009): its
+    pointer is normalized identically to the other pointers (RIT-T-0127) and is
+    validated to resolve to an existing file under ``root`` — a missing alias
+    file is a caller error (``ValueError``), so a project never records a
+    dangling alias pointer. At least one of ``resume`` / ``job`` / ``alias_file``
+    must be supplied.
     Returns the updated :class:`ProjectConfig`.
     """
-    if resume is None and job is None:
-        raise ValueError("set_active requires at least one of resume or job.")
+    if resume is None and job is None and alias_file is None:
+        raise ValueError(
+            "set_active requires at least one of resume, job, or alias_file."
+        )
     if resume_source is not None and resume is None:
         raise ValueError("resume_source given without a resume.")
     if job_source is not None and job is None:
         raise ValueError("job_source given without a job.")
+    normalized_alias: str | None = None
+    if alias_file is not None:
+        normalized_alias = _normalize_pointer(alias_file)
+        assert normalized_alias is not None
+        resolved = working_dir(root) / normalized_alias
+        if not resolved.is_file():
+            raise ValueError(
+                f"alias_file does not resolve to an existing file: {resolved}"
+            )
     config = load_config(root)
     if resume is not None:
         config.active_resume = _normalize_pointer(resume)
@@ -299,6 +318,8 @@ def set_active(
     if job is not None:
         config.active_job = _normalize_pointer(job)
         config.active_job_source = _normalize_pointer(job_source)
+    if alias_file is not None:
+        config.alias_file = normalized_alias
     save_config(root, config)
     return config
 

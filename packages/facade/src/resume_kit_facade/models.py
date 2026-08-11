@@ -113,16 +113,19 @@ class SetActiveRequest:
     """Inputs for the set-active capability (RIT-T-0091).
 
     Records the ``active_resume`` / ``active_job`` pointer(s) plus the
-    originating source file path(s) through the code-owned config schema. At
-    least one of ``resume`` / ``job`` must be set; a ``*_source`` without its
-    matching document is rejected by the capability. ``root`` defaults to the
-    current directory.
+    originating source file path(s) through the code-owned config schema, and/or
+    the project ``alias_file`` synonym-index pointer (RIT-T-0167). At least one
+    of ``resume`` / ``job`` / ``alias_file`` must be set; a ``*_source`` without
+    its matching document is rejected by the capability, and an ``alias_file``
+    that does not resolve to an existing file is a validation error. ``root``
+    defaults to the current directory.
     """
 
     resume: str | None = None
     resume_source: str | None = None
     job: str | None = None
     job_source: str | None = None
+    alias_file: str | None = None
     root: str | Path = "."
 
 

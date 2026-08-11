@@ -157,6 +157,27 @@ def test_deterministic_commands_succeed(tmp_path: Path) -> None:
             assert result.exit_code == 0, (args, fmt, result.stdout)
 
 
+def test_set_active_alias_file_persists_and_round_trips(tmp_path: Path) -> None:
+    # RIT-T-0167: `set-active --alias-file <path>` persists config.alias_file.
+    from resume_kit_facade.project_config import init_project, load_config
+
+    init_project(tmp_path)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        [
+            "set-active",
+            "--alias-file",
+            "learning/synonyms.json",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert load_config(tmp_path).alias_file == "learning/synonyms.json"
+
+
 def _feedback() -> EditFeedback:
     return EditFeedback(
         edit_id="edit-1",
