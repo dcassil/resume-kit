@@ -43,7 +43,7 @@ from resume_kit_schemas import ResumeDocument, TerminologyAlignment
 from resume_kit_schemas.change import ChangeProposal
 from resume_kit_schemas.evidence import CandidateEvidence
 from resume_kit_schemas.job import JobDescription
-from resume_kit_schemas.results import PolicyReasonCode, PolicyRejection
+from resume_kit_schemas.results import PolicyReasonCode, PolicyRejection, TruthReport
 from resume_kit_terms import surface_form
 
 from .apply import _resolve_path, apply_diffs
@@ -89,9 +89,13 @@ class ScoreDelta:
 class AcceptResult:
     """Outcome of accepting one terminology-alignment suggestion.
 
-    ``applied`` is empty and ``resume`` is byte-identical to the input when the
-    policy gate rejects the change (e.g. a blocked factual field); the rejection
-    detail is then carried in ``rejected``.
+    Result contract (RIT-T-0168): ``swap_applied`` (and a non-empty ``applied``)
+    is true ONLY when the swap passed the truth gate and is safe to persist.
+    A swap the truth gate rejected — including the common "no candidate evidence
+    yet" case — is reported with ``swap_applied=False``, an empty ``applied``,
+    ``resume`` byte-identical to the input, a ``PolicyRejection`` in ``rejected``,
+    and an actionable ``truth_reason``. Consequently ``swap_applied=True`` and
+    ``truth_passed=False`` can never co-occur.
     """
 
     resume: ResumeDocument
@@ -105,6 +109,7 @@ class AcceptResult:
     location: str
     field_before: str = ""
     field_after: str = ""
+    truth_reason: str = ""
 
 
 def _swap_surface_term(text: str, current_wording: str, jd_keyword: str) -> str:
@@ -187,10 +192,36 @@ def _score(resume: ResumeDocument, job: JobDescription) -> tuple[float, float]:
     return keyword_match, skills_coverage
 
 
-def _truth_failure_explanation(truth_passed: bool) -> str:
-    if truth_passed:
+def _truth_failure_reason(
+    truth_after: TruthReport,
+    *,
+    evidence_empty: bool,
+) -> str:
+    """Explain WHY the swap failed the truth gate, in actionable terms.
+
+    An empty evidence set is the common fresh-project cause: the gate cannot
+    substantiate any wording because no :class:`CandidateEvidence` exists, so it
+    points the caller at ``extract-evidence`` rather than reporting a bare truth
+    failure. A regressed contradiction is surfaced distinctly.
+    """
+
+    if truth_after.passed:
         return ""
-    return "Terminology suggestion rejected: the applied change failed truth validation."
+    if evidence_empty:
+        return (
+            "Terminology swap not applied: no candidate evidence to substantiate "
+            "the wording — run extract-evidence first, then re-run "
+            "align-terminology."
+        )
+    if truth_after.contradiction_count > 0:
+        return (
+            "Terminology swap not applied: the change contradicts candidate "
+            "evidence (failed truth validation)."
+        )
+    return (
+        "Terminology swap not applied: the resulting wording is unsupported by "
+        "candidate evidence (failed truth validation)."
+    )
 
 
 def accept_terminology_alignment(
@@ -260,17 +291,22 @@ def accept_terminology_alignment(
     )
     updated = ResumeDocument.model_validate(result_dict)
 
-    truth_before = validate_resume_truth(resume, evidence)
     truth_after = validate_resume_truth(updated, evidence)
-    swap_applied = bool(applied) and resolved and value_changed(change)
-    contradiction_regressed = truth_after.contradiction_count > truth_before.contradiction_count
+    candidate_applied = bool(applied) and resolved and value_changed(change)
 
-    if swap_applied and contradiction_regressed:
+    # Result contract (RIT-T-0168): a swap is reported as applied ONLY when it
+    # passed the truth gate and is safe to persist. Any truth failure — a
+    # regressed contradiction OR the fresh-project "no evidence yet" case where
+    # the gate cannot substantiate the wording — rejects the swap, reverts to the
+    # original resume, and carries an actionable reason. This makes
+    # ``swap_applied=True`` + ``truth_passed=False`` impossible by construction.
+    if candidate_applied and not truth_after.passed:
+        truth_reason = _truth_failure_reason(truth_after, evidence_empty=not evidence)
         rejection = PolicyRejection(
             path=change.path,
             action=change.action,
             reason_code=PolicyReasonCode.TRUTH_VALIDATION_FAILED,
-            explanation=_truth_failure_explanation(truth_after.passed),
+            explanation=truth_reason,
             change=change,
         )
         return AcceptResult(
@@ -290,6 +326,7 @@ def accept_terminology_alignment(
             location=location,
             field_before=original_field_text,
             field_after=original_field_text,
+            truth_reason=truth_reason,
         )
 
     km_after, sc_after = _score(updated, job)
@@ -310,10 +347,11 @@ def accept_terminology_alignment(
             skills_coverage_after=sc_after,
         ),
         truth_passed=truth_after.passed,
-        swap_applied=swap_applied,
+        swap_applied=candidate_applied,
         location=location,
         field_before=original_field_text,
         field_after=field_after,
+        truth_reason="",
     )
 
 
