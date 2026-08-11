@@ -124,6 +124,12 @@ from resume_kit_facade.baseline import build_base as _build_base
 from resume_kit_facade.baseline import build_refine as _build_refine
 from resume_kit_facade.baseline import build_standard as _build_standard
 from resume_kit_facade.baseline import build_structure as _build_structure
+from resume_kit_facade.evidence_seed import (
+    normalize_evidence_file as _normalize_evidence_file,
+)
+from resume_kit_facade.evidence_seed import (
+    seed_full_resume_evidence as _seed_full_resume_evidence,
+)
 from resume_kit_facade.models import (
     AddEvidenceRequest,
     AddEvidenceResult,
@@ -179,11 +185,9 @@ from resume_kit_facade.models import (
 from resume_kit_facade.perfect import BuildPerfectResult
 from resume_kit_facade.perfect import build_perfect as _build_perfect
 from resume_kit_facade.project_config import (
-    DEFAULT_FULL_RESUME_EVIDENCE_FILE,
     init_project,
     load_config,
     load_evidence_file,
-    merge_evidence_file,
     save_config,
     save_evidence_file,
     set_active,
@@ -674,31 +678,20 @@ async def seed_full_resume_evidence_capability(
             _bad_request(request, "SeedFullResumeEvidenceRequest")
         )
     try:
-        config = load_config(request.root)
         resume = request.resume or _load_active_resume(request.root)
-        evidence_file = _normalize_evidence_file(
-            request.evidence_file
-            or config.active_evidence
-            or config.evidence_file
-            or DEFAULT_FULL_RESUME_EVIDENCE_FILE
-        )
-        extracted = build_candidate_evidence(
-            resume,
+        seed = _seed_full_resume_evidence(
+            request.root,
+            resume=resume,
             approved_claims=request.approved_claims,
+            evidence_file=request.evidence_file,
+            update_active=request.update_active,
         )
-        merged = merge_evidence_file(working_dir(request.root) / evidence_file, extracted)
-
-        config.evidence_file = evidence_file
-        if request.update_active:
-            config.active_evidence = evidence_file
-        save_config(request.root, config)
-
         result = SeedFullResumeEvidenceResult(
-            evidence_file=evidence_file,
-            active_evidence=config.active_evidence,
-            extracted_count=len(extracted),
-            total_count=len(merged),
-            evidence=merged,
+            evidence_file=seed.evidence_file,
+            active_evidence=seed.active_evidence,
+            extracted_count=seed.extracted_count,
+            total_count=seed.total_count,
+            evidence=seed.evidence,
         )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
@@ -1000,14 +993,6 @@ def _optional_path(value: str | Path | None) -> Path | None:
     if value is None:
         return None
     return Path(value)
-
-
-def _normalize_evidence_file(value: str) -> str:
-    """Return a relative evidence path safe to join under ``resume-kit/``."""
-    path = Path(value)
-    if path.is_absolute() or ".." in path.parts:
-        raise ValueError("evidence_file must be relative to resume-kit/.")
-    return path.as_posix()
 
 
 def _confirmed_evidence(

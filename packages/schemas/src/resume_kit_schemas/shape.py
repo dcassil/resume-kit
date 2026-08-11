@@ -42,14 +42,13 @@ class ContentFate(StrEnum):
     DROPPED_BY_EXPLICIT_DECISION = "dropped_by_explicit_decision"
     DROPPED_BY_RANKED_BUDGET = "dropped_by_ranked_budget"
     COMPRESSED = "compressed"
-    # Accounted: content the canonical schema does not model with a first-class
-    # section is faithfully preserved in the canonical ``Resume.custom`` holding
-    # slot rather than dropped. Distinct from UNRESOLVED, which means the content
-    # genuinely still needs a user mapping decision (RIT-T-0161).
+    # Accounted legacy fate: content was preserved in the canonical
+    # ``Resume.custom`` holding slot. New structure builds omit custom sections
+    # to evidence instead, but old ledgers remain parseable.
     PRESERVED_AS_OTHER = "preserved_as_other"
-    # Accounted: Flow 1 prepared output intentionally omits custom holding
-    # sections, while the original text is retained in candidate evidence /
-    # learning. This is not a fabrication bypass and not an unresolved drop.
+    # Accounted: structure output intentionally omits custom holding sections,
+    # while the original text is retained in candidate evidence / learning.
+    # This is not a fabrication bypass and not an unresolved drop.
     PRESERVED_IN_EVIDENCE = "preserved_in_evidence"
     UNRESOLVED = "unresolved"
 

@@ -952,7 +952,7 @@ def build_structure(
     omit_custom_sections: bool = typer.Option(
         False,
         "--omit-custom-sections",
-        help="Omit unmapped custom sections from structure and ledger them to evidence.",
+        help="Deprecated no-op; build-structure always omits custom sections to evidence.",
     ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,

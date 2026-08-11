@@ -349,12 +349,11 @@ class Reference(NamedSectionItem):
 
 
 class CustomContentSection(CanonicalBaseModel):
-    """Faithful holding slot for content with no first-class canonical section.
+    """Compatibility holding slot for non-first-class canonical content.
 
-    The shape canonicalizer routes "other"/custom sections that have no auto or
-    explicit canonical target here rather than dropping them (RIT-T-0161). Content
-    is preserved verbatim as ``lines`` under the original ``heading`` so the
-    content ledger can account for it and nothing is silently lost.
+    Current structure builds omit source custom sections from canonical output
+    after seeding them into evidence. The field remains in the schema so older
+    artifacts can still be parsed.
     """
 
     heading: str

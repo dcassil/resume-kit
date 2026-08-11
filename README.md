@@ -111,9 +111,10 @@ resume-tool build-refine --answers answers.json     # structure → refine: appl
   walkthrough.
 - **`structure`** — `base` projected into the canonical resume schema:
   redundant skill/custom sections are merged and deduped, section order is
-  normalized, and ambiguous custom sections are deferred rather than guessed.
-  `build-structure` writes `<name>-structure.json` only when the content ledger
-  is fully accounted and whole-resume claims are preserved.
+  normalized, and custom sections with no canonical home are seeded into
+  evidence and omitted from canonical output. `build-structure` writes
+  `<name>-structure.json` only when the content ledger is fully accounted and
+  whole-resume claims are preserved.
 - **`refine`** — `structure` after the generic best-practices walkthrough:
   every finding is classified `auto_suggestible` (a truthful rewrite is applied
   now) or `needs_user_input` (the user supplies real facts, e.g. a metric).
@@ -235,8 +236,10 @@ compatibility pointer to `complete-resume-flow` and the four flow skills.
 - Inserts the lossless `structure` stage into resume baselining, making the
   tracked lineage `original → base → structure → refine`.
 - Adds shape analysis and `build-structure`: redundant skill/custom sections are
-  merged into canonical skills, ambiguous sections are deferred, and writes are
-  gated by content-ledger accounting plus whole-resume claim preservation.
+  merged into canonical skills, unsupported custom sections are seeded into
+  evidence and omitted from canonical output, ambiguous mappings are deferred,
+  and writes are gated by content-ledger accounting plus whole-resume claim
+  preservation.
 - Keeps the wording pass behavior unchanged: `build-refine` now reads
   `structure ?? base ?? original`, projects canonical `structure` back to the
   BuildDoc read model, and writes `refine`.

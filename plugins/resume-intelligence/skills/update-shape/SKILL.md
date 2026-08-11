@@ -22,10 +22,12 @@ cross-section claim gates pass. It does **not** rewrite wording, does **not**
 trim for budget, and does **not** remove content to make the resume shorter.
 Ambiguous mappings are deferred for the user; never guess.
 
-The `--omit-custom-sections` build option is the only place the no-custom
-projection may happen. Parse must always produce a faithful `-original.json`
-that retains `customSections` and their headings; this step then accounts for
-any omitted custom content through the content ledger and claim gates.
+The no-custom projection happens by default in `build-structure`. Parse must
+always produce a faithful `-original.json` that retains `customSections` and
+their headings; this step auto-seeds full-resume evidence, omits custom sections
+from canonical output, and accounts for omitted custom content through the
+content ledger and claim gates. The old `--omit-custom-sections` option is a
+no-op compatibility alias.
 
 ## Prerequisites
 
@@ -46,8 +48,9 @@ Run the shared **Prerequisites gate** —
 1. **Shape analysis.** Run the deterministic resume-only shape analyzer and show
    the `ShapeReport` (`summary` + `findings`). Use the active `base` JSON unless
    the caller explicitly supplies a different resume.
-2. **Auto-safe canonicalization.** Run `build-structure`: it applies only the
-   report-driven transforms the engine can account for, writes
+2. **Auto-safe canonicalization.** Run `build-structure`: it idempotently seeds
+   full-resume evidence, applies only the report-driven transforms the engine can
+   account for, omits custom sections from canonical output, writes
    `resume-kit/resumes/<name>-structure.json` only when gates pass, and records
    the `structure` pointer plus `structure_derived_from` lineage.
 3. **Surface deferred mappings.** If findings are deferred or the build returns

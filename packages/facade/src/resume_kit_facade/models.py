@@ -206,9 +206,10 @@ class BuildStructureRequest:
     Deterministic, filesystem-local: runs the ``base -> structure`` canonical
     shape build under ``root``. Optional ``answers`` map source-section display
     names to canonical section names. Ambiguous or unsupported mappings remain
-    deferred by the engine. ``omit_custom_sections`` is an opt-in Flow 1
-    projection mode: source custom content is ledgered as preserved in evidence
-    instead of retained in the canonical custom holding slot.
+    deferred by the engine. Source custom content is always omitted from
+    canonical output, first seeded into durable evidence, then ledgered as
+    preserved in evidence. ``omit_custom_sections`` is retained only as a
+    backward-compatible no-op alias for the default behavior.
     """
 
     root: str | Path = "."

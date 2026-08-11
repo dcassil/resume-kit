@@ -398,8 +398,8 @@ class BuildStructureBody(_Options):
     omit_custom_sections: bool = Field(
         default=False,
         description=(
-            "Omit unmapped custom sections from structure and ledger them as "
-            "preserved in evidence."
+            "Deprecated no-op; build-structure always omits custom sections "
+            "after seeding them into evidence."
         ),
     )
 

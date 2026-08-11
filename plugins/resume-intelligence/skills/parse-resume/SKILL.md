@@ -204,9 +204,10 @@ tell the user — never fill gaps with invented content.
   as a reason to omit the authored custom section from `-original.json`.
 - **No-custom / single-skills-section output is NOT a parse concern.** The lossy
   dedupe/flattening transform belongs exclusively to the step-3 structure pass:
-  `resume-tool build-structure --omit-custom-sections`. That path runs the
-  claim-preservation and content-ledger gates. Parse never omits custom sections
-  and never tries to satisfy the no-custom render/export policy.
+  `resume-tool build-structure`. That path auto-seeds full-resume evidence, runs
+  the claim-preservation and content-ledger gates, and omits custom sections from
+  canonical output by default. Parse never omits custom sections and never tries
+  to satisfy the no-custom render/export policy.
 - **Non-ASCII punctuation is a real ATS risk.** Résumés often use `·` middots,
   “curly quotes”, en/em dashes, and `~`. The ATS engine flags these
   ("Non-ASCII characters detected — some ATS systems may mis-parse them"), and

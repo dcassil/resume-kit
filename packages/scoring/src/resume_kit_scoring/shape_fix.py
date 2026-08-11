@@ -95,6 +95,8 @@ type EvidenceReceipt = tuple[str, str]
 class CustomHandoffPolicy(StrEnum):
     """How ambiguous/custom source sections are handled during shape projection."""
 
+    # Deprecated compatibility alias. The transform now always omits custom
+    # holding sections and ledgers their content to active evidence.
     PRESERVE_IN_CANONICAL_CUSTOM = "preserve_in_canonical_custom"
     OMIT_AND_LEDGER_TO_EVIDENCE = "omit_and_ledger_to_evidence"
 
@@ -105,17 +107,17 @@ def apply_shape_transforms(
     decisions: Mapping[str, ShapeDecision] | None = None,
     *,
     custom_handoff_policy: CustomHandoffPolicy = (
-        CustomHandoffPolicy.PRESERVE_IN_CANONICAL_CUSTOM
+        CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE
     ),
 ) -> ShapeFixResult:
     """Return a canonical ``Resume`` plus per-token ledger accounting.
 
     The transform is intentionally narrow. It moves already-structured
     BuildDoc fields and auto-safe, report-justified custom string-list sections
-    into the canonical schema. Unsupported or ambiguous custom content follows
-    ``custom_handoff_policy``: the legacy/default path preserves it in
-    ``Resume.custom``; Flow 1 can omit that holding slot and ledger the source
-    text as retained in durable evidence instead.
+    into the canonical schema. Unsupported or ambiguous custom content is never
+    kept in ``Resume.custom``; it is ledgered as retained in durable evidence.
+    ``custom_handoff_policy`` is retained for API compatibility and the old
+    preserve value is treated as this omit behavior.
     """
 
     builder = _CanonicalBuilder()
@@ -150,27 +152,22 @@ def apply_shape_transforms(
 
     applied_sections: set[str] = set()
     deferred_sections: set[str] = set()
+    _ = custom_handoff_policy
     for key in sorted(resume.customSections):
         section = resume.customSections[key]
         display_name = display_names.get(key, key)
         source_path = f"customSections.{key}"
         target = decision_targets.get(display_name) or report_targets.get(display_name)
         explicit = display_name in decision_targets
-        if target is None or target is CanonicalSection.OTHER:
+        if target is None or target == CanonicalSection.OTHER:
             # No first-class canonical home: account for the content through
-            # the selected no-custom handoff policy rather than guessing a
-            # canonical section or marking it unresolved.
-            if (
-                custom_handoff_policy
-                is CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE
-            ):
-                builder.handoff_custom_section_to_evidence(
-                    section,
-                    display_name,
-                    source_path,
-                )
-            else:
-                builder.preserve_custom_section(section, display_name, source_path)
+            # durable evidence rather than guessing a canonical section or
+            # retaining a custom holding slot in structure/refine/final output.
+            builder.handoff_custom_section_to_evidence(
+                section,
+                display_name,
+                source_path,
+            )
             applied_sections.add(display_name)
             continue
         if not explicit and target not in _AUTO_CUSTOM_TARGETS:
@@ -224,7 +221,7 @@ def content_ledger_ok(
             return False
         if entry.fate in _TARGET_REQUIRED_FATES and not _has_text(entry.target_path):
             return False
-        if entry.fate is ContentFate.DROPPED_BY_EXPLICIT_DECISION and not _has_text(
+        if entry.fate == ContentFate.DROPPED_BY_EXPLICIT_DECISION and not _has_text(
             entry.reason
         ):
             return False
@@ -253,7 +250,7 @@ def evidence_receipts_ok(
     """Verify that ``preserved_in_evidence`` ledger entries have evidence receipts."""
 
     preserved = [
-        entry for entry in ledger.entries if entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+        entry for entry in ledger.entries if entry.fate == ContentFate.PRESERVED_IN_EVIDENCE
     ]
     if not preserved:
         return True
@@ -542,7 +539,7 @@ class _CanonicalBuilder:
         target: CanonicalSection,
         source_path: str,
     ) -> bool:
-        if target is CanonicalSection.SKILLS and section.sectionType is SectionType.STRING_LIST:
+        if target == CanonicalSection.SKILLS and section.sectionType == SectionType.STRING_LIST:
             self.add_skill_group(
                 display_name,
                 section.strings or [],
@@ -650,11 +647,11 @@ class _CanonicalBuilder:
                 continue
             if not _has_text(value):
                 continue
-            if target is CanonicalSection.CERTIFICATIONS:
+            if target == CanonicalSection.CERTIFICATIONS:
                 self._add_certification(value, source)
-            elif target is CanonicalSection.AWARDS:
+            elif target == CanonicalSection.AWARDS:
                 self._add_award(value, source)
-            elif target is CanonicalSection.LANGUAGES:
+            elif target == CanonicalSection.LANGUAGES:
                 self._add_language(value, source)
 
     def _add_certification(self, value: str, source_path: str) -> None:
@@ -707,37 +704,6 @@ class _CanonicalBuilder:
         self.languages.append(Language(name=value))
         self._language_keys[key] = target_path
         self._record_text(value, ContentFate.MOVED, source_path, target_path)
-
-    def preserve_custom_section(
-        self,
-        section: CustomSection,
-        display_name: str,
-        source_path: str,
-    ) -> None:
-        """Preserve an untargeted custom section in the canonical ``custom`` slot.
-
-        Content that has no first-class canonical home is kept verbatim so the
-        ledger can account for it (fate ``PRESERVED_AS_OTHER``) instead of
-        reporting it as dropped/unresolved (RIT-T-0161).
-        """
-        custom_index = len(self.custom_sections)
-        lines: list[str] = []
-        for path, text in _custom_texts(section, source_path):
-            if _is_heading_artifact(text, display_name):
-                self._record_text(text, ContentFate.DROPPED_AS_HEADING, path, None)
-                continue
-            if _is_parser_artifact(text):
-                self._record_text(text, ContentFate.DROPPED_AS_PARSER_ARTIFACT, path, None)
-                continue
-            if not _has_text(text):
-                continue
-            target_path = f"custom[{custom_index}].lines[{len(lines)}]"
-            lines.append(text)
-            self._record_text(text, ContentFate.PRESERVED_AS_OTHER, path, target_path)
-        if lines:
-            self.custom_sections.append(
-                CustomContentSection(heading=display_name, lines=lines)
-            )
 
     def unresolved_custom_section(
         self,
@@ -932,7 +898,7 @@ def _without_evidence_preserved_claims(
     source_paths = {
         entry.source_path
         for entry in ledger.entries
-        if entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+        if entry.fate == ContentFate.PRESERVED_IN_EVIDENCE
     }
     if not source_paths:
         return claims
