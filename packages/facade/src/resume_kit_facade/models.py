@@ -749,6 +749,8 @@ class ExportResumeRequest:
     format: ExportFormat
     options: ExportOptions | None = None
     artifact_id: str | None = None
+    root: str | Path = "."
+    allow_over_length: bool = False
 
     def resolved_artifact_id(self, data: bytes) -> str:
         """Return the caller-supplied id or a deterministic hash-derived one."""

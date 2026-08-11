@@ -815,6 +815,8 @@ async def resume_export(arguments: ToolArguments) -> ToolResult:
             {
                 "resume": _resume(_required(arguments, "resume"), "resume"),
                 "format": _export_format(arguments, "format"),
+                "root": _optional_string(arguments, "root", "."),
+                "allow_over_length": _optional_bool(arguments, "allow_over_length"),
             },
         )
     except _ValidationFailure as exc:

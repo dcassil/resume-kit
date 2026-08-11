@@ -375,7 +375,12 @@ async def test_resume_export_returns_envelope_metadata_and_base64_bytes(
     assert isinstance(artifact, dict)
     assert data["artifact_id"] == artifact["artifact_id"]
     assert data["artifact_type"] == "resume"
-    assert artifact["metadata"] == {"format": format_value}
+    metadata = artifact["metadata"]
+    assert isinstance(metadata, dict)
+    assert metadata["format"] == format_value
+    page_budget = metadata["page_budget"]
+    assert isinstance(page_budget, dict)
+    assert page_budget["blocked"] is False
     raw = base64.b64decode(str(payload["artifact_bytes_base64"]))
     assert raw.startswith(signature)
 

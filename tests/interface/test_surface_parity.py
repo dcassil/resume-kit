@@ -18,6 +18,7 @@ from resume_kit_cli.io import InMemoryArtifactStore
 from resume_kit_core import InterfaceResponse, StructuredCompletionProvider
 from resume_kit_core.interface import ExitCode
 from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_export import ExportOptions, PageBudgetResult
 from resume_kit_export.models import ExportFormat, mime_type
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
@@ -57,6 +58,7 @@ from resume_kit_facade.models import (
 from resume_kit_facade.project_config import init_project, load_config, set_active, working_dir
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.tools import HANDLERS
+from resume_kit_policy import ResumeShapePolicy
 from resume_kit_schemas import (
     AdditionalInfo,
     CandidateEvidence,
@@ -1662,3 +1664,169 @@ def test_export_artifact_metadata_equivalent_across_surfaces(
     expected_signature = _FORMAT_SIGNATURES[fmt]
     for surface in (direct, cli, mcp, api):
         assert surface.signature == expected_signature
+
+
+def test_export_page_budget_override_contract_across_surfaces(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Export blocks over-length resumes by default and honors explicit override."""
+    ctx = _context(tmp_path)
+    (tmp_path / "resume-kit").mkdir(exist_ok=True)
+    (tmp_path / "resume-kit" / "config.json").write_text(
+        '{"shape_policy": {"informational_budgets": {"max_pages": 2}}}',
+        encoding="utf-8",
+    )
+
+    def fake_check_page_budget(
+        resume: ResumeDocument,
+        policy: ResumeShapePolicy,
+        *,
+        options: ExportOptions | None = None,
+        override: bool = False,
+    ) -> PageBudgetResult:
+        assert resume.summary
+        assert policy.informational_budgets.max_pages == 2
+        assert options is None
+        return PageBudgetResult(
+            pages=3,
+            max_pages=2,
+            within_budget=False,
+            blocked=not override,
+            overridden=override,
+            message=(
+                "Rendered resume is 3 pages, exceeding the 2-page maximum; "
+                "export allowed because the page budget override was used."
+                if override
+                else (
+                    "Export blocked: rendered resume is 3 pages, exceeding the "
+                    "2-page maximum."
+                )
+            ),
+        )
+
+    capabilities = importlib.import_module("resume_kit_facade.capabilities")
+    monkeypatch.setattr(capabilities, "check_page_budget", fake_check_page_budget)
+
+    store = InMemoryArtifactStore()
+    blocked_direct = asyncio.run(
+        _await_response(
+            REGISTRY["export-resume"](
+                ExportResumeRequest(
+                    resume=ctx.data.resume,
+                    format=ExportFormat.pdf,
+                    root=tmp_path,
+                ),
+                CapabilityOptions(artifact_store=store),
+            )
+        )
+    )
+    assert blocked_direct.errors
+    assert blocked_direct.errors[0].details["pages"] == 3
+
+    cli_blocked = _RUNNER.invoke(
+        _CLI_APP,
+        [
+            "export",
+            "--format",
+            "pdf",
+            "--resume",
+            str(ctx.paths.resume),
+            "--root",
+            str(tmp_path),
+        ],
+    )
+    assert cli_blocked.exit_code == int(ExitCode.INVALID_INPUT), cli_blocked.stdout
+    assert "3 pages" in cli_blocked.stdout
+    assert "2-page maximum" in cli_blocked.stdout
+
+    resume_json = _resume(ctx)
+    mcp_blocked = asyncio.run(
+        _await_json(
+            HANDLERS["resume_export"](
+                {"resume": resume_json, "format": "pdf", "root": str(tmp_path)}
+            )
+        )
+    )
+    assert mcp_blocked["errors"]
+
+    api_blocked = _CLIENT.post(
+        "/export",
+        json={"resume": resume_json, "format": "pdf", "root": str(tmp_path)},
+    )
+    assert api_blocked.status_code == 422
+    assert api_blocked.json()["errors"]
+
+    allowed_direct = asyncio.run(
+        _await_response(
+            REGISTRY["export-resume"](
+                ExportResumeRequest(
+                    resume=ctx.data.resume,
+                    format=ExportFormat.pdf,
+                    root=tmp_path,
+                    allow_over_length=True,
+                ),
+                CapabilityOptions(artifact_store=store),
+            )
+        )
+    )
+    assert allowed_direct.ok
+    direct_page_budget = allowed_direct.artifacts[0].metadata["page_budget"]
+    assert isinstance(direct_page_budget, dict)
+    assert direct_page_budget["overridden"] is True
+
+    cli_allowed_out = tmp_path / "allowed.pdf"
+    cli_allowed = _RUNNER.invoke(
+        _CLI_APP,
+        [
+            "export",
+            "--format",
+            "pdf",
+            "--resume",
+            str(ctx.paths.resume),
+            "--root",
+            str(tmp_path),
+            "--allow-over-length",
+            "--out",
+            str(cli_allowed_out),
+        ],
+    )
+    assert cli_allowed.exit_code == 0, cli_allowed.stdout
+    assert cli_allowed_out.read_bytes().startswith(b"%PDF-")
+
+    mcp_allowed = asyncio.run(
+        _await_json(
+            HANDLERS["resume_export"](
+                {
+                    "resume": resume_json,
+                    "format": "pdf",
+                    "root": str(tmp_path),
+                    "allow_over_length": True,
+                }
+            )
+        )
+    )
+    assert mcp_allowed["errors"] == []
+    mcp_ref = mcp_allowed["data"]
+    assert isinstance(mcp_ref, dict)
+    mcp_metadata = mcp_ref["metadata"]
+    assert isinstance(mcp_metadata, dict)
+    mcp_page_budget = mcp_metadata["page_budget"]
+    assert isinstance(mcp_page_budget, dict)
+    assert mcp_page_budget["pages"] == 3
+    assert mcp_page_budget["overridden"] is True
+
+    api_allowed = _CLIENT.post(
+        "/export",
+        json={
+            "resume": resume_json,
+            "format": "pdf",
+            "root": str(tmp_path),
+            "allow_over_length": True,
+        },
+    )
+    assert api_allowed.status_code == 200, api_allowed.text
+    assert api_allowed.content.startswith(b"%PDF-")
+    assert api_allowed.headers["x-resume-kit-pages"] == "3"
+    assert api_allowed.headers["x-resume-kit-max-pages"] == "2"
+    assert api_allowed.headers["x-resume-kit-page-budget-override"] == "true"

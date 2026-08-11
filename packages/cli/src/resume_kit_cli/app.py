@@ -126,6 +126,11 @@ _AliasFile = typer.Option(
 _Format = typer.Option(..., "--format", help="Export format: pdf or docx.")
 _Out = typer.Option(None, "--out", help="Write raw bytes to this path.")
 _ResumeOrStdin = typer.Option("-", "--resume", help="Resume JSON path, or '-' for stdin.")
+_AllowOverLength = typer.Option(
+    False,
+    "--allow-over-length",
+    help="Allow export when rendered pages exceed the configured maximum.",
+)
 _BasePath = typer.Option(
     None,
     "--base-path",
@@ -734,12 +739,19 @@ def export(
     format: ExportFormat = _Format,
     out: str | None = _Out,
     resume: str = _ResumeOrStdin,
+    root: str = _Root,
+    allow_over_length: bool = _AllowOverLength,
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
 ) -> None:
     """Render a resume to PDF/DOCX bytes via the export-resume capability."""
-    request = ExportResumeRequest(resume=io.load_resume(resume), format=format)
+    request = ExportResumeRequest(
+        resume=io.load_resume(resume),
+        format=format,
+        root=root,
+        allow_over_length=allow_over_length,
+    )
     store = io.InMemoryArtifactStore()
     options = CapabilityOptions(strict=strict, artifact_store=store)
     response = asyncio.run(caps.export_resume(request, options))

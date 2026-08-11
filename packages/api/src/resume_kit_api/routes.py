@@ -540,6 +540,8 @@ def register_routes(app: FastAPI) -> None:
             format=body.format,
             options=body.options,
             artifact_id=body.artifact_id,
+            root=body.root,
+            allow_over_length=body.allow_over_length,
         )
         options = CapabilityOptions(
             no_llm=body.no_llm,
@@ -559,6 +561,13 @@ def register_routes(app: FastAPI) -> None:
             "X-Artifact-Id": ref.artifact_id,
             "X-Resume-Kit-Warnings": str(len(response.warnings)),
         }
+        page_budget = ref.metadata.get("page_budget")
+        if isinstance(page_budget, dict):
+            headers["X-Resume-Kit-Pages"] = str(page_budget.get("pages", ""))
+            headers["X-Resume-Kit-Max-Pages"] = str(page_budget.get("max_pages", ""))
+            headers["X-Resume-Kit-Page-Budget-Override"] = str(
+                page_budget.get("overridden", False)
+            ).lower()
         return Response(
             content=data,
             media_type=ref.content_type,

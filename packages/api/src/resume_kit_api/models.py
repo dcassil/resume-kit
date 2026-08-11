@@ -437,3 +437,8 @@ class ExportResumeBody(_Options):
     format: ExportFormat
     options: ExportOptions | None = None
     artifact_id: str | None = None
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    allow_over_length: bool = Field(
+        default=False,
+        description="Allow export when rendered pages exceed the configured maximum.",
+    )
