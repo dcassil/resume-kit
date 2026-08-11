@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from resume_kit_schemas import (
     ResumeDocument,
     sanitize_keywords,
 )
+from resume_kit_schemas.evidence import CandidateEvidence
 from resume_kit_terms import (
     AliasIndex,
     MatchResult,
@@ -303,6 +305,33 @@ def _texts_near_identical(text_a: str, text_b: str) -> bool:
     return jaccard >= 0.98
 
 
+def _confirmed_evidence_proof_text(
+    confirmed_evidence: Sequence[CandidateEvidence] | None,
+) -> str:
+    """Project confirmed evidence into master-equivalent proof text (RIT-T-0158).
+
+    Implements the LOCKED option (a) fold-in: a confirmed ``CandidateEvidence``
+    contributes its provable text to the SAME proof surface the injectable
+    classifier reads from the master resume, so a keyword missing from both
+    resumes becomes ``injectable`` through the existing route — no second proof
+    path. Only ``user_confirmed`` records contribute (a captured "yes"), and only
+    their verbatim ``content`` is projected, so the addition is scoped to what the
+    candidate actually attested to and cannot broaden the proof source into false
+    injectables for unrelated keywords. The whole-term matcher still decides
+    whether a keyword appears in this text, so evidence for requirement X never
+    makes an unrelated requirement Y injectable.
+
+    Returns lowercased text (matching the resume-text convention) joined by
+    spaces, or an empty string when there is no confirmed evidence.
+    """
+    if not confirmed_evidence:
+        return ""
+    contents = [
+        record.content for record in confirmed_evidence if record.user_confirmed
+    ]
+    return " ".join(contents).lower()
+
+
 def _to_resume_dict(resume: _ResumeInput) -> dict[str, Any]:
     """Normalise a ResumeDocument or plain dict to a plain dict."""
     if isinstance(resume, ResumeDocument):
@@ -390,6 +419,8 @@ def analyze_keyword_gaps(
     jd_keywords: _JdKeywordsInput,
     tailored: _ResumeInput,
     master: _ResumeInput,
+    *,
+    confirmed_evidence: Sequence[CandidateEvidence] | None = None,
 ) -> KeywordGapAnalysis:
     """Analyze which JD keywords are missing from the tailored resume.
 
@@ -399,6 +430,14 @@ def analyze_keyword_gaps(
         tailored: The currently tailored resume (``ResumeDocument`` or dict).
         master: The master / source-of-truth resume (``ResumeDocument`` or
             dict). Used to determine which missing keywords are injectable.
+        confirmed_evidence: Optional user-confirmed ``CandidateEvidence`` records
+            (e.g. captured on an interview "yes"). Their provable text is folded
+            into the SAME master-equivalent proof surface used for injectable
+            classification (RIT-T-0158, LOCKED option (a)), so a keyword missing
+            from both resumes becomes ``injectable`` once backing evidence exists
+            — with no separate proof path. Only ``user_confirmed`` records
+            contribute, scoped to their own content; this changes what counts as
+            PROVABLE, never what counts as FAITHFUL.
 
     Returns:
         ``KeywordGapAnalysis`` with missing, injectable, and non-injectable
@@ -410,6 +449,12 @@ def analyze_keyword_gaps(
 
     tailored_text = _extract_all_text(tailored_dict).lower()
     master_text = _extract_all_text(master_dict).lower()
+
+    # Fold confirmed evidence into the master-equivalent proof surface. Injectable
+    # classification (below) reads SOLELY from ``proof_text``, so a confirmed
+    # "yes" becomes injectable through the existing route with no new proof path.
+    evidence_text = _confirmed_evidence_proof_text(confirmed_evidence)
+    proof_text = f"{master_text} {evidence_text}".strip() if evidence_text else master_text
 
     # REQ (RIT-T-0126): when tailored and master resolve to near-identical text
     # there is no distinct source to inject from, so `injectable_keywords` is
@@ -451,7 +496,7 @@ def analyze_keyword_gaps(
             )
             continue
         missing.append(keyword)
-        if _match_keyword_in_text(keyword, master_text) is not None:
+        if _match_keyword_in_text(keyword, proof_text) is not None:
             injectable.append(keyword)
         else:
             non_injectable.append(keyword)
