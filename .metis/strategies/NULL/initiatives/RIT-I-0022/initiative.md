@@ -4,14 +4,14 @@ level: initiative
 title: "Score-gated missing-requirement interview: elicit-and-prove loop with durable answer memory"
 short_code: "RIT-I-0022"
 created_at: 2026-08-10T22:59:56.969370+00:00
-updated_at: 2026-08-10T23:09:41.941709+00:00
+updated_at: 2026-08-11T02:33:10.677733+00:00
 parent: RIT-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
