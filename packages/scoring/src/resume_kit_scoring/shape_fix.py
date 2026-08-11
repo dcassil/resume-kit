@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from enum import StrEnum
 
 from resume_kit_matching.keywords import _TOKEN_RE
 from resume_kit_policy import normalize_section_heading
+from resume_kit_schemas import CandidateEvidence
 from resume_kit_schemas.canonical import (
     Achievement,
     Award,
@@ -25,6 +26,7 @@ from resume_kit_schemas.canonical import (
     Resume,
     SkillGroup,
 )
+from resume_kit_schemas.evidence import normalize_text
 from resume_kit_schemas.resume import (
     CustomSection,
     CustomSectionItem,
@@ -87,6 +89,7 @@ _TARGET_REQUIRED_FATES = frozenset(
 )
 
 type ShapeDecision = CanonicalSection | SectionMapping | str
+type EvidenceReceipt = tuple[str, str]
 
 
 class CustomHandoffPolicy(StrEnum):
@@ -207,7 +210,11 @@ def apply_shape_transforms(
     )
 
 
-def content_ledger_ok(ledger: ContentLedger) -> bool:
+def content_ledger_ok(
+    ledger: ContentLedger,
+    *,
+    evidence_receipts: Collection[EvidenceReceipt] | None = None,
+) -> bool:
     """Return True iff every ledgered token has an allowed accounted fate."""
 
     for entry in ledger.entries:
@@ -220,6 +227,43 @@ def content_ledger_ok(ledger: ContentLedger) -> bool:
         if entry.fate is ContentFate.DROPPED_BY_EXPLICIT_DECISION and not _has_text(
             entry.reason
         ):
+            return False
+    return evidence_receipts_ok(ledger, evidence_receipts)
+
+
+def evidence_receipts_from_active_evidence(
+    active_evidence: Iterable[CandidateEvidence],
+) -> frozenset[EvidenceReceipt]:
+    """Return source-path/token receipts derived from active evidence records."""
+
+    receipts: set[EvidenceReceipt] = set()
+    for record in active_evidence:
+        source = record.source
+        if source is None or not source.strip():
+            continue
+        for token in _tokens(normalize_text(record.content)):
+            receipts.add((source, token))
+    return frozenset(receipts)
+
+
+def evidence_receipts_ok(
+    ledger: ContentLedger,
+    evidence_receipts: Collection[EvidenceReceipt] | None,
+) -> bool:
+    """Verify that ``preserved_in_evidence`` ledger entries have evidence receipts."""
+
+    preserved = [
+        entry for entry in ledger.entries if entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+    ]
+    if not preserved:
+        return True
+    if not evidence_receipts:
+        return False
+    # Option A (RIT-T-0186): the ledger may claim PRESERVED_IN_EVIDENCE only when
+    # active evidence contains a matching source-path/token receipt. This is a
+    # fail-closed proof gate, not a categorical assertion by the shape transform.
+    for entry in preserved:
+        if (entry.source_path, entry.token.casefold()) not in evidence_receipts:
             return False
     return True
 

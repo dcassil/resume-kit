@@ -18,6 +18,7 @@ from resume_kit_cli.io import InMemoryArtifactStore
 from resume_kit_core import InterfaceResponse, StructuredCompletionProvider
 from resume_kit_core.interface import ExitCode
 from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_evidence import build_candidate_evidence
 from resume_kit_export import ExportOptions, PageBudgetResult
 from resume_kit_export.models import ExportFormat, mime_type
 from resume_kit_facade.capabilities import REGISTRY
@@ -55,7 +56,14 @@ from resume_kit_facade.models import (
     SuggestTerminologyRequest,
     ValidateResumeTruthRequest,
 )
-from resume_kit_facade.project_config import init_project, load_config, set_active, working_dir
+from resume_kit_facade.project_config import (
+    init_project,
+    load_config,
+    save_config,
+    save_evidence_file,
+    set_active,
+    working_dir,
+)
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.tools import HANDLERS
 from resume_kit_policy import ResumeShapePolicy
@@ -1470,6 +1478,13 @@ def _shape_root(
         resume.model_dump_json(), encoding="utf-8"
     )
     set_active(root, resume="resumes/jane-original.json")
+    if include_unmapped_custom:
+        evidence_rel = "learning/candidate-evidence.json"
+        save_evidence_file(base / evidence_rel, build_candidate_evidence(resume))
+        config = load_config(root)
+        config.evidence_file = evidence_rel
+        config.active_evidence = evidence_rel
+        save_config(root, config)
     return root
 
 
