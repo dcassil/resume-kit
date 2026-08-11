@@ -193,6 +193,7 @@ from resume_kit_facade.project_config import (
 # A capability takes a request object plus options and yields an
 # InterfaceResponse.  Registry values narrow their request via ``isinstance``.
 Capability = Callable[[object, CapabilityOptions], Awaitable[InterfaceResponse[object]]]
+_RESUME_VERSION_LABELS = frozenset(("base", "structure", "refine", "original"))
 
 
 def _widen(response: InterfaceResponse[None]) -> InterfaceResponse[object]:
@@ -234,6 +235,15 @@ def build_provider_not_configured(
 ) -> InterfaceResponse[object]:
     """Widened ``build_provider_not_configured`` for capability returns."""
     return _widen(_build_provider_not_configured(details=details))
+
+
+def _canonical_resume_version_label(value: str | None) -> str | None:
+    """Return the canonical best-practices version label, dropping paths."""
+    if value == "standard":
+        return "refine"
+    if value in _RESUME_VERSION_LABELS:
+        return value
+    return None
 
 
 def _load_active_resume(root: str | Path) -> ResumeDocument:
@@ -1487,7 +1497,9 @@ async def analyze_best_practices_capability(
         resume = _normalize_resume_input(request.resume)
         scoredoc = _project_scoredoc(resume, reference_date=_BEST_PRACTICES_REF_DATE)
         report: BestPracticesReport = _analyze_best_practices(resume, scoredoc)
-        report = report.model_copy(update={"resume_version": request.resume_version})
+        report = report.model_copy(
+            update={"resume_version": _canonical_resume_version_label(request.resume_version)}
+        )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure

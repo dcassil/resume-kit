@@ -70,6 +70,7 @@ from resume_kit_facade.models import (
     ValidateFaithfulnessRequest,
     ValidateResumeTruthRequest,
 )
+from resume_kit_facade.project_config import resolve_resume_version_label
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_schemas import (
     CandidateEvidence,
@@ -969,13 +970,14 @@ def build_structure(
 @app.command(name="analyze-best-practices")
 def analyze_best_practices(
     resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    root: str = _Root,
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
     """Run the generic (job-independent) best-practices score on a resume."""
     request = AnalyzeBestPracticesRequest(
         resume=io.load_resume_normalized(resume),
-        resume_version=resume,
+        resume_version=resolve_resume_version_label(root, resume),
     )
     options = _options(False, strict, False)
     _run(caps.analyze_best_practices_capability(request, options), output)
