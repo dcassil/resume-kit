@@ -80,6 +80,7 @@ from resume_kit_matching import (
     analyze_terminology_alignment,
     check_job_match,
     compare_versions,
+    propose_terminology_candidates,
     select_best,
 )
 from resume_kit_policy import load_shape_policy
@@ -142,6 +143,7 @@ from resume_kit_facade.models import (
     IdentifyResumeGapsRequest,
     InitProjectRequest,
     OpenEditSessionRequest,
+    ProposeTerminologyCandidatesRequest,
     RankEditCandidatesRequest,
     RankEditCandidatesResult,
     ReconcileSessionRequest,
@@ -985,6 +987,35 @@ async def suggest_terminology(
     return build_success(suggestions, strict=options.strict)
 
 
+async def propose_terminology_candidates_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Propose conservative fuzzy terminology-alias candidates (RIT-T-0165).
+
+    Deterministic, analysis-only, PROPOSAL-only: returns the
+    ``list[TerminologyCandidate]`` the conservative fuzzy/stemmed pre-filter
+    surfaces for missing JD keywords the resume plausibly satisfies under a
+    different surface term the closed lexicon could not reach. It never writes an
+    alias and never mutates the resume — every candidate is unconfirmed and must
+    still pass human confirmation + the truth gate (``learn-terminology``) before
+    an alias is seeded/grown. Honors ``alias_file`` so pairs the project index
+    already knows are not re-proposed.
+    """
+    if not isinstance(request, ProposeTerminologyCandidatesRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "ProposeTerminologyCandidatesRequest")
+        )
+    try:
+        with use_alias_file(request.alias_file):
+            candidates = propose_terminology_candidates(request.job, request.resume)
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any engine failure
+        return from_exception(exc)
+    return build_success(candidates, strict=options.strict)
+
+
 async def align_terminology(
     request: object,
     options: CapabilityOptions,
@@ -1379,6 +1410,7 @@ REGISTRY: dict[str, Capability] = {
     "reconcile-session": reconcile_session_capability,
     "export-resume": export_resume,
     "suggest-terminology": suggest_terminology,
+    "suggest-terminology-candidates": propose_terminology_candidates_capability,
     "align-terminology": align_terminology,
     "init-project": init_project_capability,
     "set-active": set_active_capability,

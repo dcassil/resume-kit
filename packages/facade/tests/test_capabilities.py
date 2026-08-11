@@ -112,6 +112,7 @@ def test_registry_contains_all_capabilities() -> None:
         "reconcile-session",
         "export-resume",
         "suggest-terminology",
+        "suggest-terminology-candidates",
         "align-terminology",
         "init-project",
         "set-active",

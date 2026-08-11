@@ -38,6 +38,7 @@ def test_all_public_exports_importable() -> None:
         InitProjectRequest,
         OpenEditSessionRequest,
         ProjectConfig,
+        ProposeTerminologyCandidatesRequest,
         RankEditCandidatesRequest,
         RankEditCandidatesResult,
         ReconcileSessionRequest,
@@ -82,6 +83,7 @@ def test_all_public_exports_importable() -> None:
         init_project_capability,
         load_config,
         open_edit_session_capability,
+        propose_terminology_candidates_capability,
         rank_edit_candidates_capability,
         reconcile_session_capability,
         record_edit_feedback_capability,
@@ -98,7 +100,9 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 36
+    assert len(REGISTRY) == 37
+    assert callable(propose_terminology_candidates_capability)
+    assert "suggest-terminology-candidates" in REGISTRY
     assert "ats-view" in REGISTRY
     assert "build-base" in REGISTRY
     assert "analyze-shape" in REGISTRY
@@ -164,6 +168,7 @@ def test_all_public_exports_importable() -> None:
     assert callable(align_terminology)
     assert AlignTerminologyRequest is not None
     assert SuggestTerminologyRequest is not None
+    assert ProposeTerminologyCandidatesRequest is not None
     assert AlignTerminologyResult is not None
     assert TerminologyAlignmentDelta is not None
 

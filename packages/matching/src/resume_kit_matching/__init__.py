@@ -11,6 +11,7 @@ from .match import check_job_match
 from .predicates import is_valid_resume, jd_keywords_present
 from .selection import select_best
 from .terminology import analyze_terminology_alignment
+from .terminology_candidates import propose_terminology_candidates
 
 __version__ = "0.0.0"
 
@@ -23,4 +24,5 @@ __all__ = [
     "select_best",
     "compare_versions",
     "analyze_terminology_alignment",
+    "propose_terminology_candidates",
 ]

@@ -117,6 +117,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "edit_session_reconcile",
         "resume_export",
         "resume_suggest_terminology",
+        "resume_suggest_terminology_candidates",
         "resume_align_terminology",
         "project_init",
         "project_set_active",

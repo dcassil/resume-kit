@@ -676,6 +676,24 @@ class ExportResumeRequest:
 
 
 @dataclass(frozen=True)
+class ProposeTerminologyCandidatesRequest:
+    """Inputs for the propose-terminology-candidates capability (RIT-T-0165).
+
+    Analysis-only, PROPOSAL-only: runs the conservative fuzzy/stemmed pre-filter
+    that surfaces candidate ``(jd_keyword, resume_phrase)`` synonym pairs the
+    closed alias lexicon could not reach on its own — the seed/grow input the
+    ``learn-terminology`` truth gate + human confirmation then decide on. It
+    never writes an alias and never mutates the resume; every candidate returned
+    is unconfirmed. The project ``alias_file`` (if any) is honored so pairs the
+    index already knows are not re-proposed.
+    """
+
+    resume: ResumeDocument
+    job: JobDescription
+    alias_file: str | Path | None = None
+
+
+@dataclass(frozen=True)
 class SuggestTerminologyRequest:
     """Inputs for the suggest-terminology capability (RIT-I-0010).
 

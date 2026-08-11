@@ -27,6 +27,7 @@ from .analysis import (
     ResumeVariantScore,
     ScoreDelta,
     TerminologyAlignment,
+    TerminologyCandidate,
 )
 from .ats_view import (
     ATS_VIEW_DISCLAIMER,
@@ -208,6 +209,7 @@ __all__ = [
     "ScoreDelta",
     "ResumeComparisonResult",
     "TerminologyAlignment",
+    "TerminologyCandidate",
     # common
     "Warning",
     "Severity",
