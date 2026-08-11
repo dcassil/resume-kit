@@ -107,6 +107,15 @@ class ProjectConfig(BaseModel):
             ``final_resume``.
         final_job_id: Stable job identifier used when producing
             ``final_resume``. Only written together with ``final_resume``.
+        interview_threshold: Overall-score cut-off (0–100) that gates the opt-in
+            ``interview-missing-job-description`` branch in the ``resume-workflow``
+            guide (RIT-I-0022). After the second scoring, the guide OFFERS the
+            interview when the re-scored ``overall`` is below this value **or** any
+            REQUIRED requirement is still uncovered — the second (required-coverage)
+            condition is read directly from the match/gap output and needs no
+            config knob of its own. Defaults to ``70``. The offer is strictly
+            opt-in: this field only decides when the offer is *made*; declining
+            leaves behavior identical to before the feature existed.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -129,6 +138,7 @@ class ProjectConfig(BaseModel):
     final_resume: str | None = None
     final_derived_from: str | None = None
     final_job_id: str | None = None
+    interview_threshold: int = 70
 
 
 def working_dir(root: str | Path) -> Path:

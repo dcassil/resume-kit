@@ -436,3 +436,22 @@ def test_version_pointers_round_trip_and_preserve_unknown_keys(tmp_path: Path) -
     assert legacy.structure_resume is None
     assert legacy.refine_resume is None
     assert legacy.standard_resume is None
+
+
+def test_interview_threshold_defaults_to_seventy() -> None:
+    # RIT-T-0160: the score-gated interview trigger reads a config-driven
+    # threshold. A fresh config carries the default (~70) so the gate has a value
+    # even when the project never set one.
+    assert ProjectConfig().interview_threshold == 70
+
+
+def test_interview_threshold_round_trips(tmp_path: Path) -> None:
+    # A project may override the threshold; it must persist across a save/load
+    # round-trip like any other canonical pointer, and a legacy config that never
+    # set it still loads with the default.
+    cfg = ProjectConfig(interview_threshold=80)
+    save_config(tmp_path, cfg)
+    reloaded = load_config(tmp_path)
+    assert reloaded.interview_threshold == 80
+    legacy = ProjectConfig.model_validate({"active_resume": "resumes/y-original.json"})
+    assert legacy.interview_threshold == 70
