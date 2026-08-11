@@ -51,6 +51,9 @@ from resume_kit_core.interface import (
 from resume_kit_core.interface import (
     from_resume_kit_error as _from_resume_kit_error,
 )
+from resume_kit_core.interface import (
+    from_value_error as _from_value_error,
+)
 from resume_kit_core.storage import ArtifactRef, ArtifactStore
 from resume_kit_document_parser import (
     TextExtractionResult,
@@ -201,6 +204,11 @@ def from_resume_kit_error(exc: ResumeKitError) -> InterfaceResponse[object]:
 def from_exception(exc: BaseException) -> InterfaceResponse[object]:
     """Widened ``from_exception`` for capability return positions."""
     return _widen(_from_exception(exc))
+
+
+def from_value_error(exc: ValueError) -> InterfaceResponse[object]:
+    """Widened ``from_value_error`` for capability return positions."""
+    return _widen(_from_value_error(exc))
 
 
 def build_provider_not_configured(
@@ -1076,10 +1084,16 @@ async def set_active_capability(
             resume_source=request.resume_source,
             job=request.job,
             job_source=request.job_source,
+            alias_file=request.alias_file,
         )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
-    except Exception as exc:  # noqa: BLE001 - map any filesystem/validation failure
+    except ValueError as exc:
+        # Caller-input error (orphan source, missing alias file, nothing to set):
+        # surface as a `validation` error with actionable text, not a masked
+        # internal error (RIT-T-0156 boundary, RIT-T-0167).
+        return from_value_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem failure
         return from_exception(exc)
     return build_success(config, strict=options.strict)
 

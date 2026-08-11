@@ -871,6 +871,7 @@ async def project_set_active(arguments: ToolArguments) -> ToolResult:
                 "resume_source": _optional_str(arguments, "resume_source"),
                 "job": _optional_str(arguments, "job"),
                 "job_source": _optional_str(arguments, "job_source"),
+                "alias_file": _optional_alias_file(arguments),
                 "root": _optional_string(arguments, "root", "."),
             },
         )

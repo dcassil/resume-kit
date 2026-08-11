@@ -258,6 +258,45 @@ async def test_warnings_remain_separate_from_errors() -> None:
     assert payload["errors"] == []
 
 
+async def test_project_set_active_alias_file_persists(tmp_path: Path) -> None:
+    # RIT-T-0167: the advertised alias_file param is real — it persists.
+    from resume_kit_facade.project_config import load_config
+
+    init_project(tmp_path)
+    alias = tmp_path / "resume-kit" / "learning" / "synonyms.json"
+    alias.write_text("{}", encoding="utf-8")
+    payload = await HANDLERS["project_set_active"](
+        {"alias_file": "learning/synonyms.json", "root": str(tmp_path)}
+    )
+    _assert_envelope(payload)
+    assert payload["errors"] == []
+    assert load_config(tmp_path).alias_file == "learning/synonyms.json"
+
+
+async def test_project_set_active_invalid_alias_file_is_validation(tmp_path: Path) -> None:
+    # RIT-T-0167: invalid alias_file → validation error, not internal_error.
+    init_project(tmp_path)
+    payload = await HANDLERS["project_set_active"](
+        {"alias_file": "learning/nope.json", "root": str(tmp_path)}
+    )
+    errors = payload["errors"]
+    assert isinstance(errors, list) and errors
+    assert errors[0]["code"] == "validation_failed"
+
+
+async def test_project_init_does_not_accept_alias_file(tmp_path: Path) -> None:
+    # RIT-T-0167 decision: project_init does NOT support alias_file (use
+    # project_set_active). Passing it is silently ignored — never persisted.
+    from resume_kit_facade.project_config import load_config
+
+    payload = await HANDLERS["project_init"](
+        {"alias_file": "learning/synonyms.json", "root": str(tmp_path)}
+    )
+    _assert_envelope(payload)
+    assert payload["errors"] == []
+    assert load_config(tmp_path).alias_file is None
+
+
 async def test_validate_truth_returns_reason_code_fields() -> None:
     payload = await HANDLERS["resume_validate_truth"](
         {"resume": _resume(), "evidence": [], "no_llm": True}
