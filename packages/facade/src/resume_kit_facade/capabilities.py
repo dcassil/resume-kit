@@ -29,6 +29,7 @@ schemas, and the engine packages only.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Awaitable, Callable
 from datetime import date
 from pathlib import Path
@@ -227,6 +228,22 @@ def build_provider_not_configured(
 ) -> InterfaceResponse[object]:
     """Widened ``build_provider_not_configured`` for capability returns."""
     return _widen(_build_provider_not_configured(details=details))
+
+
+def _load_active_resume(root: str | Path) -> ResumeDocument:
+    """Load the original active resume for root-only project write surfaces."""
+    from resume_kit_core.errors import ErrorCode
+
+    config = load_config(root)
+    active_resume = config.active_resume
+    if not active_resume:
+        raise ResumeKitError.from_code(ErrorCode.VALIDATION_FAILED, "No active_resume set.")
+    resume_file = working_dir(root) / active_resume
+    if not resume_file.exists():
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, f"Active resume not found: {active_resume}."
+        )
+    return ResumeDocument.model_validate(json.loads(resume_file.read_text(encoding="utf-8")))
 
 
 class _UnexpectedRequestError(ResumeKitError):
@@ -629,6 +646,7 @@ async def seed_full_resume_evidence_capability(
         )
     try:
         config = load_config(request.root)
+        resume = request.resume or _load_active_resume(request.root)
         evidence_file = _normalize_evidence_file(
             request.evidence_file
             or config.active_evidence
@@ -636,7 +654,7 @@ async def seed_full_resume_evidence_capability(
             or DEFAULT_FULL_RESUME_EVIDENCE_FILE
         )
         extracted = build_candidate_evidence(
-            request.resume,
+            resume,
             approved_claims=request.approved_claims,
         )
         merged = merge_evidence_file(working_dir(request.root) / evidence_file, extracted)

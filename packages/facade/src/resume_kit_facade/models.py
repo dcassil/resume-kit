@@ -456,14 +456,15 @@ class BuildCandidateEvidenceRequest:
 class SeedFullResumeEvidenceRequest:
     """Inputs for seeding durable evidence from the full source resume.
 
-    Extracts evidence from the supplied full ``ResumeDocument`` before any
-    no-custom prepared-resume projection, then merges it into the requested
-    evidence file. When ``evidence_file`` is omitted, the capability uses
+    Extracts evidence from the supplied full ``ResumeDocument`` or, when
+    omitted, the project's original ``active_resume`` before any no-custom
+    prepared-resume projection, then merges it into the requested evidence
+    file. When ``evidence_file`` is omitted, the capability uses
     ``active_evidence``, then ``evidence_file``, then the default
     ``learning/candidate-evidence.json`` path under ``resume-kit/``.
     """
 
-    resume: ResumeDocument
+    resume: ResumeDocument | None = None
     approved_claims: list[CandidateEvidence] | list[str] | None = None
     root: str | Path = "."
     evidence_file: str | None = None

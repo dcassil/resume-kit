@@ -83,6 +83,7 @@ resume-kit/
 ├── jobs/<name>-original.json            # immutable job conversions
 ├── working/edit-session.json            # code-owned active edit-session state
 ├── working/<name>.tailored.json         # commit-session output for a tailored resume
+├── learning/candidate-evidence.json     # durable full-resume evidence seed
 ├── learning/synonyms.json               # grown project alias index (default alias_file target)
 └── learning/<skill>.md                  # accumulated hints; skills read these first, append new ones
 ```
@@ -119,6 +120,12 @@ guides — they do not implement resume intelligence logic and must not invent
 facts, bypass evidence, or create business rules in prompt text.
 
 ## Workflow (start here)
+
+`prepare-base-resume` is Flow 1 of the composable flows. Run it once per resume
+before any job-specific work when you want a reusable ATS-ready baseline: it
+parses the resume, seeds full-resume learning with
+`seed-full-resume-evidence`, runs the `base -> structure -> refine` preparation,
+and leaves `refine` as the default downstream tailoring input.
 
 `resume-workflow` is the entry-point guide; it runs the skills in order:
 
@@ -180,6 +187,7 @@ by keyword matching + terminology).
 |---|---|---|---|
 | `parse-resume` | (agent-driven) | — | No (agent converts) |
 | `parse-job` | (agent-driven) | — | No (agent converts) |
+| `prepare-base-resume` | `resume-tool seed-full-resume-evidence` + baseline commands | `resume_seed_full_resume_evidence` + baseline tools | No (deterministic flow) |
 | `check-structure` | `resume-tool check-structure` | `resume_check_ats_structure` | No (deterministic) |
 | `check-keywords` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
 | `check-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |
