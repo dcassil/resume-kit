@@ -47,6 +47,10 @@ class ContentFate(StrEnum):
     # slot rather than dropped. Distinct from UNRESOLVED, which means the content
     # genuinely still needs a user mapping decision (RIT-T-0161).
     PRESERVED_AS_OTHER = "preserved_as_other"
+    # Accounted: Flow 1 prepared output intentionally omits custom holding
+    # sections, while the original text is retained in candidate evidence /
+    # learning. This is not a fabrication bypass and not an unresolved drop.
+    PRESERVED_IN_EVIDENCE = "preserved_in_evidence"
     UNRESOLVED = "unresolved"
 
 

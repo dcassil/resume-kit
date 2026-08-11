@@ -48,6 +48,7 @@ from resume_kit_facade.models import (
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
+    SeedFullResumeEvidenceRequest,
     SessionPromptRequest,
     SessionStatusRequest,
     SuggestTerminologyRequest,
@@ -478,6 +479,17 @@ def _evidence(ctx: FixtureContext) -> list[JsonDict]:
     return _json_models(ctx.data.evidence)
 
 
+def _seed_root(ctx: FixtureContext) -> Path:
+    root = ctx.paths.resume.parent / "seed-root"
+    resume_rel = "resumes/jordan-full-source.json"
+    resume_path = working_dir(root) / resume_rel
+    if not resume_path.exists():
+        init_project(root)
+        resume_path.write_text(ctx.data.resume.model_dump_json(), encoding="utf-8")
+        set_active(root, resume=resume_rel)
+    return root
+
+
 _SURFACE_CASES = (
     SurfaceCase(
         name="check-resume-job-match",
@@ -693,6 +705,20 @@ _SURFACE_CASES = (
             "resume": _resume(ctx),
             "approved_claims": ["Confirmed Docker work"],
         },
+    ),
+    SurfaceCase(
+        name="seed-full-resume-evidence",
+        capability="seed-full-resume-evidence",
+        request=lambda ctx: SeedFullResumeEvidenceRequest(root=_seed_root(ctx)),
+        cli_args=lambda ctx: [
+            "seed-full-resume-evidence",
+            "--root",
+            str(_seed_root(ctx)),
+        ],
+        mcp_name="resume_seed_full_resume_evidence",
+        mcp_args=lambda ctx: {"root": str(_seed_root(ctx))},
+        api_path="/seed-full-resume-evidence",
+        api_body=lambda ctx: {"root": str(_seed_root(ctx))},
     ),
     SurfaceCase(
         name="record-edit-feedback",

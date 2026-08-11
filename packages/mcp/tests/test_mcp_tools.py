@@ -127,6 +127,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "resume_build_structure",
         "resume_build_standard",
         "resume_build_refine",
+        "resume_seed_full_resume_evidence",
         "resume_build_perfect",
         "resume_analyze_best_practices",
         "resume_ats_view",

@@ -190,7 +190,37 @@ The full job-specific path is `original → base → structure → refine → ta
 commits truthful job-alignment edits, and the final fit only fits that tailored
 content to the configured shape and page budgets.
 
+### Composable agent flows
+
+The resume-intelligence plugin exposes the same path as four composable flow
+skills, plus one complete guide:
+
+- **`complete-resume-flow`** - the start-here guide for the end-to-end order.
+- **`prepare-base-resume` (Flow 1)** - run once per source resume to build the
+  reusable `original -> base -> structure -> refine` lineage and seed durable
+  full-resume evidence.
+- **`ingest-job` (Flow 2)** - run once per job to parse/activate the job and
+  grow the project alias file before scoring.
+- **`tailor-resume` (Flow 3)** - run per job to score, apply truthful
+  edit-session changes, validate facts, and re-score.
+- **`finalize-resume` (Flow 4)** - run per tailored job resume to fit and
+  export under the rendered page gate.
+
+Repeated-use path: run Flow 1 once per resume, then run Flows 2, 3, and 4 many
+times for different jobs. The older `resume-workflow` skill remains as a thin
+compatibility pointer to `complete-resume-flow` and the four flow skills.
+
 ## Release Notes
+
+### Unreleased - composable complete flow (RIT-T-0174)
+
+- Adds `complete-resume-flow` as the canonical composite guide for the four
+  reusable flow skills.
+- Retains `resume-workflow` as a compatibility pointer, so per-stage gates live
+  only in `prepare-base-resume`, `ingest-job`, `tailor-resume`, and
+  `finalize-resume`.
+- Documents the repeated-use model: Flow 1 once per resume; Flows 2/3/4 many
+  times per job.
 
 ### Unreleased — perfect fit stage (RIT-T-0153)
 

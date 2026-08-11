@@ -43,6 +43,14 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "update-shape",
         "update-refine",
         "update-best-practices",
+        # Flows
+        "prepare-base-resume",
+        "complete-resume-flow",
+        "ingest-job",
+        "tailor-resume",
+        "finalize-resume",
+        "seed-terminology",
+        "interview-missing-job-description",
         # Improve
         "update-keywords",
         "update-terminology",
@@ -66,11 +74,13 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
 
 # CLI commands and MCP tool names that must appear (one per slug). Workflow /
 # agent-driven skills (parse-resume, parse-job, update-keywords,
-# update-terminology, learn-terminology, resume-workflow, review-resume,
-# rank-changes, learn-change) are intentionally exempt — they orchestrate
-# other skills/tools (or drive the resume_kit_feedback package, which has no
-# CLI/MCP surface) rather than wrapping a single capability.
+# update-terminology, learn-terminology, complete-resume-flow, tailor-resume,
+# resume-workflow, review-resume, rank-changes, learn-change) are intentionally
+# exempt — they orchestrate other skills/tools (or drive the
+# resume_kit_feedback package, which has no CLI/MCP surface) rather than
+# wrapping a single capability.
 EXPECTED_CLI_OR_MCP: dict[str, list[str]] = {
+    "prepare-base-resume": ["resume-tool", "resume_seed_full_resume_evidence"],
     "check-structure": ["resume-tool", "resume_check_ats_structure"],
     "check-keywords": ["resume-tool", "resume_check_job_match"],
     "select-resume": ["resume-tool", "resume_select_best"],

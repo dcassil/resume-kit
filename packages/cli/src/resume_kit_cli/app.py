@@ -60,6 +60,7 @@ from resume_kit_facade.models import (
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
     RequirementAnswerRequest,
+    SeedFullResumeEvidenceRequest,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -878,6 +879,18 @@ def build_refine(
     request = BuildRefineRequest(root=root, answers=io.load_answers(answers))
     options = _options(False, strict, False)
     _run(caps.build_refine_capability(request, options), output)
+
+
+@app.command(name="seed-full-resume-evidence")
+def seed_full_resume_evidence(
+    root: str = _Root,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Seed durable evidence from the active full source resume."""
+    request = SeedFullResumeEvidenceRequest(root=root)
+    options = _options(False, strict, False)
+    _run(caps.seed_full_resume_evidence_capability(request, options), output)
 
 
 @app.command(name="fit")

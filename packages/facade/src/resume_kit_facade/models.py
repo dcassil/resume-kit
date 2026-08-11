@@ -453,6 +453,25 @@ class BuildCandidateEvidenceRequest:
 
 
 @dataclass(frozen=True)
+class SeedFullResumeEvidenceRequest:
+    """Inputs for seeding durable evidence from the full source resume.
+
+    Extracts evidence from the supplied full ``ResumeDocument`` or, when
+    omitted, the project's original ``active_resume`` before any no-custom
+    prepared-resume projection, then merges it into the requested evidence
+    file. When ``evidence_file`` is omitted, the capability uses
+    ``active_evidence``, then ``evidence_file``, then the default
+    ``learning/candidate-evidence.json`` path under ``resume-kit/``.
+    """
+
+    resume: ResumeDocument | None = None
+    approved_claims: list[CandidateEvidence] | list[str] | None = None
+    root: str | Path = "."
+    evidence_file: str | None = None
+    update_active: bool = True
+
+
+@dataclass(frozen=True)
 class RecordEditFeedbackRequest:
     """Inputs for the record-edit-feedback capability.
 
@@ -656,6 +675,24 @@ class AddEvidenceResult(BaseModel):
     )
     active_evidence: str | None = Field(
         default=None, description="Updated active evidence pointer, if requested."
+    )
+
+
+class SeedFullResumeEvidenceResult(BaseModel):
+    """Serializable result for a full-resume evidence seed/merge."""
+
+    model_config = {"frozen": True}
+
+    evidence_file: str = Field(
+        description="Evidence file path relative to the resume-kit working dir."
+    )
+    active_evidence: str | None = Field(
+        default=None, description="Updated active evidence pointer, if requested."
+    )
+    extracted_count: int = Field(description="Number of evidence records extracted.")
+    total_count: int = Field(description="Total records after idempotent merge.")
+    evidence: list[CandidateEvidence] = Field(
+        description="Merged evidence records currently persisted."
     )
 
 

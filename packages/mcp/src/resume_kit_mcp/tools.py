@@ -51,6 +51,7 @@ from resume_kit_facade.models import (
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
     RequirementAnswerRequest,
+    SeedFullResumeEvidenceRequest,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -107,6 +108,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "resume_build_structure",
     "resume_build_standard",
     "resume_build_refine",
+    "resume_seed_full_resume_evidence",
     "resume_build_perfect",
     "resume_analyze_best_practices",
     "resume_ats_view",
@@ -988,6 +990,17 @@ async def resume_build_refine(arguments: ToolArguments) -> ToolResult:
     return await _call("build-refine", request, arguments)
 
 
+async def resume_seed_full_resume_evidence(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            SeedFullResumeEvidenceRequest,
+            {"root": _optional_string(arguments, "root", ".")},
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("seed-full-resume-evidence", request, arguments)
+
+
 async def resume_build_perfect(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -1198,6 +1211,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "resume_build_structure": resume_build_structure,
     "resume_build_standard": resume_build_standard,
     "resume_build_refine": resume_build_refine,
+    "resume_seed_full_resume_evidence": resume_seed_full_resume_evidence,
     "resume_build_perfect": resume_build_perfect,
     "resume_analyze_best_practices": resume_analyze_best_practices,
     "resume_ats_view": resume_ats_view,

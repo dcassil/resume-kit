@@ -361,6 +361,12 @@ class BuildRefineBody(BuildStandardBody):
     """Body for ``POST /build-refine`` — run the base->refine wording pass."""
 
 
+class SeedFullResumeEvidenceBody(_Options):
+    """Body for ``POST /seed-full-resume-evidence`` — seed full-resume learning."""
+
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+
+
 class AnalyzeShapeBody(_Options):
     """Body for ``POST /analyze-shape`` — resume shape report, no writes.
 

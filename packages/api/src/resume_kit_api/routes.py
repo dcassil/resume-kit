@@ -75,6 +75,7 @@ from resume_kit_facade.models import (
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
+    SeedFullResumeEvidenceRequest,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -113,6 +114,7 @@ from resume_kit_api.models import (
     RankEditCandidatesBody,
     RecordEditFeedbackBody,
     RefreshPreferencesBody,
+    SeedFullResumeEvidenceBody,
     SelectBestResumeBody,
     SessionRootBody,
     SetActiveBody,
@@ -472,6 +474,11 @@ def register_routes(app: FastAPI) -> None:
     async def build_refine(body: BuildRefineBody) -> Response:
         request = BuildRefineRequest(root=body.root, answers=body.answers)
         return _render(await REGISTRY["build-refine"](request, _options(body)))
+
+    @app.post("/seed-full-resume-evidence")
+    async def seed_full_resume_evidence(body: SeedFullResumeEvidenceBody) -> Response:
+        request = SeedFullResumeEvidenceRequest(root=body.root)
+        return _render(await REGISTRY["seed-full-resume-evidence"](request, _options(body)))
 
     @app.post("/fit")
     async def build_perfect(body: BuildPerfectBody) -> Response:

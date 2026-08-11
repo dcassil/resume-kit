@@ -29,6 +29,7 @@ schemas, and the engine packages only.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Awaitable, Callable
 from datetime import date
 from pathlib import Path
@@ -156,6 +157,8 @@ from resume_kit_facade.models import (
     RefreshPreferencesRequest,
     RequirementAnswerRequest,
     RequirementAnswerResult,
+    SeedFullResumeEvidenceRequest,
+    SeedFullResumeEvidenceResult,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -170,9 +173,11 @@ from resume_kit_facade.models import (
 from resume_kit_facade.perfect import BuildPerfectResult
 from resume_kit_facade.perfect import build_perfect as _build_perfect
 from resume_kit_facade.project_config import (
+    DEFAULT_FULL_RESUME_EVIDENCE_FILE,
     init_project,
     load_config,
     load_evidence_file,
+    merge_evidence_file,
     save_config,
     save_evidence_file,
     set_active,
@@ -223,6 +228,22 @@ def build_provider_not_configured(
 ) -> InterfaceResponse[object]:
     """Widened ``build_provider_not_configured`` for capability returns."""
     return _widen(_build_provider_not_configured(details=details))
+
+
+def _load_active_resume(root: str | Path) -> ResumeDocument:
+    """Load the original active resume for root-only project write surfaces."""
+    from resume_kit_core.errors import ErrorCode
+
+    config = load_config(root)
+    active_resume = config.active_resume
+    if not active_resume:
+        raise ResumeKitError.from_code(ErrorCode.VALIDATION_FAILED, "No active_resume set.")
+    resume_file = working_dir(root) / active_resume
+    if not resume_file.exists():
+        raise ResumeKitError.from_code(
+            ErrorCode.VALIDATION_FAILED, f"Active resume not found: {active_resume}."
+        )
+    return ResumeDocument.model_validate(json.loads(resume_file.read_text(encoding="utf-8")))
 
 
 class _UnexpectedRequestError(ResumeKitError):
@@ -607,6 +628,56 @@ async def build_candidate_evidence_capability(
     except Exception as exc:  # noqa: BLE001 - map any engine failure
         return from_exception(exc)
     return build_success(evidence, strict=options.strict)
+
+
+async def seed_full_resume_evidence_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Extract and merge durable evidence from a full source resume.
+
+    Deterministic and filesystem-local: Flow 1 can call this before projecting
+    a no-custom prepared resume. The persisted records are proof inputs only;
+    they do not bypass truth, faithfulness, or claim gates.
+    """
+    if not isinstance(request, SeedFullResumeEvidenceRequest):
+        return from_resume_kit_error(
+            _bad_request(request, "SeedFullResumeEvidenceRequest")
+        )
+    try:
+        config = load_config(request.root)
+        resume = request.resume or _load_active_resume(request.root)
+        evidence_file = _normalize_evidence_file(
+            request.evidence_file
+            or config.active_evidence
+            or config.evidence_file
+            or DEFAULT_FULL_RESUME_EVIDENCE_FILE
+        )
+        extracted = build_candidate_evidence(
+            resume,
+            approved_claims=request.approved_claims,
+        )
+        merged = merge_evidence_file(working_dir(request.root) / evidence_file, extracted)
+
+        config.evidence_file = evidence_file
+        if request.update_active:
+            config.active_evidence = evidence_file
+        save_config(request.root, config)
+
+        result = SeedFullResumeEvidenceResult(
+            evidence_file=evidence_file,
+            active_evidence=config.active_evidence,
+            extracted_count=len(extracted),
+            total_count=len(merged),
+            evidence=merged,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except ValueError as exc:
+        return from_value_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any filesystem failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
 
 
 async def record_edit_feedback_capability(
@@ -1449,6 +1520,7 @@ REGISTRY: dict[str, Capability] = {
     "validate-facts": validate_resume_truth_capability,
     "validate-faithfulness": validate_faithfulness_capability,
     "extract-evidence": build_candidate_evidence_capability,
+    "seed-full-resume-evidence": seed_full_resume_evidence_capability,
     "record-edit-feedback": record_edit_feedback_capability,
     "requirement-answer": requirement_answer_capability,
     "rank-edit-candidates": rank_edit_candidates_capability,

@@ -22,6 +22,7 @@ class EvidenceKind(StrEnum):
     CERTIFICATION = "certification"
     EDUCATION = "education"
     SKILL = "skill"
+    SOURCE_CUSTOM = "source_custom"
     USER_STATEMENT = "user_statement"
     OTHER = "other"
 

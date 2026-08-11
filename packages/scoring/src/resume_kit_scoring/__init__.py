@@ -34,6 +34,7 @@ from resume_kit_scoring.rank_experience import rank_experience
 from resume_kit_scoring.rank_skills import rank_skills
 from resume_kit_scoring.shape_analyzer import analyze_resume_shape
 from resume_kit_scoring.shape_fix import (
+    CustomHandoffPolicy,
     apply_shape_transforms,
     claims_preserved_across_sections,
     content_ledger_ok,
@@ -48,6 +49,7 @@ from resume_kit_scoring.standard_fix import (
 __all__ = [
     "BaseFixResult",
     "CompressionCandidate",
+    "CustomHandoffPolicy",
     "RefineFixResult",
     "StandardFixResult",
     "analyze_best_practices",

@@ -48,6 +48,7 @@ WORKING_DIR_NAME = "resume-kit"
 CONFIG_FILE_NAME = "config.json"
 #: The content sub-folders scaffolded by :func:`init_project`, in order.
 CONTENT_DIRS: tuple[str, ...] = ("resumes", "jobs", "working", "learning")
+DEFAULT_FULL_RESUME_EVIDENCE_FILE = "learning/candidate-evidence.json"
 
 
 class ProjectConfig(BaseModel):
@@ -233,6 +234,27 @@ def load_evidence_file(path: Path) -> list[CandidateEvidence]:
 def save_evidence_file(path: Path, evidence: list[CandidateEvidence]) -> None:
     """Atomically write a bare evidence array to ``path``."""
     atomic_write_json(path, [item.model_dump(mode="json") for item in evidence])
+
+
+def merge_evidence_file(
+    path: Path,
+    incoming: list[CandidateEvidence],
+) -> list[CandidateEvidence]:
+    """Idempotently merge ``incoming`` evidence records into ``path``.
+
+    Evidence ids are content-addressed by the extractor, so the merge key is the
+    record id. Existing records always win on collisions: this preserves
+    confirmed/user evidence, timestamps, and any learning already present. New
+    records are appended by id and the final file is written atomically.
+    """
+    evidence_by_id = {item.id: item for item in load_evidence_file(path)}
+    for record in incoming:
+        if record.id in evidence_by_id:
+            continue
+        evidence_by_id[record.id] = record
+    merged = sorted(evidence_by_id.values(), key=lambda item: item.id)
+    save_evidence_file(path, merged)
+    return merged
 
 
 def init_project(root: str | Path) -> ProjectConfig:
