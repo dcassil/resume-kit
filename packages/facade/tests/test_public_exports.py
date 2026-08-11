@@ -47,6 +47,8 @@ def test_all_public_exports_importable() -> None:
         RecordEditFeedbackResult,
         RefineBuildResult,
         RefreshPreferencesRequest,
+        SeedFullResumeEvidenceRequest,
+        SeedFullResumeEvidenceResult,
         SelectBestResumeRequest,
         SessionPromptRequest,
         SessionStatusRequest,
@@ -90,6 +92,7 @@ def test_all_public_exports_importable() -> None:
         refresh_preferences_capability,
         requirement_answer_capability,
         save_config,
+        seed_full_resume_evidence_capability,
         select_best_resume,
         session_prompt_capability,
         session_status_capability,
@@ -101,7 +104,7 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 38
+    assert len(REGISTRY) == 39
     assert callable(propose_terminology_candidates_capability)
     assert "suggest-terminology-candidates" in REGISTRY
     assert "ats-view" in REGISTRY
@@ -125,6 +128,7 @@ def test_all_public_exports_importable() -> None:
     assert "rank-edit-candidates" in REGISTRY
     assert "refresh-preferences" in REGISTRY
     assert "add-evidence" in REGISTRY
+    assert "seed-full-resume-evidence" in REGISTRY
     assert "open-edit-session" in REGISTRY
     assert "session-prompt" in REGISTRY
     assert "decide-change" in REGISTRY
@@ -134,6 +138,7 @@ def test_all_public_exports_importable() -> None:
 
     assert callable(init_project_capability)
     assert callable(add_evidence_capability)
+    assert callable(seed_full_resume_evidence_capability)
     assert callable(record_edit_feedback_capability)
     assert callable(requirement_answer_capability)
     assert callable(rank_edit_candidates_capability)
@@ -152,6 +157,7 @@ def test_all_public_exports_importable() -> None:
     assert ProjectConfig is not None
     assert InitProjectRequest is not None
     assert AddEvidenceRequest is not None
+    assert SeedFullResumeEvidenceRequest is not None
     assert RecordEditFeedbackRequest is not None
     assert RankEditCandidatesRequest is not None
     assert RefreshPreferencesRequest is not None
@@ -210,6 +216,7 @@ def test_all_public_exports_importable() -> None:
     assert callable(validate_faithfulness_capability)
     assert ValidateFaithfulnessRequest is not None
     assert AddEvidenceResult is not None
+    assert SeedFullResumeEvidenceResult is not None
     assert RecordEditFeedbackResult is not None
     assert RankEditCandidatesResult is not None
 

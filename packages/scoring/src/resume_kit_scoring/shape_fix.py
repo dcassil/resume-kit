@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from enum import StrEnum
 
 from resume_kit_matching.keywords import _TOKEN_RE
 from resume_kit_policy import normalize_section_heading
@@ -70,6 +71,7 @@ _LEDGER_OK_FATES = frozenset(
         ContentFate.MOVED,
         ContentFate.DEDUPED,
         ContentFate.PRESERVED_AS_OTHER,
+        ContentFate.PRESERVED_IN_EVIDENCE,
         ContentFate.DROPPED_AS_HEADING,
         ContentFate.DROPPED_AS_PARSER_ARTIFACT,
         ContentFate.DROPPED_BY_EXPLICIT_DECISION,
@@ -87,17 +89,30 @@ _TARGET_REQUIRED_FATES = frozenset(
 type ShapeDecision = CanonicalSection | SectionMapping | str
 
 
+class CustomHandoffPolicy(StrEnum):
+    """How ambiguous/custom source sections are handled during shape projection."""
+
+    PRESERVE_IN_CANONICAL_CUSTOM = "preserve_in_canonical_custom"
+    OMIT_AND_LEDGER_TO_EVIDENCE = "omit_and_ledger_to_evidence"
+
+
 def apply_shape_transforms(
     resume: ResumeDocument,
     report: ShapeReport,
     decisions: Mapping[str, ShapeDecision] | None = None,
+    *,
+    custom_handoff_policy: CustomHandoffPolicy = (
+        CustomHandoffPolicy.PRESERVE_IN_CANONICAL_CUSTOM
+    ),
 ) -> ShapeFixResult:
     """Return a canonical ``Resume`` plus per-token ledger accounting.
 
     The transform is intentionally narrow. It moves already-structured
     BuildDoc fields and auto-safe, report-justified custom string-list sections
-    into the canonical schema. Unsupported or ambiguous custom content is
-    ledgered as unresolved instead of being guessed.
+    into the canonical schema. Unsupported or ambiguous custom content follows
+    ``custom_handoff_policy``: the legacy/default path preserves it in
+    ``Resume.custom``; Flow 1 can omit that holding slot and ledger the source
+    text as retained in durable evidence instead.
     """
 
     builder = _CanonicalBuilder()
@@ -139,10 +154,20 @@ def apply_shape_transforms(
         target = decision_targets.get(display_name) or report_targets.get(display_name)
         explicit = display_name in decision_targets
         if target is None or target is CanonicalSection.OTHER:
-            # No first-class canonical home: preserve the content faithfully in
-            # the canonical ``custom`` holding slot so the ledger accounts for it
-            # (RIT-T-0161) rather than counting it as dropped/unresolved.
-            builder.preserve_custom_section(section, display_name, source_path)
+            # No first-class canonical home: account for the content through
+            # the selected no-custom handoff policy rather than guessing a
+            # canonical section or marking it unresolved.
+            if (
+                custom_handoff_policy
+                is CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE
+            ):
+                builder.handoff_custom_section_to_evidence(
+                    section,
+                    display_name,
+                    source_path,
+                )
+            else:
+                builder.preserve_custom_section(section, display_name, source_path)
             applied_sections.add(display_name)
             continue
         if not explicit and target not in _AUTO_CUSTOM_TARGETS:
@@ -686,6 +711,33 @@ class _CanonicalBuilder:
                     reason=f"custom section '{display_name}' needs a mapping decision",
                 )
 
+    def handoff_custom_section_to_evidence(
+        self,
+        section: CustomSection,
+        display_name: str,
+        source_path: str,
+    ) -> None:
+        """Account for custom source content intentionally retained in evidence.
+
+        Flow 1 prepared resumes do not keep a canonical ``custom`` holding
+        section. The source text is still extracted into ``CandidateEvidence``
+        by the full-resume evidence builder; these ledger rows make that
+        movement explicit so the shape pass never silently drops content.
+        """
+        for path, text in _custom_texts(section, source_path):
+            if _is_heading_artifact(text, display_name):
+                self._record_text(text, ContentFate.DROPPED_AS_HEADING, path, None)
+            elif _is_parser_artifact(text):
+                self._record_text(text, ContentFate.DROPPED_AS_PARSER_ARTIFACT, path, None)
+            elif _has_text(text):
+                self._record_text(
+                    text,
+                    ContentFate.PRESERVED_IN_EVIDENCE,
+                    path,
+                    None,
+                    reason=f"custom section '{display_name}' preserved in evidence",
+                )
+
     def skill_groups(self) -> list[SkillGroup]:
         keywords = list(self._skill_keywords.values())
         if not keywords:
@@ -946,6 +998,7 @@ def _is_parser_artifact(value: str) -> bool:
 
 
 __all__ = [
+    "CustomHandoffPolicy",
     "apply_shape_transforms",
     "claims_preserved_across_sections",
     "content_ledger_ok",

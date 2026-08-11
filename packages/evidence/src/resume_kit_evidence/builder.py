@@ -3,8 +3,9 @@
 New resume-kit subsystem (no upstream port). ``build_candidate_evidence`` walks a
 :class:`~resume_kit_schemas.ResumeDocument` and emits one
 :class:`~resume_kit_schemas.evidence.CandidateEvidence` record per material fact
-the candidate can attest to — summary, work history, projects, education, skills
-and certifications — plus any explicitly approved-claim inputs.
+the candidate can attest to — summary, work history, projects, education, skills,
+certifications, languages, awards, and custom/unmapped source sections — plus
+any explicitly approved-claim inputs.
 
 The extractor never invents content: every evidence record's ``content`` is copied
 verbatim from a resume field or an approved-claim input. Evidence identifiers are
@@ -17,8 +18,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable
 
-from resume_kit_schemas import ResumeDocument
+from resume_kit_schemas import CustomSection, ResumeDocument, SectionMeta, SectionType
 from resume_kit_schemas.evidence import CandidateEvidence, EvidenceKind
 
 __all__ = [
@@ -68,6 +70,31 @@ def _make(
     )
 
 
+def _record(
+    records: list[CandidateEvidence],
+    kind: EvidenceKind,
+    content: str | None,
+    *,
+    source: str,
+    tags: Iterable[str] = (),
+    user_confirmed: bool = False,
+) -> None:
+    if content is None:
+        return
+    text = content.strip()
+    if not text:
+        return
+    records.append(
+        _make(
+            kind,
+            text,
+            source=source,
+            tags=[tag for tag in tags if tag],
+            user_confirmed=user_confirmed,
+        )
+    )
+
+
 def build_candidate_evidence(
     resume: ResumeDocument,
     *,
@@ -90,99 +117,110 @@ def build_candidate_evidence(
 
     records: list[CandidateEvidence] = []
 
-    summary = resume.summary.strip()
-    if summary:
-        records.append(
-            _make(
-                EvidenceKind.MASTER_RESUME,
-                summary,
-                source="summary",
-                tags=["summary"],
-            )
-        )
+    _record(
+        records,
+        EvidenceKind.MASTER_RESUME,
+        resume.summary,
+        source="summary",
+        tags=["summary"],
+    )
 
-    for exp in resume.workExperience:
+    for exp_index, exp in enumerate(resume.workExperience):
         employer = exp.company.strip()
         role = exp.title.strip()
         header = " — ".join(part for part in (role, employer) if part)
-        if header:
-            records.append(
-                _make(
-                    EvidenceKind.WORK_HISTORY,
-                    header,
-                    source="workExperience",
-                    tags=[t for t in (employer, role) if t],
-                )
+        _record(
+            records,
+            EvidenceKind.WORK_HISTORY,
+            header,
+            source=f"workExperience[{exp_index}]",
+            tags=[employer, role],
+        )
+        for bullet_index, bullet in enumerate(exp.description):
+            _record(
+                records,
+                EvidenceKind.WORK_HISTORY,
+                bullet,
+                source=f"workExperience[{exp_index}].description[{bullet_index}]",
+                tags=[employer],
             )
-        for bullet in exp.description:
-            text = bullet.strip()
-            if text:
-                records.append(
-                    _make(
-                        EvidenceKind.WORK_HISTORY,
-                        text,
-                        source="workExperience",
-                        tags=[t for t in (employer,) if t],
-                    )
-                )
 
-    for proj in resume.personalProjects:
+    for proj_index, proj in enumerate(resume.personalProjects):
         name = proj.name.strip()
-        if name:
-            records.append(
-                _make(
-                    EvidenceKind.PROJECT,
-                    name,
-                    source="personalProjects",
-                    tags=[name],
-                )
+        _record(
+            records,
+            EvidenceKind.PROJECT,
+            name,
+            source=f"personalProjects[{proj_index}].name",
+            tags=[name],
+        )
+        for bullet_index, bullet in enumerate(proj.description):
+            _record(
+                records,
+                EvidenceKind.PROJECT,
+                bullet,
+                source=f"personalProjects[{proj_index}].description[{bullet_index}]",
+                tags=[name],
             )
-        for bullet in proj.description:
-            text = bullet.strip()
-            if text:
-                records.append(
-                    _make(
-                        EvidenceKind.PROJECT,
-                        text,
-                        source="personalProjects",
-                        tags=[t for t in (name,) if t],
-                    )
-                )
 
-    for edu in resume.education:
+    for edu_index, edu in enumerate(resume.education):
         parts = [p for p in (edu.degree.strip(), edu.institution.strip()) if p]
-        if parts:
-            records.append(
-                _make(
-                    EvidenceKind.EDUCATION,
-                    " — ".join(parts),
-                    source="education",
-                    tags=parts,
-                )
-            )
+        _record(
+            records,
+            EvidenceKind.EDUCATION,
+            " — ".join(parts),
+            source=f"education[{edu_index}]",
+            tags=parts,
+        )
 
-    for skill in resume.additional.technicalSkills:
-        text = skill.strip()
-        if text:
-            records.append(
-                _make(
-                    EvidenceKind.SKILL,
-                    text,
-                    source="additional.technicalSkills",
-                    tags=[text],
-                )
-            )
+    for skill_index, skill in enumerate(resume.additional.technicalSkills):
+        _record(
+            records,
+            EvidenceKind.SKILL,
+            skill,
+            source=f"additional.technicalSkills[{skill_index}]",
+            tags=[skill.strip()],
+        )
 
-    for cert in resume.additional.certificationsTraining:
-        text = cert.strip()
-        if text:
-            records.append(
-                _make(
-                    EvidenceKind.CERTIFICATION,
-                    text,
-                    source="additional.certificationsTraining",
-                    tags=[text],
-                )
+    for cert_index, cert in enumerate(resume.additional.certificationsTraining):
+        _record(
+            records,
+            EvidenceKind.CERTIFICATION,
+            cert,
+            source=f"additional.certificationsTraining[{cert_index}]",
+            tags=[cert.strip()],
+        )
+
+    for language_index, language in enumerate(resume.additional.languages):
+        _record(
+            records,
+            EvidenceKind.OTHER,
+            language,
+            source=f"additional.languages[{language_index}]",
+            tags=["language", language.strip()],
+        )
+
+    for award_index, award in enumerate(resume.additional.awards):
+        _record(
+            records,
+            EvidenceKind.OTHER,
+            award,
+            source=f"additional.awards[{award_index}]",
+            tags=["award", award.strip()],
+        )
+
+    display_names = _custom_display_names(resume.sectionMeta)
+    for key in sorted(resume.customSections):
+        section = resume.customSections[key]
+        display_name = display_names.get(key, key)
+        source_base = f"customSections.{key}"
+        for source, text in _custom_evidence_texts(section, source_base):
+            _record(
+                records,
+                EvidenceKind.SOURCE_CUSTOM,
+                text,
+                source=source,
+                tags=[f"custom:{display_name}", display_name],
             )
 
     for claim in approved_claims or []:
@@ -223,3 +261,40 @@ def build_candidate_evidence(
         seen.add(record.id)
         unique.append(record)
     return unique
+
+
+def _custom_display_names(section_meta: Iterable[SectionMeta]) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for meta in section_meta:
+        if not meta.isDefault:
+            names[meta.key] = meta.displayName or meta.key
+    return names
+
+
+def _custom_evidence_texts(
+    section: CustomSection,
+    source_path: str,
+) -> list[tuple[str, str]]:
+    if section.sectionType is SectionType.TEXT:
+        return [(f"{source_path}.text", section.text or "")]
+    if section.sectionType is SectionType.STRING_LIST:
+        return [
+            (f"{source_path}.strings[{index}]", value)
+            for index, value in enumerate(section.strings or [])
+        ]
+    texts: list[tuple[str, str]] = []
+    for index, item in enumerate(section.items or []):
+        base = f"{source_path}.items[{index}]"
+        texts.extend(
+            [
+                (f"{base}.title", item.title),
+                (f"{base}.subtitle", item.subtitle or ""),
+                (f"{base}.location", item.location or ""),
+                (f"{base}.years", item.years),
+            ]
+        )
+        texts.extend(
+            (f"{base}.description[{bullet_index}]", bullet)
+            for bullet_index, bullet in enumerate(item.description)
+        )
+    return texts

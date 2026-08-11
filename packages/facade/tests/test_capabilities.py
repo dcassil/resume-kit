@@ -100,6 +100,7 @@ def test_registry_contains_all_capabilities() -> None:
         "validate-facts",
         "validate-faithfulness",
         "extract-evidence",
+        "seed-full-resume-evidence",
         "record-edit-feedback",
         "requirement-answer",
         "rank-edit-candidates",
