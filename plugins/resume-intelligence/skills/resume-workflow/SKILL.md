@@ -6,7 +6,8 @@ description: >
   baseline the resume (base → structure → refine, job-independent, REQUIRED before
   tailoring) → seed the synonym alias index → check against the job →
   (optionally) improve → (optionally)
-  second-agent review → validate truth → re-check for deltas → perfect fit →
+  second-agent review → validate truth → re-check for deltas →
+  (optionally, if still low) interview the missing requirements → perfect fit →
   export — and names
   the gate (what must exist) for each step, including that all job tailoring is
   gated behind a `refine` version (or a recorded override). This is a GUIDE: it
@@ -156,18 +157,41 @@ opt-in and never auto-runs.
    **extract-evidence**, gate: resume JSON). Any unsupported or
    contradicted claim must be fixed before proceeding — never ship fabrications.
 
-9. **Re-check for deltas** — re-run **check-keywords** and **check-gaps** on the
-   improved resume.
+9. **Re-check for deltas** *(the second scoring)* — re-run **check-keywords** and
+   **check-gaps** on the improved resume.
    gate: the improved resume JSON + `active_job`. Compare against the step-5
    baseline to confirm the changes actually helped.
 
-10. **Perfect / fit** — run **perfect**.
+   **Still low → offer the interview (see step 10).** When this second scoring
+   leaves `overall` below the configured `interview_threshold` (config.json,
+   default **70**) **OR** any REQUIRED requirement is still uncovered (a decent
+   overall can hide a missing must-have — the gate fires on **either** condition),
+   surface that fact and OFFER step 10. The offer is strictly **opt-in**: if the
+   user declines, skip straight to step 11 (**perfect**) exactly as before this
+   feature existed — no decliner ever sees changed behavior.
+
+10. **Interview the missing requirements** *(optional — opt-in; only offered when
+   step 9 is "still low")* — run **interview-missing-job-description**.
+   gate: a scored tailored resume + `active_job` + the step-9 `KeywordGapAnalysis`
+   (from **check-gaps**), and the master resume so injectability can be classified.
+   Offered only when, after the step-9 second scoring, `overall <
+   interview_threshold` **OR** a required requirement is uncovered. The skill walks
+   the missing items in the JD's own priority order (required → preferred →
+   remaining keywords), and for each **accepted "yes"** captures a grounding fact,
+   persists it as `CandidateEvidence`, and routes it through **update-keywords**
+   (add evidence → re-run **check-gaps** so the term is injectable → the
+   truth-gated edit-session) → then re-scores. It **elicits and proves**; a bare
+   "yes" never inserts a keyword. On termination (score crosses
+   `interview_threshold`, the user stops, or the queue is exhausted), control
+   returns to step 11. **Decline → proceed to step 11 exactly as today.**
+
+11. **Perfect / fit** — run **perfect**.
    gate: the tailored resume JSON + `active_job`. Runs the job-aware budget fit,
    presents ranked trim/compression candidates, and commits only decision- or
    ranked-budget-accounted removals plus claim-gated compressions. Writes the
    final resume when the ledger gate passes.
 
-11. **Export** — run **export-resume**.
+12. **Export** — run **export-resume**.
    gate: the final resume JSON. Produces the PDF/DOCX artifact to submit. Export
    enforces the `max_pages` page HARD GATE, so fitting is not considered
    submission-ready until export passes.
@@ -181,6 +205,11 @@ opt-in and never auto-runs.
   **seed-terminology** reuses; also run it standalone to grow the alias index
   consumed by **check-keywords** and **update-terminology** via `alias_file` when
   a legitimate term is being missed because of naming variants.
+- **interview-missing-job-description** *(step 10 — opt-in)* — the score-gated
+  elicit-and-prove loop offered when the step-9 second scoring is still below
+  `interview_threshold` OR a required requirement is uncovered. Truth-gated; a
+  bare "yes" never inserts a keyword. See step 10 above. Skipping it (decline)
+  leaves the flow identical to before this branch existed.
 - **compare-versions** / **select-resume** *(optional)* — when you
   maintain multiple variants: compare two versions, or pick the best of several,
   against `active_job`.
