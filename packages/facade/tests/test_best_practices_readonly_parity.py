@@ -6,9 +6,10 @@ Guards two defects observed on a canonical ``structure`` resume:
   canonical ``structure`` format the same way ``build_refine`` does (single
   shared projection), so it detects experience bullets and reports the same
   findings instead of a false "zero findings".
-- RIT-T-0164: the emitted report stamps a non-null ``resume_version`` and every
-  finding carries its stable rule identifier (non-null) under the serialized
-  ``code`` key as well as ``rule_code``.
+- RIT-T-0164/RIT-T-0179: the emitted report stamps only a canonical
+  ``resume_version`` label and never echoes a raw path; every finding carries
+  its stable rule identifier (non-null) under the serialized ``code`` key as
+  well as ``rule_code``.
 """
 
 from __future__ import annotations
@@ -170,23 +171,36 @@ def test_lenient_resumedocument_validate_on_canonical_is_the_bug(tmp_path: Path)
     assert fixed_report.findings  # the fix
 
 
-def test_report_stamps_resume_version_and_finding_code(tmp_path: Path) -> None:
-    """RIT-T-0164: non-null resume_version and non-null per-finding code."""
+def test_report_stamps_canonical_resume_version_and_finding_code(tmp_path: Path) -> None:
+    """RIT-T-0164: canonical resume_version and non-null per-finding code."""
     raw = _structure_raw(tmp_path)
     resume = normalize_resume_input(raw)
     request = AnalyzeBestPracticesRequest(
-        resume=resume, resume_version="resumes/riley-structure.json"
+        resume=resume, resume_version="structure"
     )
     resp = _run(request)
 
     dumped = resp.model_dump(mode="json")
     data = dumped["data"]
 
-    assert data["resume_version"] == "resumes/riley-structure.json"
+    assert data["resume_version"] == "structure"
     assert data["findings"], "expected findings on a metric-less structure resume"
     for finding in data["findings"]:
         assert finding["rule_code"], "rule_code must be non-null"
         assert finding["code"] == finding["rule_code"], "code mirrors rule_code, non-null"
+
+
+def test_report_drops_raw_resume_version_path(tmp_path: Path) -> None:
+    """A raw filesystem path is never echoed into BestPracticesReport.resume_version."""
+    raw = _structure_raw(tmp_path)
+    resume = normalize_resume_input(raw)
+    request = AnalyzeBestPracticesRequest(
+        resume=resume,
+        resume_version=str(working_dir(tmp_path) / "resumes" / "riley-structure.json"),
+    )
+    resp = _run(request)
+
+    assert resp.data.resume_version is None
 
 
 def test_report_resume_version_defaults_none_when_not_supplied(tmp_path: Path) -> None:

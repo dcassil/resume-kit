@@ -21,9 +21,11 @@ from resume_kit_facade.project_config import (
     init_project,
     load_config,
     load_evidence_file,
+    resolve_resume_version_label,
     save_config,
     save_evidence_file,
     set_active,
+    set_version,
     working_dir,
 )
 from resume_kit_schemas import CandidateEvidence, EvidenceKind
@@ -211,6 +213,18 @@ def test_project_config_tracks_evidence_pointers() -> None:
     )
     assert config.evidence_file == "working/user-confirmed-evidence.json"
     assert config.active_evidence == "working/user-confirmed-evidence.json"
+
+
+def test_resolve_resume_version_label_from_project_pointers(tmp_path: Path) -> None:
+    init_project(tmp_path)
+    set_version(tmp_path, refine="resumes/riley-refine.json")
+
+    matched = working_dir(tmp_path) / "resumes" / "riley-refine.json"
+    unmatched = working_dir(tmp_path) / "resumes" / "riley-other.json"
+
+    assert resolve_resume_version_label(tmp_path, matched) == "refine"
+    assert resolve_resume_version_label(tmp_path, unmatched) is None
+    assert resolve_resume_version_label(None, matched) is None
 
 
 def test_evidence_file_round_trips_atomically(tmp_path: Path) -> None:

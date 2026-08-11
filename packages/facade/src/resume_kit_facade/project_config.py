@@ -378,6 +378,43 @@ def resolve_active_resume(config: ProjectConfig) -> str | None:
     )
 
 
+def resolve_resume_version_label(
+    root: str | Path | None,
+    resume_path: str | Path | None,
+) -> str | None:
+    """Resolve a resume file path to its canonical project version label.
+
+    Version pointers in ``config.json`` are working-dir-relative by convention,
+    so both the incoming path and stored pointers are normalized to their real
+    filesystem locations before comparison. The returned identity is the stable
+    report label, never the source path.
+    """
+    if root is None or resume_path is None:
+        return None
+
+    config = load_config(root)
+    candidate = _resolve_resume_pointer_path(root, str(resume_path))
+    for label, pointer in (
+        ("refine", config.refine_resume),
+        ("refine", config.standard_resume),
+        ("structure", config.structure_resume),
+        ("base", config.base_resume),
+        ("original", config.active_resume),
+    ):
+        if pointer is not None and candidate == _resolve_resume_pointer_path(root, pointer):
+            return label
+    return None
+
+
+def _resolve_resume_pointer_path(root: str | Path, value: str) -> Path:
+    pointer = _normalize_pointer(value)
+    assert pointer is not None
+    path = Path(pointer)
+    if path.is_absolute():
+        return path.resolve()
+    return (working_dir(root) / path).resolve()
+
+
 def set_version(
     root: str | Path,
     *,
