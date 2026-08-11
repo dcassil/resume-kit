@@ -1263,6 +1263,168 @@ def test_review_edits_lifecycle_parity_across_surfaces(tmp_path: Path) -> None:
     assert api == direct
 
 
+def _add_skill_list_change() -> ChangeProposal:
+    return ChangeProposal(
+        path="additional.technicalSkills",
+        action="add_skill",
+        original=None,
+        value=["Kubernetes", "AWS"],
+        reason="Add JD-required skills approved by the reviewer.",
+    )
+
+
+def _add_skill_session_root(tmp_path: Path, name: str) -> Path:
+    root = tmp_path / name
+    init_project(root)
+    base = working_dir(root)
+    resume = ResumeDocument(
+        summary="Backend engineer delivering Python APIs.",
+        additional=AdditionalInfo(technicalSkills=["Python"]),
+    )
+    job = JobDescription(
+        title="Backend Engineer",
+        raw_text="Backend role requiring Kubernetes and AWS.",
+        requirements=[
+            Requirement(
+                text="Operate Kubernetes services on AWS.",
+                keywords=["Kubernetes", "AWS"],
+            )
+        ],
+        keywords=["Kubernetes", "AWS"],
+    )
+    (base / "resumes" / "jordan-original.json").write_text(
+        resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    (base / "jobs" / "job.json").write_text(job.model_dump_json(), encoding="utf-8")
+    set_active(root, resume="resumes/jordan-original.json", job="jobs/job.json")
+    _write_json(
+        root / "changes.json",
+        [_add_skill_list_change().model_dump(mode="json")],
+    )
+    return root
+
+
+def _direct_add_skill_list_commit(root: Path) -> JsonDict:
+    change = _add_skill_list_change()
+    responses = [
+        _direct_json(
+            "open-edit-session",
+            OpenEditSessionRequest(root=root, mode="interactive", changes=[change]),
+        ),
+        _direct_json(
+            "decide-change",
+            DecideChangeRequest(
+                root=root,
+                path="additional.technicalSkills",
+                action=ReviewAction.APPROVE,
+            ),
+        ),
+        _direct_json("commit-session", CommitSessionRequest(root=root)),
+    ]
+    return _scrub_session_payload(responses[-1])
+
+
+def _cli_add_skill_list_commit(root: Path) -> JsonDict:
+    responses = [
+        _cli_json(
+            [
+                "review-edits",
+                "open",
+                "--mode",
+                "interactive",
+                "--changes",
+                str(root / "changes.json"),
+                "--root",
+                str(root),
+            ]
+        ),
+        _cli_json(
+            [
+                "review-edits",
+                "decide",
+                "--path",
+                "additional.technicalSkills",
+                "--action",
+                "approve",
+                "--root",
+                str(root),
+            ]
+        ),
+        _cli_json(["review-edits", "commit", "--root", str(root)]),
+    ]
+    return _scrub_session_payload(responses[-1])
+
+
+def _mcp_add_skill_list_commit(root: Path) -> JsonDict:
+    change = _add_skill_list_change().model_dump(mode="json")
+    responses = [
+        _mcp_json(
+            "edit_session_open",
+            {"root": str(root), "mode": "interactive", "changes": [change]},
+        ),
+        _mcp_json(
+            "edit_session_decide",
+            {
+                "root": str(root),
+                "path": "additional.technicalSkills",
+                "action": "approve",
+            },
+        ),
+        _mcp_json("edit_session_commit", {"root": str(root)}),
+    ]
+    return _scrub_session_payload(responses[-1])
+
+
+def _api_add_skill_list_commit(root: Path) -> JsonDict:
+    change = _add_skill_list_change().model_dump(mode="json")
+    responses = [
+        _api_json(
+            "/review-edits/open",
+            {"root": str(root), "mode": "interactive", "changes": [change]},
+        ),
+        _api_json(
+            "/review-edits/decide",
+            {
+                "root": str(root),
+                "path": "additional.technicalSkills",
+                "action": "approve",
+            },
+        ),
+        _api_json("/review-edits/commit", {"root": str(root)}),
+    ]
+    return _scrub_session_payload(responses[-1])
+
+
+def _written_skills(root: Path) -> list[str]:
+    payload = json.loads(
+        (working_dir(root) / "working" / "jordan.tailored.json").read_text(encoding="utf-8")
+    )
+    skills = payload["additional"]["technicalSkills"]
+    assert isinstance(skills, list)
+    return cast(list[str], skills)
+
+
+def test_add_skill_list_commit_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _add_skill_session_root(tmp_path, "direct-add-skill"),
+        "cli": _add_skill_session_root(tmp_path, "cli-add-skill"),
+        "mcp": _add_skill_session_root(tmp_path, "mcp-add-skill"),
+        "api": _add_skill_session_root(tmp_path, "api-add-skill"),
+    }
+
+    direct = _direct_add_skill_list_commit(roots["direct"])
+    cli = _cli_add_skill_list_commit(roots["cli"])
+    mcp = _mcp_add_skill_list_commit(roots["mcp"])
+    api = _api_add_skill_list_commit(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+    for root in roots.values():
+        assert _written_skills(root) == ["Python", "Kubernetes", "AWS"]
+
+
 # ---------------------------------------------------------------------------
 # Baselining lifecycle parity (RIT-I-0016): build-base then build-standard
 # ---------------------------------------------------------------------------

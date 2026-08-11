@@ -455,6 +455,30 @@ def test_add_skill_to_technical_skills(sample_resume: dict[str, Any]) -> None:
     assert "Kubernetes" in result["additional"]["technicalSkills"]
 
 
+def test_add_skill_list_value_expands_to_single_skill_changes(
+    sample_resume: dict[str, Any],
+) -> None:
+    changes = [
+        ChangeProposal(
+            path="additional.technicalSkills",
+            action="add_skill",
+            original=None,
+            value=["Kubernetes", "Terraform"],
+            reason="JD-required skills approved by verifier",
+        )
+    ]
+    result, applied, rejected = _apply(
+        sample_resume,
+        changes,
+        allowed_skill_targets=[{"skill": "Kubernetes"}, {"skill": "Terraform"}],
+    )
+    assert len(applied) == 2
+    assert len(rejected) == 0
+    assert [change.value for change in applied] == ["Kubernetes", "Terraform"]
+    assert "Kubernetes" in result["additional"]["technicalSkills"]
+    assert "Terraform" in result["additional"]["technicalSkills"]
+
+
 def test_add_skill_rejects_unverified_skill(
     sample_resume: dict[str, Any],
 ) -> None:

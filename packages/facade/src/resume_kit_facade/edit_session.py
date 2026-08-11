@@ -20,6 +20,7 @@ from uuid import uuid4
 from resume_kit_alignment import ReviewController, apply_diffs
 from resume_kit_core import CoreError, ErrorCode, ResumeKitError
 from resume_kit_evidence import validate_resume_truth
+from resume_kit_policy import verify_skill_target_plan
 from resume_kit_schemas import (
     ATSScore,
     CandidateEvidence,
@@ -35,6 +36,7 @@ from resume_kit_schemas import (
     ReviewAction,
     ReviewDecision,
     ScoreDelta,
+    SkillTargetPlan,
 )
 from resume_kit_terms import (
     AliasIndex,
@@ -267,7 +269,24 @@ def commit_session(
 
     original = _load_resume(_project_file(root, state.active_resume))
     before_match, before_ats = _score(root, original, state.active_job)
-    result_dict, applied, rejected = apply_diffs(original, accepted, freedom=freedom)
+    skill_targets = _skill_targets_for_accepted_additions(
+        root=root,
+        state=state,
+        original=original,
+        changes=accepted,
+    )
+    result_dict, applied, rejected = apply_diffs(
+        original,
+        accepted,
+        freedom=freedom,
+        allowed_skill_targets=skill_targets,
+    )
+    if rejected:
+        _raise_gate(
+            "change_not_applied",
+            "Approved changes were rejected by the apply layer.",
+            {"rejected": [item.model_dump(mode="json") for item in rejected]},
+        )
     updated_resume = ResumeDocument.model_validate(result_dict)
     assembled_contradicted = _assembled_contradicted_paths(root, state, updated_resume)
     if assembled_contradicted:
@@ -725,6 +744,39 @@ def _accepted_changes(state: EditSessionState) -> list[ChangeProposal]:
             else:
                 changes.append(change)
     return changes
+
+
+def _skill_targets_for_accepted_additions(
+    *,
+    root: str | Path,
+    state: EditSessionState,
+    original: ResumeDocument,
+    changes: list[ChangeProposal],
+) -> SkillTargetPlan | None:
+    targets = _accepted_add_skill_targets(changes)
+    if not targets:
+        return None
+    job = JobDescription.model_validate_json(
+        _project_file(root, state.active_job).read_text(encoding="utf-8")
+    )
+    return verify_skill_target_plan(
+        {"target_skills": targets},
+        original,
+        job,
+        candidate_evidence=state.review_session.evidence,
+    )
+
+
+def _accepted_add_skill_targets(changes: list[ChangeProposal]) -> list[str]:
+    targets: list[str] = []
+    for change in changes:
+        if change.action != "add_skill":
+            continue
+        if isinstance(change.value, str):
+            targets.append(change.value)
+        else:
+            targets.extend(change.value)
+    return targets
 
 
 def _terminal_decision_keys(state: EditSessionState) -> set[str]:
