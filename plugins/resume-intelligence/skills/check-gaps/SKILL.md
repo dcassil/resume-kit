@@ -2,10 +2,11 @@
 name: check-gaps
 description: >
   Check and produce ONLY the missing / injectable keyword list between a
-  tailored resume, a master resume, and a job description — which job keywords
-  are missing from the tailored resume, which can be injected from the master
-  (injectable), and which are absent from both (non-injectable). No coverage
-  percentage focus, no composite score. No LLM required.
+  tailored resume, a proof surface, and a job description — which job keywords
+  are missing from the tailored resume, which can be proved from a distinct
+  master resume and/or confirmed Flow 1 learning-evidence (injectable), and
+  which are not proved by either source (non-injectable). No coverage percentage
+  focus, no composite score. No LLM required.
 ---
 
 > **Renamed:** `check-gaps` was `identify-resume-gaps` before v1.0.0 (see RIT-A-0005).
@@ -21,25 +22,57 @@ Run the shared **Prerequisites gate** first — see
     `resume-kit/config.json` (or an explicit job JSON path the caller passes).
   - a **tailored `ResumeDocument` JSON** — the `active_resume` pointer (or an
     explicit resume JSON path the caller passes) — the resume being evaluated.
-  - a **master `ResumeDocument` JSON** — the full master resume used to decide
-    injectability. Prefer an explicit master path; where applicable fall back to
-    the configured master pointer. If no distinct master is available, say so —
-    without a master, injectable vs. non-injectable cannot be distinguished.
+- **Proof source for full injectability classification:** use at least one of:
+  - a **distinct master `ResumeDocument` JSON** — the full master resume used
+    to decide which missing job keywords are already supported outside the
+    tailored resume. Prefer an explicit master path; where applicable fall back
+    to the prepared baseline lineage described in
+    [`../_shared/config-pointers.md`](../_shared/config-pointers.md).
+  - **confirmed Flow 1 learning-evidence** — normally
+    `resume-kit/learning/candidate-evidence.json`, `evidence_file`, or the
+    configured `active_evidence`, whose confirmed facts can prove additions the
+    resume may truthfully make.
 - **If any required input is missing** (no pointer, file absent, or a raw file
   where a canonical JSON is required): **STOP**. Do not guess and do not run on
   partial input. Name the upstream skill for the missing one:
-  - Missing/unconverted resume (tailored or master) → run **`parse-resume`**.
+  - Missing/unconverted tailored resume → run **`parse-resume`**.
   - Missing/unconverted job → run **`parse-job`**.
+- **If no proof source is available:** continue only if the caller explicitly
+  accepts **keyword-only gap classification**. Otherwise, obtain a distinct
+  master with **`parse-resume`** or obtain confirmed learning-evidence with
+  **`extract-evidence`** / the Flow 1 preparation skill that owns it.
 
 Conversions are best run in **subagents** (large intermediate text stays out of
 the main context); pass the saved JSON paths back here — they live under
 `resume-kit/resumes/` and `resume-kit/jobs/`.
 
+## Injectability proof contract
+
+`injectable_keywords` means a keyword is missing from the tailored resume but is
+proved by the same master-equivalent proof surface used by Flow 3
+[`tailor-resume`](../tailor-resume/SKILL.md). That proof surface may include:
+
+- a **distinct master resume**, where the keyword appears in the candidate's
+  source-of-truth resume but not in the tailored resume.
+- **confirmed Flow 1 learning-evidence**, where the keyword is absent from both
+  resumes but the evidence content proves the candidate genuinely has it.
+
+These are two inputs to one proof contract, not two different standards. Flow 1
+learning-evidence can prove that an addition is true, but every resulting resume
+edit still must pass the existing edit-session, commit, and truth gates.
+
+If neither a distinct master resume nor confirmed Flow 1 learning-evidence is
+available, label the result **keyword-only gap classification**. In that
+degraded mode the skill can still list keywords missing from the tailored
+resume, but it cannot responsibly distinguish `injectable_keywords` from
+`non_injectable_keywords`; do not present non-injectable labels as a factual
+claim about the candidate's abilities.
+
 ## Purpose
 
 Produce a `KeywordGapAnalysis` showing which job keywords are missing from the
-tailored resume, which can be added from the master resume (injectable), and
-which are absent from both (non-injectable).
+tailored resume, which can be added because the shared proof surface supports
+them (injectable), and which are not proved by that surface (non-injectable).
 
 ## When to use
 
@@ -54,7 +87,7 @@ which are absent from both (non-injectable).
 |---|---|---|
 | `job` | `JobDescription` | The target job |
 | `tailored` | `ResumeDocument` | The resume version being evaluated |
-| `master` | `ResumeDocument` | The full master resume used to check injectability |
+| `master` | `ResumeDocument` | The full master resume used by the current CLI/MCP surface to check injectability |
 
 **Options** (`CapabilityOptions`)
 
@@ -122,8 +155,10 @@ skill. Keep the two apart: a real gap must NOT be aliased or mirrored away.
 ## Notes
 
 - Fully deterministic.  No provider needed.
-- `injectable_keywords` = keywords in the job and master but not in tailored
-  (the alignment engine can add them without inventing facts).
-- `non_injectable_keywords` = keywords in the job but absent from both resumes
-  (cannot be added truthfully).
+- `injectable_keywords` = keywords in the job but not in tailored, proved by a
+  distinct master resume and/or confirmed Flow 1 learning-evidence (the
+  alignment engine can propose them without inventing facts, subject to the
+  existing truth gates).
+- `non_injectable_keywords` = keywords in the job but not in tailored and not
+  proved by either available proof source.
 - Do not claim the user possesses non-injectable skills.

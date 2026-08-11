@@ -4,6 +4,10 @@ Every resume-intelligence skill that consumes inputs runs this gate **first**,
 before doing any work. It is the single, reusable definition each skill points
 to; each skill then names its own specific inputs and upstream skills.
 
+For the code-owned `resume-kit/config.json` pointer and lineage contract, see
+[`config-pointers.md`](config-pointers.md). Skills should use that shared
+contract instead of redefining pointer precedence ad hoc.
+
 ## The gate
 
 1. **Locate the working dir.** State lives under `resume-kit/` in the current
