@@ -193,4 +193,15 @@ doc-only and can run in parallel with each other and with 1/2.
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation.*
+- 2026-08-11: COMPLETED & published (resume-kit 0.15.0 / plugin 1.8.0 / marketplace 0.10.0). All 4
+  tasks landed (RIT-T-0175 page-gate wiring + `--allow-over-length`; RIT-T-0176 no-custom Flow 1 +
+  parse-resume dedupe; RIT-T-0177 standard→refine doc cleanup; RIT-T-0178 check-gaps proof contract +
+  `_shared/config-pointers.md`). Status backfilled after the fact (this section was left empty at
+  close — a doc-hygiene miss).
+- 2026-08-11: REQ-006 VERIFIED shipped (post-hoc audit). `check-gaps/SKILL.md` and `tailor-resume/SKILL.md`
+  both carry an identical "Injectability proof contract" section (injectable = proved by a distinct
+  master resume AND/OR confirmed Flow 1 `active_evidence`); `tailor-resume` explicitly states "Flow 3
+  uses the same proof contract as check-gaps." `_shared/config-pointers.md` exists (REQ-007). The
+  earlier "completed but exit_criteria_met:false + empty Status Updates" flag was doc hygiene only, not
+  a real gap. Consequence: RIT-T-0181 / RIT-T-0184 should CROSS-LINK this shipped contract, not
+  re-specify it.
