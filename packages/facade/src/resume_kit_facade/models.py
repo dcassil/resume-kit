@@ -205,11 +205,14 @@ class BuildStructureRequest:
     Deterministic, filesystem-local: runs the ``base -> structure`` canonical
     shape build under ``root``. Optional ``answers`` map source-section display
     names to canonical section names. Ambiguous or unsupported mappings remain
-    deferred by the engine.
+    deferred by the engine. ``omit_custom_sections`` is an opt-in Flow 1
+    projection mode: source custom content is ledgered as preserved in evidence
+    instead of retained in the canonical custom holding slot.
     """
 
     root: str | Path = "."
     answers: dict[str, str] | None = None
+    omit_custom_sections: bool = False
 
 
 @dataclass(frozen=True)
@@ -749,6 +752,8 @@ class ExportResumeRequest:
     format: ExportFormat
     options: ExportOptions | None = None
     artifact_id: str | None = None
+    root: str | Path = "."
+    allow_over_length: bool = False
 
     def resolved_artifact_id(self, data: bytes) -> str:
         """Return the caller-supplied id or a deterministic hash-derived one."""

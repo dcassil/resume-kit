@@ -39,7 +39,13 @@ from resume_kit_alignment import align_resume as _align_resume
 from resume_kit_ats import check_ats_structure as _check_ats_structure
 from resume_kit_ats import check_faithfulness as _check_faithfulness
 from resume_kit_ats import compute_ats_score
-from resume_kit_core import InterfaceResponse, Question, ResumeKitError
+from resume_kit_core import (
+    CoreError,
+    ErrorCode,
+    InterfaceResponse,
+    Question,
+    ResumeKitError,
+)
 from resume_kit_core.interface import (
     build_provider_not_configured as _build_provider_not_configured,
 )
@@ -63,7 +69,7 @@ from resume_kit_document_parser import (
     parse_resume_structured,
 )
 from resume_kit_evidence import build_candidate_evidence, validate_resume_truth
-from resume_kit_export import render
+from resume_kit_export import check_page_budget, render
 from resume_kit_export.models import mime_type
 from resume_kit_feedback import (
     HeuristicRanker,
@@ -1056,6 +1062,22 @@ async def export_resume(
         return from_resume_kit_error(_bad_request(request, "ExportResumeRequest"))
     try:
         data = render(request.resume, request.format, request.options)
+        page_budget = check_page_budget(
+            request.resume,
+            load_shape_policy(request.root),
+            options=request.options,
+            override=request.allow_over_length,
+        )
+        if page_budget.blocked:
+            return InterfaceResponse(
+                errors=[
+                    CoreError(
+                        code=ErrorCode.VALIDATION_FAILED,
+                        message=page_budget.message,
+                        details=page_budget.model_dump(mode="json"),
+                    )
+                ]
+            )
         artifact_id = request.resolved_artifact_id(data)
         content_type = mime_type(request.format)
         store: ArtifactStore = (
@@ -1068,7 +1090,10 @@ async def export_resume(
             "resume",
             data,
             content_type=content_type,
-            metadata={"format": request.format.value},
+            metadata={
+                "format": request.format.value,
+                "page_budget": page_budget.model_dump(mode="json"),
+            },
         )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
@@ -1419,7 +1444,11 @@ async def build_structure_capability(
     if not isinstance(request, BuildStructureRequest):
         return from_resume_kit_error(_bad_request(request, "BuildStructureRequest"))
     try:
-        result = _build_structure(request.root, answers=request.answers)
+        result = _build_structure(
+            request.root,
+            answers=request.answers,
+            omit_custom_sections=request.omit_custom_sections,
+        )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure

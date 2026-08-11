@@ -74,6 +74,24 @@ def test_render_docx_omits_empty_optional_fields_and_placeholders() -> None:
     assert "N/A" not in paragraphs
 
 
+def test_render_docx_dedupes_custom_skills_section() -> None:
+    payload = _resume().model_dump(mode="json")
+    payload["customSections"] = {
+        "Technical Skills": {
+            "sectionType": "stringList",
+            "strings": ["Technical Skills", "Python", "Pydantic", "DOCX", "FastAPI"],
+        }
+    }
+    resume = ResumeDocument.model_validate(payload)
+
+    document = Document(BytesIO(render_docx(resume)))
+    paragraphs = _paragraph_text(document)
+
+    assert paragraphs.count("Skills & Awards") == 1
+    assert "Technical Skills" not in paragraphs
+    assert any("Technical Skills: Python, Pydantic, DOCX, FastAPI" in p for p in paragraphs)
+
+
 def _resume() -> ResumeDocument:
     return ResumeDocument(
         personalInfo={

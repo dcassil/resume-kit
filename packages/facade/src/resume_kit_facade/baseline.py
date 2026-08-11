@@ -28,6 +28,7 @@ from resume_kit_schemas import AtsStructureFinding, AtsStructureReport, ResumeDo
 from resume_kit_schemas.canonical import CanonicalSection, Resume
 from resume_kit_schemas.shape import ContentLedger, SectionMapping, ShapeReport
 from resume_kit_scoring import (
+    CustomHandoffPolicy,
     analyze_best_practices,
     analyze_resume_shape,
     apply_auto_fixes,
@@ -220,6 +221,7 @@ def build_structure(
     *,
     answers: Mapping[str, str] | None = None,
     decisions: Mapping[str, ShapeDecision] | None = None,
+    omit_custom_sections: bool = False,
 ) -> BuildStructureResult:
     """Produce the canonical ``structure`` version from ``base`` or original.
 
@@ -246,9 +248,19 @@ def build_structure(
     decision_map: Mapping[str, ShapeDecision] = (
         decisions if decisions is not None else answers or {}
     )
-    fix = apply_shape_transforms(source, report, decision_map)
+    custom_handoff_policy = (
+        CustomHandoffPolicy.OMIT_AND_LEDGER_TO_EVIDENCE
+        if omit_custom_sections
+        else CustomHandoffPolicy.PRESERVE_IN_CANONICAL_CUSTOM
+    )
+    fix = apply_shape_transforms(
+        source,
+        report,
+        decision_map,
+        custom_handoff_policy=custom_handoff_policy,
+    )
     ledger_ok = content_ledger_ok(fix.ledger)
-    claims_ok = claims_preserved_across_sections(source, fix.resume)
+    claims_ok = claims_preserved_across_sections(source, fix.resume, fix.ledger)
     applied = [finding.code for finding in fix.applied_findings]
     deferred = [finding.code for finding in fix.deferred_findings]
 

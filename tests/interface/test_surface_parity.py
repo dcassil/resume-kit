@@ -18,6 +18,7 @@ from resume_kit_cli.io import InMemoryArtifactStore
 from resume_kit_core import InterfaceResponse, StructuredCompletionProvider
 from resume_kit_core.interface import ExitCode
 from resume_kit_core.testing import FakeStructuredCompletionProvider
+from resume_kit_export import ExportOptions, PageBudgetResult
 from resume_kit_export.models import ExportFormat, mime_type
 from resume_kit_facade.capabilities import REGISTRY
 from resume_kit_facade.models import (
@@ -57,6 +58,7 @@ from resume_kit_facade.models import (
 from resume_kit_facade.project_config import init_project, load_config, set_active, working_dir
 from resume_kit_feedback import Candidate, FeatureContext
 from resume_kit_mcp.tools import HANDLERS
+from resume_kit_policy import ResumeShapePolicy
 from resume_kit_schemas import (
     AdditionalInfo,
     CandidateEvidence,
@@ -1445,12 +1447,27 @@ def _shape_resume() -> ResumeDocument:
     )
 
 
-def _shape_root(tmp_path: Path, name: str) -> Path:
+def _shape_root(
+    tmp_path: Path,
+    name: str,
+    *,
+    include_unmapped_custom: bool = False,
+) -> Path:
     root = tmp_path / name
     init_project(root)
     base = working_dir(root)
+    resume = _shape_resume()
+    if include_unmapped_custom:
+        payload = resume.model_dump(mode="json")
+        custom_sections = payload.setdefault("customSections", {})
+        assert isinstance(custom_sections, dict)
+        custom_sections["Community"] = {
+            "sectionType": "stringList",
+            "strings": ["Mentored bootcamp students"],
+        }
+        resume = ResumeDocument.model_validate(payload)
     (base / "resumes" / "jane-original.json").write_text(
-        _shape_resume().model_dump_json(), encoding="utf-8"
+        resume.model_dump_json(), encoding="utf-8"
     )
     set_active(root, resume="resumes/jane-original.json")
     return root
@@ -1461,7 +1478,7 @@ def _shape_gate_failure_root(tmp_path: Path, name: str) -> Path:
     init_project(root)
     resume = _shape_resume().model_dump(mode="json")
     resume["customSections"] = {
-        "Open Source": {
+        "Core Skills": {
             "sectionType": "text",
             "text": "Maintained Python libraries and React dashboards.",
         }
@@ -1488,43 +1505,79 @@ def _structure_lineage(root: Path) -> JsonDict:
     }
 
 
-def _direct_shape_lifecycle(root: Path) -> list[JsonDict]:
-    resume = _shape_resume()
+def _shape_resume_for_root(root: Path) -> ResumeDocument:
+    path = working_dir(root) / "resumes" / "jane-original.json"
+    return ResumeDocument.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _direct_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
+    resume = _shape_resume_for_root(root)
     return [
         _direct_json("analyze-shape", AnalyzeShapeRequest(resume=resume, root=root)),
         _direct_json("build-base", BuildBaseRequest(root=root)),
-        _direct_json("build-structure", BuildStructureRequest(root=root)),
+        _direct_json(
+            "build-structure",
+            BuildStructureRequest(
+                root=root,
+                omit_custom_sections=omit_custom_sections,
+            ),
+        ),
     ]
 
 
-def _cli_shape_lifecycle(root: Path) -> list[JsonDict]:
+def _cli_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
     resume_path = working_dir(root) / "resumes" / "jane-original.json"
+    build_structure_args = ["build-structure", "--root", str(root)]
+    if omit_custom_sections:
+        build_structure_args.append("--omit-custom-sections")
     return [
         _cli_json(["analyze-shape", "--resume", str(resume_path), "--root", str(root)]),
         _cli_json(["build-base", "--root", str(root)]),
-        _cli_json(["build-structure", "--root", str(root)]),
+        _cli_json(build_structure_args),
     ]
 
 
-def _mcp_shape_lifecycle(root: Path) -> list[JsonDict]:
+def _mcp_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
     return [
         _mcp_json(
             "resume_analyze_shape",
-            {"resume": _json_model(_shape_resume()), "root": str(root)},
+            {"resume": _json_model(_shape_resume_for_root(root)), "root": str(root)},
         ),
         _mcp_json("resume_build_base", {"root": str(root)}),
-        _mcp_json("resume_build_structure", {"root": str(root)}),
+        _mcp_json(
+            "resume_build_structure",
+            {"root": str(root), "omit_custom_sections": omit_custom_sections},
+        ),
     ]
 
 
-def _api_shape_lifecycle(root: Path) -> list[JsonDict]:
+def _api_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
     return [
         _api_json(
             "/analyze-shape",
-            {"resume": _json_model(_shape_resume()), "root": str(root)},
+            {"resume": _json_model(_shape_resume_for_root(root)), "root": str(root)},
         ),
         _api_json("/build-base", {"root": str(root)}),
-        _api_json("/build-structure", {"root": str(root)}),
+        _api_json(
+            "/build-structure",
+            {"root": str(root), "omit_custom_sections": omit_custom_sections},
+        ),
     ]
 
 
@@ -1550,6 +1603,50 @@ def test_shape_structure_lifecycle_parity_across_surfaces(tmp_path: Path) -> Non
     assert _structure_lineage(roots["cli"]) == _structure_lineage(roots["direct"])
     assert _structure_lineage(roots["mcp"]) == _structure_lineage(roots["direct"])
     assert _structure_lineage(roots["api"]) == _structure_lineage(roots["direct"])
+
+
+def test_build_structure_omit_custom_sections_parity_across_surfaces(
+    tmp_path: Path,
+) -> None:
+    roots = {
+        "direct": _shape_root(
+            tmp_path,
+            "direct-shape-omit",
+            include_unmapped_custom=True,
+        ),
+        "cli": _shape_root(tmp_path, "cli-shape-omit", include_unmapped_custom=True),
+        "mcp": _shape_root(tmp_path, "mcp-shape-omit", include_unmapped_custom=True),
+        "api": _shape_root(tmp_path, "api-shape-omit", include_unmapped_custom=True),
+    }
+
+    direct = _direct_shape_lifecycle(
+        roots["direct"],
+        omit_custom_sections=True,
+    )
+    cli = _cli_shape_lifecycle(roots["cli"], omit_custom_sections=True)
+    mcp = _mcp_shape_lifecycle(roots["mcp"], omit_custom_sections=True)
+    api = _api_shape_lifecycle(roots["api"], omit_custom_sections=True)
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+    assert _structure_json(roots["direct"])["custom"] == []
+    assert _structure_json(roots["cli"]) == _structure_json(roots["direct"])
+    assert _structure_json(roots["mcp"]) == _structure_json(roots["direct"])
+    assert _structure_json(roots["api"]) == _structure_json(roots["direct"])
+
+    data = direct[-1]["data"]
+    assert isinstance(data, dict)
+    ledger = data["ledger"]
+    assert isinstance(ledger, dict)
+    entries = ledger["entries"]
+    assert isinstance(entries, list)
+    assert any(
+        isinstance(entry, dict)
+        and entry.get("fate") == "preserved_in_evidence"
+        and entry.get("source_path") == "customSections.Community.strings[0]"
+        for entry in entries
+    )
 
 
 def test_build_structure_cli_exits_nonzero_when_gate_fails(tmp_path: Path) -> None:
@@ -1662,3 +1759,169 @@ def test_export_artifact_metadata_equivalent_across_surfaces(
     expected_signature = _FORMAT_SIGNATURES[fmt]
     for surface in (direct, cli, mcp, api):
         assert surface.signature == expected_signature
+
+
+def test_export_page_budget_override_contract_across_surfaces(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Export blocks over-length resumes by default and honors explicit override."""
+    ctx = _context(tmp_path)
+    (tmp_path / "resume-kit").mkdir(exist_ok=True)
+    (tmp_path / "resume-kit" / "config.json").write_text(
+        '{"shape_policy": {"informational_budgets": {"max_pages": 2}}}',
+        encoding="utf-8",
+    )
+
+    def fake_check_page_budget(
+        resume: ResumeDocument,
+        policy: ResumeShapePolicy,
+        *,
+        options: ExportOptions | None = None,
+        override: bool = False,
+    ) -> PageBudgetResult:
+        assert resume.summary
+        assert policy.informational_budgets.max_pages == 2
+        assert options is None
+        return PageBudgetResult(
+            pages=3,
+            max_pages=2,
+            within_budget=False,
+            blocked=not override,
+            overridden=override,
+            message=(
+                "Rendered resume is 3 pages, exceeding the 2-page maximum; "
+                "export allowed because the page budget override was used."
+                if override
+                else (
+                    "Export blocked: rendered resume is 3 pages, exceeding the "
+                    "2-page maximum."
+                )
+            ),
+        )
+
+    capabilities = importlib.import_module("resume_kit_facade.capabilities")
+    monkeypatch.setattr(capabilities, "check_page_budget", fake_check_page_budget)
+
+    store = InMemoryArtifactStore()
+    blocked_direct = asyncio.run(
+        _await_response(
+            REGISTRY["export-resume"](
+                ExportResumeRequest(
+                    resume=ctx.data.resume,
+                    format=ExportFormat.pdf,
+                    root=tmp_path,
+                ),
+                CapabilityOptions(artifact_store=store),
+            )
+        )
+    )
+    assert blocked_direct.errors
+    assert blocked_direct.errors[0].details["pages"] == 3
+
+    cli_blocked = _RUNNER.invoke(
+        _CLI_APP,
+        [
+            "export",
+            "--format",
+            "pdf",
+            "--resume",
+            str(ctx.paths.resume),
+            "--root",
+            str(tmp_path),
+        ],
+    )
+    assert cli_blocked.exit_code == int(ExitCode.INVALID_INPUT), cli_blocked.stdout
+    assert "3 pages" in cli_blocked.stdout
+    assert "2-page maximum" in cli_blocked.stdout
+
+    resume_json = _resume(ctx)
+    mcp_blocked = asyncio.run(
+        _await_json(
+            HANDLERS["resume_export"](
+                {"resume": resume_json, "format": "pdf", "root": str(tmp_path)}
+            )
+        )
+    )
+    assert mcp_blocked["errors"]
+
+    api_blocked = _CLIENT.post(
+        "/export",
+        json={"resume": resume_json, "format": "pdf", "root": str(tmp_path)},
+    )
+    assert api_blocked.status_code == 422
+    assert api_blocked.json()["errors"]
+
+    allowed_direct = asyncio.run(
+        _await_response(
+            REGISTRY["export-resume"](
+                ExportResumeRequest(
+                    resume=ctx.data.resume,
+                    format=ExportFormat.pdf,
+                    root=tmp_path,
+                    allow_over_length=True,
+                ),
+                CapabilityOptions(artifact_store=store),
+            )
+        )
+    )
+    assert allowed_direct.ok
+    direct_page_budget = allowed_direct.artifacts[0].metadata["page_budget"]
+    assert isinstance(direct_page_budget, dict)
+    assert direct_page_budget["overridden"] is True
+
+    cli_allowed_out = tmp_path / "allowed.pdf"
+    cli_allowed = _RUNNER.invoke(
+        _CLI_APP,
+        [
+            "export",
+            "--format",
+            "pdf",
+            "--resume",
+            str(ctx.paths.resume),
+            "--root",
+            str(tmp_path),
+            "--allow-over-length",
+            "--out",
+            str(cli_allowed_out),
+        ],
+    )
+    assert cli_allowed.exit_code == 0, cli_allowed.stdout
+    assert cli_allowed_out.read_bytes().startswith(b"%PDF-")
+
+    mcp_allowed = asyncio.run(
+        _await_json(
+            HANDLERS["resume_export"](
+                {
+                    "resume": resume_json,
+                    "format": "pdf",
+                    "root": str(tmp_path),
+                    "allow_over_length": True,
+                }
+            )
+        )
+    )
+    assert mcp_allowed["errors"] == []
+    mcp_ref = mcp_allowed["data"]
+    assert isinstance(mcp_ref, dict)
+    mcp_metadata = mcp_ref["metadata"]
+    assert isinstance(mcp_metadata, dict)
+    mcp_page_budget = mcp_metadata["page_budget"]
+    assert isinstance(mcp_page_budget, dict)
+    assert mcp_page_budget["pages"] == 3
+    assert mcp_page_budget["overridden"] is True
+
+    api_allowed = _CLIENT.post(
+        "/export",
+        json={
+            "resume": resume_json,
+            "format": "pdf",
+            "root": str(tmp_path),
+            "allow_over_length": True,
+        },
+    )
+    assert api_allowed.status_code == 200, api_allowed.text
+    assert api_allowed.content.startswith(b"%PDF-")
+    assert api_allowed.headers["x-resume-kit-pages"] == "3"
+    assert api_allowed.headers["x-resume-kit-max-pages"] == "2"
+    assert api_allowed.headers["x-resume-kit-page-budget-override"] == "true"

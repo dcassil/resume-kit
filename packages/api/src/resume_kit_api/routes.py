@@ -497,7 +497,11 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/build-structure")
     async def build_structure(body: BuildStructureBody) -> Response:
-        request = BuildStructureRequest(root=body.root, answers=body.answers)
+        request = BuildStructureRequest(
+            root=body.root,
+            answers=body.answers,
+            omit_custom_sections=body.omit_custom_sections,
+        )
         return _render(await REGISTRY["build-structure"](request, _options(body)))
 
     @app.post("/analyze-best-practices")
@@ -540,6 +544,8 @@ def register_routes(app: FastAPI) -> None:
             format=body.format,
             options=body.options,
             artifact_id=body.artifact_id,
+            root=body.root,
+            allow_over_length=body.allow_over_length,
         )
         options = CapabilityOptions(
             no_llm=body.no_llm,
@@ -559,6 +565,13 @@ def register_routes(app: FastAPI) -> None:
             "X-Artifact-Id": ref.artifact_id,
             "X-Resume-Kit-Warnings": str(len(response.warnings)),
         }
+        page_budget = ref.metadata.get("page_budget")
+        if isinstance(page_budget, dict):
+            headers["X-Resume-Kit-Pages"] = str(page_budget.get("pages", ""))
+            headers["X-Resume-Kit-Max-Pages"] = str(page_budget.get("max_pages", ""))
+            headers["X-Resume-Kit-Page-Budget-Override"] = str(
+                page_budget.get("overridden", False)
+            ).lower()
         return Response(
             content=data,
             media_type=ref.content_type,

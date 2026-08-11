@@ -129,3 +129,19 @@ def test_render_pdf_empty_optional_fields() -> None:
     # No placeholders for omitted sections.
     for absent in ("Summary", "Experience", "Education", "Projects", "Additional"):
         assert absent not in text, f"unexpected section: {absent!r}"
+
+
+def test_render_pdf_dedupes_custom_skills_section() -> None:
+    payload = _full_resume().model_dump(mode="json")
+    payload["customSections"] = {
+        "Technical Skills": {
+            "sectionType": "stringList",
+            "strings": ["Technical Skills", "Analytical Engine", "Algorithms", "Python"],
+        }
+    }
+    resume = ResumeDocument.model_validate(payload)
+
+    text = extract_text(io.BytesIO(render_pdf(resume)))
+
+    assert text.count("Technical Skills") == 1
+    assert "Python" in text

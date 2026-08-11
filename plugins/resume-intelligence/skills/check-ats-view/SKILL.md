@@ -23,8 +23,8 @@ coverage against a job and no composite/overall ATS score.
 Run the shared **Prerequisites gate** first — see
 [`../_shared/prerequisites.md`](../_shared/prerequisites.md).
 
-- **Required input:** a **`ResumeDocument` JSON** — normally the `standard` (or
-  `base`) version once baselining has run, or the `active_resume` pointer in
+- **Required input:** a **`ResumeDocument` JSON** — normally the `refine` (or
+  `structure`/`base`) version once baselining has run, or the `active_resume` pointer in
   `resume-kit/config.json` (or an explicit resume JSON path the caller passes).
 - **Does NOT need a job.** This view is job-independent; do not require or read a
   `JobDescription`.

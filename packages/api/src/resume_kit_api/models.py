@@ -391,6 +391,13 @@ class BuildStructureBody(_Options):
         default=None,
         description="Optional map of source section names to canonical targets.",
     )
+    omit_custom_sections: bool = Field(
+        default=False,
+        description=(
+            "Omit unmapped custom sections from structure and ledger them as "
+            "preserved in evidence."
+        ),
+    )
 
 
 class AnalyzeBestPracticesBody(_Options):
@@ -437,3 +444,8 @@ class ExportResumeBody(_Options):
     format: ExportFormat
     options: ExportOptions | None = None
     artifact_id: str | None = None
+    root: str = Field(default=".", description="Project root containing resume-kit/.")
+    allow_over_length: bool = Field(
+        default=False,
+        description="Allow export when rendered pages exceed the configured maximum.",
+    )

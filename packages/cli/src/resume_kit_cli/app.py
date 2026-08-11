@@ -126,6 +126,11 @@ _AliasFile = typer.Option(
 _Format = typer.Option(..., "--format", help="Export format: pdf or docx.")
 _Out = typer.Option(None, "--out", help="Write raw bytes to this path.")
 _ResumeOrStdin = typer.Option("-", "--resume", help="Resume JSON path, or '-' for stdin.")
+_AllowOverLength = typer.Option(
+    False,
+    "--allow-over-length",
+    help="Allow export when rendered pages exceed the configured maximum.",
+)
 _BasePath = typer.Option(
     None,
     "--base-path",
@@ -734,12 +739,19 @@ def export(
     format: ExportFormat = _Format,
     out: str | None = _Out,
     resume: str = _ResumeOrStdin,
+    root: str = _Root,
+    allow_over_length: bool = _AllowOverLength,
     output: OutputFormat = _Output,
     strict: bool = _Strict,
     config: str | None = _Config,
 ) -> None:
     """Render a resume to PDF/DOCX bytes via the export-resume capability."""
-    request = ExportResumeRequest(resume=io.load_resume(resume), format=format)
+    request = ExportResumeRequest(
+        resume=io.load_resume(resume),
+        format=format,
+        root=root,
+        allow_over_length=allow_over_length,
+    )
     store = io.InMemoryArtifactStore()
     options = CapabilityOptions(strict=strict, artifact_store=store)
     response = asyncio.run(caps.export_resume(request, options))
@@ -936,11 +948,20 @@ def build_structure(
         "--answers",
         help="Optional JSON path mapping source section names to canonical targets.",
     ),
+    omit_custom_sections: bool = typer.Option(
+        False,
+        "--omit-custom-sections",
+        help="Omit unmapped custom sections from structure and ledger them to evidence.",
+    ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
     """Run the base->structure canonical shape write path behind hard gates."""
-    request = BuildStructureRequest(root=root, answers=io.load_answers(answers))
+    request = BuildStructureRequest(
+        root=root,
+        answers=io.load_answers(answers),
+        omit_custom_sections=omit_custom_sections,
+    )
     options = _options(False, strict, False)
     _run_gate(caps.build_structure_capability(request, options), output)
 

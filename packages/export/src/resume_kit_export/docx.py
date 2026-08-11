@@ -13,6 +13,7 @@ from docx.enum.section import WD_SECTION_START
 from docx.shared import Mm, Pt
 from resume_kit_schemas.resume import ResumeDocument, SectionType
 
+from resume_kit_export.dedupe import dedupe_skill_custom_sections_for_render
 from resume_kit_export.models import ExportOptions
 
 _FIXED_DATETIME = datetime(2000, 1, 1, 0, 0, 0)
@@ -26,6 +27,7 @@ def render_docx(
 ) -> bytes:
     """Render *resume* as deterministic DOCX bytes."""
 
+    resume = dedupe_skill_custom_sections_for_render(resume)
     resolved_options = options or ExportOptions()
     document = Document()
     _configure_document(document, resolved_options)

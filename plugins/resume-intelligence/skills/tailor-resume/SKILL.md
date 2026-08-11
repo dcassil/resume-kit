@@ -28,33 +28,55 @@ Run the shared **Prerequisites gate** -
   using another canonical resume artifact.
 - **Required active job:** `active_job` in `resume-kit/config.json`, normally
   written by **ingest-job**.
-- **Required learning/evidence:** available Flow 1 learning/evidence, normally
-  `resume-kit/learning/candidate-evidence.json` or the configured
-  `active_evidence`, so truthful additions can be proved.
+- **Proof source for full injectability classification:** use at least one of:
+  - a **distinct master resume** from the prepared baseline lineage described in
+    [`../_shared/config-pointers.md`](../_shared/config-pointers.md).
+  - **confirmed Flow 1 learning/evidence**, normally
+    `resume-kit/learning/candidate-evidence.json`, `evidence_file`, or the
+    configured `active_evidence`, so truthful additions can be proved.
 - **Alias file:** use `config.json`'s `alias_file` when present, normally
   `resume-kit/learning/synonyms.json` from **ingest-job**. If absent, scoring
   runs with the seed lexicon only.
-- **If the prepared resume or learning/evidence is missing:** STOP and run
-  **prepare-base-resume** first. Do not tailor against an original-only resume
-  unless the user has recorded the override.
+- **If the prepared resume is missing:** STOP and run **prepare-base-resume**
+  first. Do not tailor against an original-only resume unless the user has
+  recorded the override.
 - **If `active_job` is missing:** STOP and run **ingest-job** first.
+- **If both proof sources are missing:** continue only if the caller explicitly
+  accepts **keyword-only gap classification**. In that degraded mode
+  **check-gaps** can list missing job keywords, but it cannot responsibly
+  distinguish `injectable_keywords` from `non_injectable_keywords`; do not
+  present non-injectable labels as a factual claim about the candidate's
+  abilities.
+
+## Injectability proof contract
+
+Flow 3 uses the same proof contract as
+[`check-gaps`](../check-gaps/SKILL.md): `injectable_keywords` are missing from
+the tailored resume but proved by a master-equivalent proof surface. That proof
+surface may include a distinct master resume and/or confirmed Flow 1
+learning-evidence. These are two inputs to one standard, not two different
+standards.
 
 Flow 1 learning/evidence can prove that a candidate genuinely has a skill or
-claim. It is proof input only: every resume edit still passes the existing
-edit-session, commit, and truth gates. Never auto-insert a keyword just because
-evidence exists.
+claim, including one absent from both the tailored and master resumes. It is
+proof input only: every resume edit still passes the existing edit-session,
+commit, and truth gates. Never auto-insert a keyword just because evidence
+exists.
 
 ## The walkthrough
 
 1. **First scoring.** Run **check-keywords** and **check-gaps** against the
-   prepared resume and active job. Pass `alias_file` when present so baseline
-   scoring honors confirmed terminology learning. Record these results as the
-   before scores for later deltas.
+   prepared resume, active job, and available injectability proof source. Pass
+   `alias_file` when present so baseline scoring honors confirmed terminology
+   learning. Record these results as the before scores for later deltas. If the
+   proof source is absent by explicit override, label the gap result
+   **keyword-only gap classification**.
 
 2. **Route truthful improvements.** Use only the improvements surfaced by the
    first scoring:
    - **update-keywords** for missing-but-true keywords that the prepared resume
-     lacks but Flow 1 evidence or master evidence proves.
+     lacks but a distinct master resume or confirmed Flow 1 learning-evidence
+     proves.
    - **update-terminology** for wording swaps where the prepared resume already
      satisfies a job keyword under a different surface term.
    - **rank-changes** first when several truthful candidates are available and
@@ -100,7 +122,9 @@ evidence exists.
 
 ```bash
 resume-tool match --resume <refine-or-working.json> --job <job.json> [--alias-file <path>]
-resume-tool identify-gaps --resume <refine-or-working.json> --job <job.json> [--alias-file <path>]
+resume-tool identify-gaps --job <job.json> \
+    --tailored <refine-or-working.json> --master <master.json> \
+    [--alias-file <path>]
 ```
 
 MCP tools: `resume_check_job_match`, `resume_identify_gaps`.
@@ -108,7 +132,9 @@ MCP tools: `resume_check_job_match`, `resume_identify_gaps`.
 **Improvement candidates**
 
 ```bash
-resume-tool identify-gaps --resume <resume.json> --job <job.json> [--alias-file <path>]
+resume-tool identify-gaps --job <job.json> \
+    --tailored <resume.json> --master <master.json> \
+    [--alias-file <path>]
 resume-tool suggest-terminology --resume <resume.json> --job <job.json> [--alias-file <path>]
 resume-tool rank-edit-candidates --candidates <candidates.json> [--alias-file <path>]
 ```

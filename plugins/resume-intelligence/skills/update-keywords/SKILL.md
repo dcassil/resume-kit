@@ -104,7 +104,7 @@ Follow the shared truth posture in the runbook, plus:
 
 ## Output
 
-Return the runbook's standard output (committed `working_path`, session id,
+Return the runbook's normal output (committed `working_path`, session id,
 decided changes, gate rejections, before/after match delta) with each approved/
 edited change carrying its `{path, keyword, evidence}`, and every rejected/skipped
 keyword with its reason code when supplied. State explicitly that non-injectable

@@ -5,13 +5,13 @@ description: >
   check, then apply auto-safe structural fixes (strip PII/placeholders, normalize
   dates and formatting) behind the claim-preservation gate, writing
   <name>-base.json and pointing config's `base` at it. Deterministic, no LLM.
-  Judgment/needs-input items are DEFERRED here and handled by the standard
-  walkthrough (update-best-practices). Best run in a subagent.
+  Judgment/needs-input items are DEFERRED here and handled by the refine
+  walkthrough (update-refine). Best run in a subagent.
 ---
 
 # update-structure — original → base (structural check + auto-safe fix)
 
-Baselining step 1 of the `original → base → standard` pipeline (RIT-I-0016). This
+Baselining step 1 of the `original → base → structure → refine` pipeline (RIT-I-0016). This
 skill gets the resume itself structurally ATS-clean **before any job is
 involved**. It drives the deterministic `build-base` capability, whose fix is
 **auto-safe only** and gated by claim-preservation (no employer/title/degree/
@@ -38,7 +38,7 @@ Run the shared **Prerequisites gate** — [`../_shared/prerequisites.md`](../_sh
    `resume-kit/resumes/<name>-base.json`, and records the `base` pointer.
 3. **Report applied vs deferred.** Show which fixes were `applied` and which were
    `deferred` (judgment / needs-input items). Deferred items are NOT fixed here —
-   they are carried into the standard walkthrough (**update-best-practices**).
+   they are carried into the refine walkthrough (**update-refine**).
 
 ## How to invoke
 
@@ -56,7 +56,7 @@ resume-tool build-base --root . --mode auto [--output {json,text,md}]
 `build-base` is **auto-only by design** (RIT-T-0115): the fixes are deterministic
 and truth-preserving, so there is no per-fix interactive approval at the `base`
 stage. Interactive, human-in-the-loop handling of the **deferred** judgment items
-happens in the next step, **update-best-practices** (the `standard` walkthrough).
+happens in the next step, **update-refine** (the `refine` walkthrough).
 Do not claim this skill applies interactive base fixes; it applies the auto-safe
 set and defers the rest.
 
@@ -66,7 +66,7 @@ set and defers the rest.
 |---|---|---|
 | `base_path` | string | Written `base` version, relative to `resume-kit/` |
 | `applied` | list of strings | Auto-safe fixes applied |
-| `deferred` | list of strings | Judgment/needs-input items handed to update-best-practices |
+| `deferred` | list of strings | Judgment/needs-input items handed to update-refine |
 
 Report the applied and deferred lists verbatim, plus the structural report. State
 that `base` is a truth-preserving structural pass — no wording judgment was made.

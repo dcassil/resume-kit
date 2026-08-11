@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from resume_kit_core.storage import ArtifactRef
 from resume_kit_core.testing import FakeArtifactStore, FakeStructuredCompletionProvider
-from resume_kit_export import ExportFormat
+from resume_kit_export import ExportFormat, ExportOptions, PageBudgetResult
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.models import (
     AddEvidenceRequest,
@@ -37,6 +37,7 @@ from resume_kit_facade.models import (
     ValidateResumeTruthRequest,
 )
 from resume_kit_feedback import Candidate, FeatureContext
+from resume_kit_policy import ResumeShapePolicy
 from resume_kit_schemas import (
     AdditionalInfo,
     AlignmentResult,
@@ -77,6 +78,15 @@ def _job() -> JobDescription:
 
 def _resume() -> ResumeDocument:
     return ResumeDocument(summary="Python engineer with Docker experience.")
+
+
+def _over_length_resume() -> ResumeDocument:
+    return ResumeDocument(
+        summary=(
+            "Python engineer with Docker experience, platform ownership, "
+            "migration leadership, observability programs, and API delivery."
+        )
+    )
 
 
 _DETERMINISTIC = CapabilityOptions(no_llm=True)
@@ -506,7 +516,10 @@ async def test_export_resume_pdf_persists_to_injected_store() -> None:
     ref = response.artifacts[0]
     assert isinstance(ref, ArtifactRef)
     assert ref.content_type == "application/pdf"
-    assert ref.metadata == {"format": "pdf"}
+    assert ref.metadata["format"] == "pdf"
+    page_budget = ref.metadata["page_budget"]
+    assert isinstance(page_budget, dict)
+    assert page_budget["blocked"] is False
     data = await store.get(ref.artifact_id)
     assert isinstance(data, bytes)
     assert data.startswith(b"%PDF-")
@@ -524,10 +537,90 @@ async def test_export_resume_docx_persists_to_injected_store() -> None:
     assert ref.content_type == (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
-    assert ref.metadata == {"format": "docx"}
+    assert ref.metadata["format"] == "docx"
+    page_budget = ref.metadata["page_budget"]
+    assert isinstance(page_budget, dict)
+    assert page_budget["blocked"] is False
     data = await store.get(ref.artifact_id)
     assert isinstance(data, bytes)
     assert data.startswith(b"PK")
+
+
+@pytest.mark.asyncio
+async def test_export_resume_blocks_over_length_by_default_and_allows_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "resume-kit").mkdir()
+    (tmp_path / "resume-kit" / "config.json").write_text(
+        '{"shape_policy": {"informational_budgets": {"max_pages": 2}}}',
+        encoding="utf-8",
+    )
+
+    def fake_check_page_budget(
+        resume: ResumeDocument,
+        policy: ResumeShapePolicy,
+        *,
+        options: ExportOptions | None = None,
+        override: bool = False,
+    ) -> PageBudgetResult:
+        assert resume == _over_length_resume()
+        assert policy.informational_budgets.max_pages == 2
+        assert options is None
+        return PageBudgetResult(
+            pages=3,
+            max_pages=2,
+            within_budget=False,
+            blocked=not override,
+            overridden=override,
+            message=(
+                "Rendered resume is 3 pages, exceeding the 2-page maximum; "
+                "export allowed because the page budget override was used."
+                if override
+                else (
+                    "Export blocked: rendered resume is 3 pages, exceeding the "
+                    "2-page maximum."
+                )
+            ),
+        )
+
+    monkeypatch.setattr(caps, "check_page_budget", fake_check_page_budget)
+
+    blocked_store = FakeArtifactStore()
+    blocked = await caps.export_resume(
+        ExportResumeRequest(
+            resume=_over_length_resume(),
+            format=ExportFormat.pdf,
+            root=tmp_path,
+        ),
+        CapabilityOptions(artifact_store=blocked_store),
+    )
+    assert not blocked.ok
+    assert blocked.errors[0].message == (
+        "Export blocked: rendered resume is 3 pages, exceeding the 2-page maximum."
+    )
+    assert blocked.errors[0].details["pages"] == 3
+    assert blocked.errors[0].details["max_pages"] == 2
+    assert blocked_store.stored_ids() == []
+
+    allowed_store = FakeArtifactStore()
+    allowed = await caps.export_resume(
+        ExportResumeRequest(
+            resume=_over_length_resume(),
+            format=ExportFormat.pdf,
+            root=tmp_path,
+            allow_over_length=True,
+        ),
+        CapabilityOptions(artifact_store=allowed_store),
+    )
+    assert allowed.ok
+    ref = allowed.artifacts[0]
+    page_budget = ref.metadata["page_budget"]
+    assert isinstance(page_budget, dict)
+    assert page_budget["pages"] == 3
+    assert page_budget["max_pages"] == 2
+    assert page_budget["overridden"] is True
+    assert await allowed_store.exists(ref.artifact_id)
 
 
 @pytest.mark.asyncio
