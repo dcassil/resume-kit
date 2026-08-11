@@ -230,3 +230,45 @@ def test_key_only_custom_section_heading_not_dropped() -> None:
     added = _added_tokens(report)
     assert "domains" not in added
     assert "industries" not in added
+
+
+def test_no_custom_original_dropping_custom_heading_is_rejected() -> None:
+    """An ``-original.json`` projection may not omit custom section headings.
+
+    The no-custom transform belongs after parse. At source-faithfulness time,
+    the custom section dict key is authored content and dropping it must be a
+    hard failure, not a tolerated structure decision.
+    """
+    source = (
+        "Experience\n"
+        "Engineer, Acme, 2020 - Present\n"
+        "- Built payment services\n"
+        "Technical Skills\n"
+        "Python\n"
+        "PostgreSQL\n"
+    )
+    no_custom_original = ResumeDocument.model_validate(
+        {
+            "workExperience": [
+                {
+                    "title": "Engineer",
+                    "company": "Acme",
+                    "years": "2020 - Present",
+                    "description": ["Built payment services"],
+                }
+            ],
+            "additional": {"technicalSkills": ["Python", "PostgreSQL"]},
+            "customSections": {},
+        }
+    )
+
+    report = check_faithfulness(source, no_custom_original)
+
+    assert report.passed is False
+    assert FaithfulnessCode.DROPPED_SPANS in _error_codes(report)
+    dropped = next(
+        finding
+        for finding in report.findings
+        if finding.code is FaithfulnessCode.DROPPED_SPANS
+    )
+    assert "technical skills" in dropped.items

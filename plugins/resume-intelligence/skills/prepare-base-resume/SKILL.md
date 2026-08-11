@@ -32,7 +32,9 @@ Run the shared **Prerequisites gate** -
 1. **Parse the resume.** Run **parse-resume** if the source is a PDF, DOCX,
    Markdown, or text file. Save the faithful `<name>-original.json` and set it
    active with `resume-tool set-active --resume resumes/<name>-original.json`
-   plus `--resume-source` when a source file exists.
+   plus `--resume-source` when a source file exists. The original must retain
+   all `customSections`, including user-authored headings and visible Skills
+   sections; no-custom projection is not allowed during parse.
 2. **Seed full-resume learning before projection.** Call
    `seed-full-resume-evidence` while `active_resume` still points at the full
    source resume. This captures all source content, including custom and

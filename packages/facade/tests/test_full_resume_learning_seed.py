@@ -12,17 +12,28 @@ from resume_kit_evidence import build_candidate_evidence, make_evidence_id
 from resume_kit_export.docx import render_docx
 from resume_kit_facade import capabilities as caps
 from resume_kit_facade.baseline import build_base, build_structure
-from resume_kit_facade.models import CapabilityOptions, SeedFullResumeEvidenceRequest
+from resume_kit_facade.models import (
+    CapabilityOptions,
+    SeedFullResumeEvidenceRequest,
+    ValidateFaithfulnessRequest,
+)
 from resume_kit_facade.project_config import (
     init_project,
     load_config,
     load_evidence_file,
+    save_config,
     save_evidence_file,
     set_active,
     working_dir,
 )
 from resume_kit_policy import default_shape_policy
-from resume_kit_schemas import CandidateEvidence, EvidenceKind, ResumeDocument
+from resume_kit_schemas import (
+    CandidateEvidence,
+    EvidenceKind,
+    FaithfulnessCode,
+    FaithfulnessReport,
+    ResumeDocument,
+)
 from resume_kit_schemas.canonical import Resume
 from resume_kit_schemas.shape import ContentFate
 from resume_kit_scoring import (
@@ -30,6 +41,7 @@ from resume_kit_scoring import (
     analyze_resume_shape,
     apply_shape_transforms,
     content_ledger_ok,
+    evidence_receipts_from_active_evidence,
     project_builddoc_from_canonical,
 )
 
@@ -93,6 +105,17 @@ def _full_source_resume() -> ResumeDocument:
                 },
             },
         }
+    )
+
+
+def _technical_skills_source_text() -> str:
+    return (
+        "Technical Skills\n"
+        "Python\n"
+        "PostgreSQL\n"
+        "FastAPI\n"
+        "Community\n"
+        "Mentored bootcamp students\n"
     )
 
 
@@ -186,13 +209,97 @@ def test_no_custom_handoff_omits_custom_output_and_ledgers_evidence() -> None:
     evidence = build_candidate_evidence(resume)
 
     assert result.resume.custom == []
-    assert content_ledger_ok(result.ledger)
+    assert content_ledger_ok(
+        result.ledger,
+        evidence_receipts=evidence_receipts_from_active_evidence(evidence),
+    )
     assert any(
         entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
         and entry.source_path == "customSections.community.strings[0]"
         for entry in result.ledger.entries
     )
     assert any(item.content == "Mentored bootcamp students" for item in evidence)
+
+
+def test_flow1_omit_build_fails_when_active_evidence_is_empty(tmp_path: Path) -> None:
+    resume = _full_source_resume()
+    init_project(tmp_path)
+    original_rel = "resumes/ada-original.json"
+    (working_dir(tmp_path) / original_rel).write_text(
+        resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    set_active(tmp_path, resume=original_rel)
+    evidence_rel = "learning/candidate-evidence.json"
+    save_evidence_file(working_dir(tmp_path) / evidence_rel, [])
+    config = load_config(tmp_path)
+    config.evidence_file = evidence_rel
+    config.active_evidence = evidence_rel
+    save_config(tmp_path, config)
+    build_base(tmp_path, mode="auto")
+
+    result = build_structure(tmp_path, omit_custom_sections=True)
+
+    assert result.structure_path is None
+    assert not result.ledger_ok
+    assert result.claims_ok
+    assert any(
+        entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+        and entry.source_path == "customSections.community.strings[0]"
+        for entry in result.ledger.entries
+    )
+    assert not (working_dir(tmp_path) / "resumes" / "ada-structure.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_validate_faithfulness_rejects_no_custom_original() -> None:
+    faithful = ResumeDocument.model_validate(
+        {
+            "additional": {"technicalSkills": ["Python", "PostgreSQL", "FastAPI"]},
+            "customSections": {
+                "Technical Skills": {
+                    "sectionType": "stringList",
+                    "strings": ["Python", "PostgreSQL", "FastAPI"],
+                },
+                "Community": {
+                    "sectionType": "stringList",
+                    "strings": ["Mentored bootcamp students"],
+                },
+            },
+        }
+    )
+    no_custom = ResumeDocument.model_validate(
+        {
+            "additional": {"technicalSkills": ["Python", "PostgreSQL", "FastAPI"]},
+            "customSections": {},
+        }
+    )
+
+    faithful_response = await caps.validate_faithfulness_capability(
+        ValidateFaithfulnessRequest(
+            resume=faithful,
+            source_text=_technical_skills_source_text(),
+        ),
+        CapabilityOptions(no_llm=True),
+    )
+    no_custom_response = await caps.validate_faithfulness_capability(
+        ValidateFaithfulnessRequest(
+            resume=no_custom,
+            source_text=_technical_skills_source_text(),
+        ),
+        CapabilityOptions(no_llm=True),
+    )
+
+    assert isinstance(faithful_response.data, FaithfulnessReport)
+    assert faithful_response.data.passed is True
+    assert isinstance(no_custom_response.data, FaithfulnessReport)
+    assert no_custom_response.data.passed is False
+    errors = {
+        finding.code
+        for finding in no_custom_response.data.findings
+        if finding.severity == "error"
+    }
+    assert FaithfulnessCode.DROPPED_SPANS in errors
 
 
 @pytest.mark.asyncio
@@ -223,6 +330,19 @@ async def test_flow1_omit_build_exports_one_skills_section_and_preserves_evidenc
         encoding="utf-8",
     )
     set_active(tmp_path, resume=original_rel)
+    original = ResumeDocument.model_validate_json(
+        (working_dir(tmp_path) / original_rel).read_text(encoding="utf-8")
+    )
+    assert original.customSections.keys() == {"Technical Skills", "community"}
+    assert original.customSections["Technical Skills"].strings == [
+        "Technical Skills",
+        "Python",
+        "PostgreSQL",
+        "FastAPI",
+    ]
+    assert original.customSections["community"].strings == [
+        "Mentored bootcamp students"
+    ]
 
     seeded = await caps.seed_full_resume_evidence_capability(
         SeedFullResumeEvidenceRequest(root=tmp_path),
@@ -246,6 +366,10 @@ async def test_flow1_omit_build_exports_one_skills_section_and_preserves_evidenc
     structure = Resume.model_validate(json.loads(structure_file.read_text(encoding="utf-8")))
     assert structure.custom == []
     assert structure.skills[0].keywords == ["Python", "PostgreSQL", "FastAPI"]
+    after_structure_original = ResumeDocument.model_validate_json(
+        (working_dir(tmp_path) / original_rel).read_text(encoding="utf-8")
+    )
+    assert after_structure_original.customSections == original.customSections
 
     evidence = load_evidence_file(
         working_dir(tmp_path) / "learning" / "candidate-evidence.json"

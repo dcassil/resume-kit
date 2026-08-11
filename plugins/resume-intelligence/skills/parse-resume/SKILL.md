@@ -171,6 +171,10 @@ gate passes on the first try.
 - **No merging or splitting** of bullets or entries.
 - **Anything that does not fit the standard sections goes into `customSections`**
   (never discard it) — a `stringList` (lines/bullets) or `text` block.
+- **Preserve custom section headings and content in `-original.json`.** The
+  `customSections` dict key is the user's authored heading, so dropping a custom
+  section or moving its heading out of the original is content loss and
+  `validate-faithfulness` must reject it.
 - **Leave unknown optional fields empty** (`""`, `null`, or `[]`) — do not guess
   emails, phones, links, or dates that are not present.
 - Before returning the candidate, **self-check** against the same intent the gate
@@ -189,16 +193,20 @@ tell the user — never fill gaps with invented content.
   casing fails schema validation.
 - **`CustomSection` has no `displayName` field.** Its only fields are
   `sectionType`, `strings`, `text`, `items`. The section's dict key is its id;
-  put the human heading nowhere schema-invalid — if you need the heading text,
-  keep it inside the content (or a `text` block).
+  for `-original.json`, use the user's heading text as the key so the heading
+  remains authored content visible to the faithfulness gate.
 - **`id` is a plain 1-based integer** per list (workExperience, education,
   personalProjects, customSection items).
-- **Skills:** put a flat, ATS-friendly list in `additional.technicalSkills`
-  (this feeds scoring and export). Do NOT also create a duplicate
-  `customSections` Skills block. If the source groups skills by category
-  (Frontend/Backend/...), flatten the skills into `additional.technicalSkills`
-  in source order; keep category names only when they are themselves stated
-  skills or certifications rather than display headings.
+- **Skills in the faithful original:** if the source has a visible Skills /
+  Technical Skills section, preserve that section exactly in `customSections`
+  with its heading and lines intact. You may also populate
+  `additional.technicalSkills` for scoring, but never use that canonical field
+  as a reason to omit the authored custom section from `-original.json`.
+- **No-custom / single-skills-section output is NOT a parse concern.** The lossy
+  dedupe/flattening transform belongs exclusively to the step-3 structure pass:
+  `resume-tool build-structure --omit-custom-sections`. That path runs the
+  claim-preservation and content-ledger gates. Parse never omits custom sections
+  and never tries to satisfy the no-custom render/export policy.
 - **Non-ASCII punctuation is a real ATS risk.** Résumés often use `·` middots,
   “curly quotes”, en/em dashes, and `~`. The ATS engine flags these
   ("Non-ASCII characters detected — some ATS systems may mis-parse them"), and
