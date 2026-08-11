@@ -10,7 +10,7 @@ description: >
 
 # update-shape — base → structure (canonical shape pass)
 
-Baselining step 2 of the `original → base → structure → standard` pipeline
+Baselining step 2 of the `original → base → structure → refine` pipeline
 (RIT-I-0019). This skill gets the resume into the canonical resume shape after
 the ATS structural `base` pass and before wording improvements. It drives the
 deterministic `analyze-shape` and `build-structure` capabilities.

@@ -96,7 +96,7 @@ Follow the shared truth posture in the runbook, plus:
 
 ## Output
 
-Return the runbook's standard output (committed `working_path`, session id,
+Return the runbook's normal output (committed `working_path`, session id,
 decided changes, gate rejections, grown aliases, before/after match deltas) with
 each applied terminology change carrying its `{path, old, new}`, and every
 rejected/skipped suggestion with its reason code when supplied.

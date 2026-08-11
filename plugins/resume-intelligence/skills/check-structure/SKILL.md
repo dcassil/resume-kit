@@ -34,7 +34,7 @@ Run the shared **Prerequisites gate** first — see
 Surface the structural signal a resume can be judged on **without any job**: how
 complete its key sections are, and concrete, deterministic recommendations for
 things that trip applicant tracking systems — missing contact fields, absent
-standard sections, malformed dates, and non-ASCII / formatting parse risks.
+canonical sections, malformed dates, and non-ASCII / formatting parse risks.
 
 This is deliberately **one job: structure only.** It never reports keyword
 coverage, matched/missing job terms, skills coverage, or any composite/overall
