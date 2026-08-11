@@ -106,6 +106,50 @@ class TerminologyAlignment(BaseModel):
     )
 
 
+class TerminologyCandidate(BaseModel):
+    """A PROPOSED synonym pair the closed lexicon could not surface on its own.
+
+    Emitted by the conservative fuzzy candidate proposer (RIT-T-0165) for each
+    *missing* job-description keyword the resume plausibly satisfies under a
+    different surface term the curated/alias matcher did not already reach — e.g.
+    ``responsive design`` (JD) vs ``responsive UI`` (resume). It exists to SEED
+    and GROW the project alias index, but it is a PROPOSAL ONLY: ``confirmed`` is
+    always ``False`` here. Every candidate must still pass human confirmation and
+    the existing truth gate before an alias is written; the proposer never
+    auto-accepts and never mutates anything. Unconfirmed candidates therefore
+    never affect scoring — the conservative-lexicon guarantee is preserved.
+    """
+
+    model_config = {"frozen": True}
+
+    jd_keyword: str = Field(
+        description="The missing employer keyword — the proposed alias canonical."
+    )
+    resume_phrase: str = Field(
+        description="The resume's current surface wording proposed as the alias."
+    )
+    locations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Dot+bracket resume paths where ``resume_phrase`` occurs "
+            "(e.g. ``workExperience[0].description[1]``), sorted for determinism."
+        ),
+    )
+    reason: str = Field(
+        description=(
+            "Human-readable why-this-was-proposed (e.g. \"shared stem "
+            "'responsive', one differing token\") — advisory only, never scored."
+        ),
+    )
+    confirmed: Literal[False] = Field(
+        default=False,
+        description=(
+            "Always False: a proposer output is unconfirmed by construction. "
+            "Confirmation + the truth gate happen downstream before any write."
+        ),
+    )
+
+
 class ATSSubScores(BaseModel):
     """Individual component scores that make up the ATS overall score."""
 

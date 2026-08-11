@@ -45,6 +45,7 @@ from resume_kit_facade.models import (
     IdentifyResumeGapsRequest,
     InitProjectRequest,
     OpenEditSessionRequest,
+    ProposeTerminologyCandidatesRequest,
     RankEditCandidatesRequest,
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
@@ -95,6 +96,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "edit_session_reconcile",
     "resume_export",
     "resume_suggest_terminology",
+    "resume_suggest_terminology_candidates",
     "resume_align_terminology",
     "project_init",
     "project_set_active",
@@ -823,6 +825,21 @@ async def resume_suggest_terminology(arguments: ToolArguments) -> ToolResult:
     return await _call("suggest-terminology", request, arguments)
 
 
+async def resume_suggest_terminology_candidates(arguments: ToolArguments) -> ToolResult:
+    try:
+        request = _make_request(
+            ProposeTerminologyCandidatesRequest,
+            {
+                "resume": _resume(_required(arguments, "resume"), "resume"),
+                "job": _job(_required(arguments, "job"), "job"),
+                "alias_file": _optional_alias_file(arguments),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("suggest-terminology-candidates", request, arguments)
+
+
 async def resume_align_terminology(arguments: ToolArguments) -> ToolResult:
     try:
         request = _make_request(
@@ -1143,6 +1160,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "edit_session_reconcile": edit_session_reconcile,
     "resume_export": resume_export,
     "resume_suggest_terminology": resume_suggest_terminology,
+    "resume_suggest_terminology_candidates": resume_suggest_terminology_candidates,
     "resume_align_terminology": resume_align_terminology,
     "project_init": project_init,
     "project_set_active": project_set_active,

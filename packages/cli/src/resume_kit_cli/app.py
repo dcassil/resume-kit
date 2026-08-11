@@ -54,6 +54,7 @@ from resume_kit_facade.models import (
     IdentifyResumeGapsRequest,
     InitProjectRequest,
     OpenEditSessionRequest,
+    ProposeTerminologyCandidatesRequest,
     RankEditCandidatesRequest,
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
@@ -461,6 +462,28 @@ def suggest_terminology(
     )
     options = _options(False, strict, False)
     _run(caps.suggest_terminology(request, options), output)
+
+
+@app.command(name="suggest-terminology-candidates")
+def suggest_terminology_candidates(
+    resume: str = typer.Option(..., "--resume", help="Resume JSON path."),
+    job: str = typer.Option(..., "--job", help="Job description JSON path."),
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+    config: str | None = _Config,
+    alias_file: str | None = _AliasFile,
+) -> None:
+    """Propose conservative fuzzy terminology-alias candidates (proposal-only).
+
+    Surfaces ``(jd_keyword, resume_phrase)`` pairs the closed lexicon could not
+    reach, for the ``learn-terminology`` truth gate + human confirmation to
+    decide on. Never writes an alias and never edits the resume.
+    """
+    request = ProposeTerminologyCandidatesRequest(
+        resume=io.load_resume(resume), job=io.load_job(job), alias_file=alias_file
+    )
+    options = _options(False, strict, False)
+    _run(caps.propose_terminology_candidates_capability(request, options), output)
 
 
 @app.command(name="align-terminology")

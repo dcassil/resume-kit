@@ -4,7 +4,8 @@ description: >
   The end-to-end runbook for tailoring a resume to a job with resume-intelligence.
   Sequences the single-purpose skills in the one obvious order — ingest →
   baseline the resume (base → structure → refine, job-independent, REQUIRED before
-  tailoring) → check against the job → (optionally) improve → (optionally)
+  tailoring) → seed the synonym alias index → check against the job →
+  (optionally) improve → (optionally)
   second-agent review → validate truth → re-check for deltas → perfect fit →
   export — and names
   the gate (what must exist) for each step, including that all job tailoring is
@@ -27,7 +28,7 @@ in **subagents** so large document text stays out of the main context.
 
 **Once-per-session review offer.** When a session starts in an initialized
 `resume-kit/` working dir, the SessionStart hook reminds the agent that the
-optional, advice-only **review-resume** step (step 6 below) is available.
+optional, advice-only **review-resume** step (step 7 below) is available.
 **Offer it at most once per session** — and only after a tailored resume exists.
 The guard is a presence marker at `resume-kit/.cache/review-offered`: once you have
 offered the review (whether the user accepts or declines), write that marker; before
@@ -90,7 +91,23 @@ opt-in and never auto-runs.
    jobs — job faithfulness is enforced by the skill's prose extraction gates. Writes
    `resume-kit/jobs/<name>-original.json` and sets `active_job`.
 
-4. **Check against the job** *(tailoring — gated on `refine`)* — run:
+4. **Seed the synonym alias index** — run **seed-terminology**.
+   gate: **resume + job both active** (`active_resume` resolved + `active_job`).
+   Proposes TRUTHFUL synonym pairs between the resume's wording and JD keywords the
+   resume ALREADY satisfies — using the conservative fuzzy pre-filter
+   (`suggest-terminology-candidates`) to surface candidates the closed lexicon
+   cannot — then truth-gates + confirms each via **learn-terminology** and writes
+   only confirmed pairs. On the FIRST run it CREATES
+   `resume-kit/learning/synonyms.json` and registers it with
+   `resume-tool set-active --alias-file learning/synonyms.json`; on each LATER job
+   it APPENDS + DEDUPES new pairs without dropping prior entries. This runs
+   **before** the first keyword/gap check so check-keywords / check-gaps /
+   suggest-terminology are alias-aware from the very first score. It writes DATA
+   only; unconfirmed proposals never affect scoring, and the proposer never
+   auto-accepts. Best run in a subagent. *(Skip only if the user explicitly
+   declines alias seeding; scoring then runs seed-lexicon-only.)*
+
+5. **Check against the job** *(tailoring — gated on `refine`)* — run:
    - **check-keywords** — gate: **`refine` present (or a recorded override)** +
      `active_job`. Runs against the `refine` resume; uses the synonym alias
      index (`alias_file`) when present to match variant terms.
@@ -100,7 +117,7 @@ opt-in and never auto-runs.
    not repeated here. Record the baseline scores so the re-check step can show
    deltas.
 
-5. **Improve** *(tailoring — gated on `refine`; only what step 4 surfaced)*:
+6. **Improve** *(tailoring — gated on `refine`; only what step 5 surfaced)*:
    - **update-keywords** — gate: **`refine` (or override)** + `active_job` + the
      keyword-match/gap findings. Produces `ChangeProposal` records for
      missing-but-true keywords.
@@ -124,7 +141,7 @@ opt-in and never auto-runs.
    auto-rewrite is disabled — there is no skill path that bulk-runs
    `align-resume`.**
 
-6. **Second-agent review** *(optional — advice-only)* — run
+7. **Second-agent review** *(optional — advice-only)* — run
    **review-resume**.
    gate: the **new** tailored resume JSON + the **original** resume JSON + the
    **job** JSON (all three must exist; this step only makes sense after tailoring).
@@ -134,31 +151,35 @@ opt-in and never auto-runs.
    at most once per session**, guarded by the `resume-kit/.cache/review-offered`
    marker (see above); skipping it does not affect the rest of the flow.
 
-7. **Validate truth** — run **validate-facts**.
+8. **Validate truth** — run **validate-facts**.
    gate: the (improved) resume JSON + `CandidateEvidence` (build it with
    **extract-evidence**, gate: resume JSON). Any unsupported or
    contradicted claim must be fixed before proceeding — never ship fabrications.
 
-8. **Re-check for deltas** — re-run **check-keywords** and **check-gaps** on the
+9. **Re-check for deltas** — re-run **check-keywords** and **check-gaps** on the
    improved resume.
-   gate: the improved resume JSON + `active_job`. Compare against the step-4
+   gate: the improved resume JSON + `active_job`. Compare against the step-5
    baseline to confirm the changes actually helped.
 
-9. **Perfect / fit** — run **perfect**.
+10. **Perfect / fit** — run **perfect**.
    gate: the tailored resume JSON + `active_job`. Runs the job-aware budget fit,
    presents ranked trim/compression candidates, and commits only decision- or
    ranked-budget-accounted removals plus claim-gated compressions. Writes the
    final resume when the ledger gate passes.
 
-10. **Export** — run **export-resume**.
+11. **Export** — run **export-resume**.
    gate: the final resume JSON. Produces the PDF/DOCX artifact to submit. Export
    enforces the `max_pages` page HARD GATE, so fitting is not considered
    submission-ready until export passes.
 
 ## Supporting / maintenance
 
-- **learn-terminology** *(as needed)* — grows the alias index consumed by
-  **check-keywords** and **update-terminology** via `alias_file`. Run it when
+- **seed-terminology** *(step 4 — automatic)* — seeds and grows the `alias_file`
+  during the flow (fuzzy-proposed, truth-gated, human-confirmed) so scoring is
+  alias-aware from the first score. See step 4 above.
+- **learn-terminology** *(as needed)* — the shared truth-gated append loop that
+  **seed-terminology** reuses; also run it standalone to grow the alias index
+  consumed by **check-keywords** and **update-terminology** via `alias_file` when
   a legitimate term is being missed because of naming variants.
 - **compare-versions** / **select-resume** *(optional)* — when you
   maintain multiple variants: compare two versions, or pick the best of several,
