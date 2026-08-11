@@ -134,6 +134,14 @@ Flow 1 learning base so `resume-kit/learning/synonyms.json` is created or grown
 before the first tailoring score. The repeated path is: run Flow 1 once for the
 resume, then run Flow 2 many times for different jobs.
 
+`tailor-resume` is Flow 3. After Flow 1 has prepared the resume and Flow 2 has
+made a job active, run Flow 3 for job-specific tailoring without rerunning resume
+preparation. It scores the prepared `refine`/canonical resume against the active
+job, routes truthful keyword and terminology improvements through the shared
+edit-session gates, validates facts, re-scores for deltas, and stops before
+`perfect` or export. It can be repeated for the same job as new evidence,
+aliases, or decisions are added.
+
 `resume-workflow` is the entry-point guide; it runs the skills in order:
 
 1. **Resume ingest** — `parse-resume` (no LLM; the agent converts the source
@@ -184,6 +192,8 @@ resume, then run Flow 2 many times for different jobs.
    `UNSUPPORTED` for missing evidence. Every claim includes a stable
    `reason_code`.
 6. **Verify** — `validate-facts`; then re-run the checks to see the delta.
+   This check/improve/verify loop is available as reusable Flow 3
+   `tailor-resume` after Flow 1 + Flow 2 have completed for a job.
 7. **Review** (optional, no LLM provider) — `review-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes
    parseable, advice-only findings to `resume-kit/review/<session>.md` (it never
@@ -203,6 +213,7 @@ by keyword matching + terminology).
 | `parse-job` | (agent-driven) | — | No (agent converts) |
 | `prepare-base-resume` | `resume-tool seed-full-resume-evidence` + baseline commands | `resume_seed_full_resume_evidence` + baseline tools | No (deterministic flow) |
 | `ingest-job` | `resume-tool set-active --job` + `resume-tool suggest-terminology-candidates` + `resume-tool set-active --alias-file` | `resume_suggest_terminology_candidates` + `project_set_active` | No (agent-driven flow) |
+| `tailor-resume` | `resume-tool match` + `resume-tool identify-gaps` + `resume-tool review-edits ...` + `resume-tool validate-truth` | `resume_check_job_match` + `resume_identify_gaps` + edit-session tools + `resume_validate_truth` | No (agent-driven flow) |
 | `check-structure` | `resume-tool check-structure` | `resume_check_ats_structure` | No (deterministic) |
 | `check-keywords` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
 | `check-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |
