@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from resume_kit_policy import default_shape_policy
+from resume_kit_schemas import CandidateEvidence, EvidenceKind
 from resume_kit_schemas.canonical import CanonicalSection, SkillGroup
 from resume_kit_schemas.resume import ResumeDocument
 from resume_kit_schemas.shape import (
@@ -16,6 +17,7 @@ from resume_kit_scoring import (
     apply_shape_transforms,
     claims_preserved_across_sections,
     content_ledger_ok,
+    evidence_receipts_from_active_evidence,
 )
 
 
@@ -165,6 +167,32 @@ def test_merge_that_loses_a_skill_fails_ledger_gate() -> None:
     )
 
     assert not content_ledger_ok(ledger)
+
+
+def test_preserved_in_evidence_requires_matching_active_evidence_receipt() -> None:
+    ledger = ContentLedger(
+        entries=[
+            ContentLedgerEntry(
+                token="mentored",
+                fate=ContentFate.PRESERVED_IN_EVIDENCE,
+                source_path="customSections.community.strings[0]",
+            )
+        ]
+    )
+    evidence = [
+        CandidateEvidence(
+            id="ev-community",
+            kind=EvidenceKind.SOURCE_CUSTOM,
+            content="Mentored bootcamp students.",
+            source="customSections.community.strings[0]",
+        )
+    ]
+
+    assert not content_ledger_ok(ledger)
+    assert content_ledger_ok(
+        ledger,
+        evidence_receipts=evidence_receipts_from_active_evidence(evidence),
+    )
 
 
 def test_moving_technical_skills_custom_section_preserves_claims() -> None:

@@ -153,9 +153,23 @@ def _to_resume_dict(original: ResumeDocument | dict[str, Any]) -> dict[str, Any]
 def _to_change_list(
     changes: ChangeSet | Sequence[ChangeProposal],
 ) -> list[ChangeProposal]:
-    if isinstance(changes, ChangeSet):
-        return list(changes.changes)
-    return list(changes)
+    items = list(changes.changes) if isinstance(changes, ChangeSet) else list(changes)
+    return _expand_add_skill_changes(items)
+
+
+def _expand_add_skill_changes(changes: Sequence[ChangeProposal]) -> list[ChangeProposal]:
+    """Expand list-valued add_skill proposals into one proposal per skill."""
+
+    expanded: list[ChangeProposal] = []
+    for change in changes:
+        if change.action != "add_skill" or not isinstance(change.value, list):
+            expanded.append(change)
+            continue
+        if not change.value:
+            expanded.append(change)
+            continue
+        expanded.extend(change.model_copy(update={"value": skill}) for skill in change.value)
+    return expanded
 
 
 def _rejection(

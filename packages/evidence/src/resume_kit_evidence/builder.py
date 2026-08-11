@@ -17,26 +17,16 @@ stably.
 from __future__ import annotations
 
 import hashlib
-import re
 from collections.abc import Iterable
 
 from resume_kit_schemas import CustomSection, ResumeDocument, SectionMeta, SectionType
-from resume_kit_schemas.evidence import CandidateEvidence, EvidenceKind
+from resume_kit_schemas.evidence import CandidateEvidence, EvidenceKind, normalize_text
 
 __all__ = [
     "build_candidate_evidence",
     "make_evidence_id",
     "normalize_text",
 ]
-
-_WS_RE = re.compile(r"\s+")
-
-
-def normalize_text(text: str) -> str:
-    """Collapse whitespace and casefold ``text`` for stable matching/hashing."""
-
-    return _WS_RE.sub(" ", text.strip()).casefold()
-
 
 def make_evidence_id(kind: EvidenceKind, content: str) -> str:
     """Return a stable, content-addressed evidence id.

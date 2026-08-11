@@ -7,10 +7,19 @@ engine and the provenance classifier.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+_WS_RE = re.compile(r"\s+")
+
+
+def normalize_text(text: str) -> str:
+    """Collapse whitespace and casefold evidence text for stable matching/hashing."""
+
+    return _WS_RE.sub(" ", text.strip()).casefold()
 
 
 class EvidenceKind(StrEnum):

@@ -164,11 +164,26 @@ def load_effective_alias_index(project_path: Path | None = None) -> AliasIndex:
     load), and a project entry that would make a term ambiguous across two
     canonicals is rejected at build time.
     """
-    seed = load_alias_lexicon(DEFAULT_LEXICON_PATH)
     resolved = _resolve_project_path(project_path)
     if resolved is None or not resolved.exists():
-        return AliasIndex(seed)
+        return build_effective_alias_index()
     project = load_alias_lexicon(resolved)
+    return build_effective_alias_index(project)
+
+
+def build_effective_alias_index(
+    project: dict[str, list[str]] | None = None,
+) -> AliasIndex:
+    """Build the effective index from seed aliases plus an in-memory project mapping.
+
+    This is the write-path counterpart to :func:`load_effective_alias_index`: callers
+    that are about to persist a project alias file can validate the fully merged
+    payload before touching disk, while still using the same merge semantics and
+    :class:`AliasIndex` ambiguity guard as normal loads.
+    """
+    seed = load_alias_lexicon(DEFAULT_LEXICON_PATH)
+    if project is None:
+        return AliasIndex(seed)
     return AliasIndex(_merge_mappings(seed, project))
 
 

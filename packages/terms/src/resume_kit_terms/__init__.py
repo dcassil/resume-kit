@@ -9,6 +9,7 @@ alias lexicon index (``AliasIndex``), and a provenance-carrying comparison
 from .aliases import (
     AliasIndex,
     LexiconError,
+    build_effective_alias_index,
     load_alias_lexicon,
     load_effective_alias_index,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "LexiconError",
     "MatchKind",
     "MatchResult",
+    "build_effective_alias_index",
     "load_alias_lexicon",
     "load_effective_alias_index",
     "match",

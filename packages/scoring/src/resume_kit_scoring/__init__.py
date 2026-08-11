@@ -38,6 +38,7 @@ from resume_kit_scoring.shape_fix import (
     apply_shape_transforms,
     claims_preserved_across_sections,
     content_ledger_ok,
+    evidence_receipts_from_active_evidence,
 )
 from resume_kit_scoring.standard_fix import (
     RefineFixResult,
@@ -66,6 +67,7 @@ __all__ = [
     "compress_summary",
     "content_ledger_ok_perfect",
     "content_ledger_ok",
+    "evidence_receipts_from_active_evidence",
     "content_preserved",
     "detect_foundational_skills",
     "detect_summary_too_long",

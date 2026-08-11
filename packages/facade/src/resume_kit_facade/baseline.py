@@ -24,7 +24,12 @@ from resume_kit_ats.engine import check_ats_structure
 from resume_kit_core import ErrorCode, ResumeKitError
 from resume_kit_document_parser import detect_source_parse_risks
 from resume_kit_policy import load_shape_policy
-from resume_kit_schemas import AtsStructureFinding, AtsStructureReport, ResumeDocument
+from resume_kit_schemas import (
+    AtsStructureFinding,
+    AtsStructureReport,
+    CandidateEvidence,
+    ResumeDocument,
+)
 from resume_kit_schemas.canonical import CanonicalSection, Resume
 from resume_kit_schemas.shape import ContentLedger, SectionMapping, ShapeReport
 from resume_kit_scoring import (
@@ -39,13 +44,16 @@ from resume_kit_scoring import (
     claims_preserved_across_sections,
     content_ledger_ok,
     content_preserved,
+    evidence_receipts_from_active_evidence,
     project_builddoc_from_canonical,
     project_scoredoc,
 )
 
 from resume_kit_facade.project_config import (
+    ProjectConfig,
     atomic_write_json,
     load_config,
+    load_evidence_file,
     set_version,
     working_dir,
 )
@@ -259,7 +267,10 @@ def build_structure(
         decision_map,
         custom_handoff_policy=custom_handoff_policy,
     )
-    ledger_ok = content_ledger_ok(fix.ledger)
+    evidence_receipts = evidence_receipts_from_active_evidence(
+        _load_active_evidence(root, config)
+    )
+    ledger_ok = content_ledger_ok(fix.ledger, evidence_receipts=evidence_receipts)
     claims_ok = claims_preserved_across_sections(source, fix.resume, fix.ledger)
     applied = [finding.code for finding in fix.applied_findings]
     deferred = [finding.code for finding in fix.deferred_findings]
@@ -288,6 +299,15 @@ def build_structure(
         applied=applied,
         deferred=deferred,
     )
+
+
+def _load_active_evidence(
+    root: str | Path, config: ProjectConfig
+) -> list[CandidateEvidence]:
+    pointer = config.active_evidence or config.evidence_file
+    if not pointer:
+        return []
+    return load_evidence_file(working_dir(root) / pointer)
 
 
 def build_refine(
