@@ -194,9 +194,11 @@ tell the user — never fill gaps with invented content.
 - **`id` is a plain 1-based integer** per list (workExperience, education,
   personalProjects, customSection items).
 - **Skills:** put a flat, ATS-friendly list in `additional.technicalSkills`
-  (this feeds scoring). If the source groups skills by category
-  (Frontend/Backend/…), ALSO preserve the categorized lines verbatim in a
-  `customSections` `stringList` so nothing is lost.
+  (this feeds scoring and export). Do NOT also create a duplicate
+  `customSections` Skills block. If the source groups skills by category
+  (Frontend/Backend/...), flatten the skills into `additional.technicalSkills`
+  in source order; keep category names only when they are themselves stated
+  skills or certifications rather than display headings.
 - **Non-ASCII punctuation is a real ATS risk.** Résumés often use `·` middots,
   “curly quotes”, en/em dashes, and `~`. The ATS engine flags these
   ("Non-ASCII characters detected — some ATS systems may mis-parse them"), and

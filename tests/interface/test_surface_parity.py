@@ -1447,12 +1447,27 @@ def _shape_resume() -> ResumeDocument:
     )
 
 
-def _shape_root(tmp_path: Path, name: str) -> Path:
+def _shape_root(
+    tmp_path: Path,
+    name: str,
+    *,
+    include_unmapped_custom: bool = False,
+) -> Path:
     root = tmp_path / name
     init_project(root)
     base = working_dir(root)
+    resume = _shape_resume()
+    if include_unmapped_custom:
+        payload = resume.model_dump(mode="json")
+        custom_sections = payload.setdefault("customSections", {})
+        assert isinstance(custom_sections, dict)
+        custom_sections["Community"] = {
+            "sectionType": "stringList",
+            "strings": ["Mentored bootcamp students"],
+        }
+        resume = ResumeDocument.model_validate(payload)
     (base / "resumes" / "jane-original.json").write_text(
-        _shape_resume().model_dump_json(), encoding="utf-8"
+        resume.model_dump_json(), encoding="utf-8"
     )
     set_active(root, resume="resumes/jane-original.json")
     return root
@@ -1463,7 +1478,7 @@ def _shape_gate_failure_root(tmp_path: Path, name: str) -> Path:
     init_project(root)
     resume = _shape_resume().model_dump(mode="json")
     resume["customSections"] = {
-        "Open Source": {
+        "Core Skills": {
             "sectionType": "text",
             "text": "Maintained Python libraries and React dashboards.",
         }
@@ -1490,43 +1505,79 @@ def _structure_lineage(root: Path) -> JsonDict:
     }
 
 
-def _direct_shape_lifecycle(root: Path) -> list[JsonDict]:
-    resume = _shape_resume()
+def _shape_resume_for_root(root: Path) -> ResumeDocument:
+    path = working_dir(root) / "resumes" / "jane-original.json"
+    return ResumeDocument.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _direct_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
+    resume = _shape_resume_for_root(root)
     return [
         _direct_json("analyze-shape", AnalyzeShapeRequest(resume=resume, root=root)),
         _direct_json("build-base", BuildBaseRequest(root=root)),
-        _direct_json("build-structure", BuildStructureRequest(root=root)),
+        _direct_json(
+            "build-structure",
+            BuildStructureRequest(
+                root=root,
+                omit_custom_sections=omit_custom_sections,
+            ),
+        ),
     ]
 
 
-def _cli_shape_lifecycle(root: Path) -> list[JsonDict]:
+def _cli_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
     resume_path = working_dir(root) / "resumes" / "jane-original.json"
+    build_structure_args = ["build-structure", "--root", str(root)]
+    if omit_custom_sections:
+        build_structure_args.append("--omit-custom-sections")
     return [
         _cli_json(["analyze-shape", "--resume", str(resume_path), "--root", str(root)]),
         _cli_json(["build-base", "--root", str(root)]),
-        _cli_json(["build-structure", "--root", str(root)]),
+        _cli_json(build_structure_args),
     ]
 
 
-def _mcp_shape_lifecycle(root: Path) -> list[JsonDict]:
+def _mcp_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
     return [
         _mcp_json(
             "resume_analyze_shape",
-            {"resume": _json_model(_shape_resume()), "root": str(root)},
+            {"resume": _json_model(_shape_resume_for_root(root)), "root": str(root)},
         ),
         _mcp_json("resume_build_base", {"root": str(root)}),
-        _mcp_json("resume_build_structure", {"root": str(root)}),
+        _mcp_json(
+            "resume_build_structure",
+            {"root": str(root), "omit_custom_sections": omit_custom_sections},
+        ),
     ]
 
 
-def _api_shape_lifecycle(root: Path) -> list[JsonDict]:
+def _api_shape_lifecycle(
+    root: Path,
+    *,
+    omit_custom_sections: bool = False,
+) -> list[JsonDict]:
     return [
         _api_json(
             "/analyze-shape",
-            {"resume": _json_model(_shape_resume()), "root": str(root)},
+            {"resume": _json_model(_shape_resume_for_root(root)), "root": str(root)},
         ),
         _api_json("/build-base", {"root": str(root)}),
-        _api_json("/build-structure", {"root": str(root)}),
+        _api_json(
+            "/build-structure",
+            {"root": str(root), "omit_custom_sections": omit_custom_sections},
+        ),
     ]
 
 
@@ -1552,6 +1603,50 @@ def test_shape_structure_lifecycle_parity_across_surfaces(tmp_path: Path) -> Non
     assert _structure_lineage(roots["cli"]) == _structure_lineage(roots["direct"])
     assert _structure_lineage(roots["mcp"]) == _structure_lineage(roots["direct"])
     assert _structure_lineage(roots["api"]) == _structure_lineage(roots["direct"])
+
+
+def test_build_structure_omit_custom_sections_parity_across_surfaces(
+    tmp_path: Path,
+) -> None:
+    roots = {
+        "direct": _shape_root(
+            tmp_path,
+            "direct-shape-omit",
+            include_unmapped_custom=True,
+        ),
+        "cli": _shape_root(tmp_path, "cli-shape-omit", include_unmapped_custom=True),
+        "mcp": _shape_root(tmp_path, "mcp-shape-omit", include_unmapped_custom=True),
+        "api": _shape_root(tmp_path, "api-shape-omit", include_unmapped_custom=True),
+    }
+
+    direct = _direct_shape_lifecycle(
+        roots["direct"],
+        omit_custom_sections=True,
+    )
+    cli = _cli_shape_lifecycle(roots["cli"], omit_custom_sections=True)
+    mcp = _mcp_shape_lifecycle(roots["mcp"], omit_custom_sections=True)
+    api = _api_shape_lifecycle(roots["api"], omit_custom_sections=True)
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+    assert _structure_json(roots["direct"])["custom"] == []
+    assert _structure_json(roots["cli"]) == _structure_json(roots["direct"])
+    assert _structure_json(roots["mcp"]) == _structure_json(roots["direct"])
+    assert _structure_json(roots["api"]) == _structure_json(roots["direct"])
+
+    data = direct[-1]["data"]
+    assert isinstance(data, dict)
+    ledger = data["ledger"]
+    assert isinstance(ledger, dict)
+    entries = ledger["entries"]
+    assert isinstance(entries, list)
+    assert any(
+        isinstance(entry, dict)
+        and entry.get("fate") == "preserved_in_evidence"
+        and entry.get("source_path") == "customSections.Community.strings[0]"
+        for entry in entries
+    )
 
 
 def test_build_structure_cli_exits_nonzero_when_gate_fails(tmp_path: Path) -> None:

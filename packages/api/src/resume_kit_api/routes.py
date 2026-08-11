@@ -497,7 +497,11 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/build-structure")
     async def build_structure(body: BuildStructureBody) -> Response:
-        request = BuildStructureRequest(root=body.root, answers=body.answers)
+        request = BuildStructureRequest(
+            root=body.root,
+            answers=body.answers,
+            omit_custom_sections=body.omit_custom_sections,
+        )
         return _render(await REGISTRY["build-structure"](request, _options(body)))
 
     @app.post("/analyze-best-practices")

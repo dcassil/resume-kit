@@ -391,6 +391,13 @@ class BuildStructureBody(_Options):
         default=None,
         description="Optional map of source section names to canonical targets.",
     )
+    omit_custom_sections: bool = Field(
+        default=False,
+        description=(
+            "Omit unmapped custom sections from structure and ledger them as "
+            "preserved in evidence."
+        ),
+    )
 
 
 class AnalyzeBestPracticesBody(_Options):

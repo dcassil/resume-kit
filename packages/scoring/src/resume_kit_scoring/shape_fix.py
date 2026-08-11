@@ -227,10 +227,14 @@ def content_ledger_ok(ledger: ContentLedger) -> bool:
 def claims_preserved_across_sections(
     before: ResumeDocument | Resume,
     after: ResumeDocument | Resume,
+    ledger: ContentLedger | None = None,
 ) -> bool:
     """True iff global employer/title/degree/skill claims are unchanged."""
 
-    return _global_claim_set(before) == _global_claim_set(after)
+    before_claims = _global_claim_set(before)
+    if ledger is not None:
+        before_claims = _without_evidence_preserved_claims(before, before_claims, ledger)
+    return before_claims == _global_claim_set(after)
 
 
 class _CanonicalBuilder:
@@ -872,6 +876,41 @@ def _custom_display_names(section_meta: Iterable[SectionMeta]) -> dict[str, str]
         if not meta.isDefault:
             names[meta.key] = meta.displayName or meta.key
     return names
+
+
+def _without_evidence_preserved_claims(
+    resume: ResumeDocument | Resume,
+    claims: dict[str, frozenset[str]],
+    ledger: ContentLedger,
+) -> dict[str, frozenset[str]]:
+    if not isinstance(resume, ResumeDocument):
+        return claims
+    source_paths = {
+        entry.source_path
+        for entry in ledger.entries
+        if entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+    }
+    if not source_paths:
+        return claims
+
+    remaining_skills: set[str] = set()
+    for value in resume.additional.technicalSkills:
+        remaining_skills.update(_skill_claims_from_value(value))
+    display_names = _custom_display_names(resume.sectionMeta)
+    for key, section in resume.customSections.items():
+        if section.sectionType is not SectionType.STRING_LIST:
+            continue
+        display_name = display_names.get(key, key)
+        for path, text in _custom_texts(section, f"customSections.{key}"):
+            if path in source_paths:
+                continue
+            if _is_heading_artifact(text, display_name) or _is_parser_artifact(text):
+                continue
+            remaining_skills.update(_skill_claims_from_value(text))
+
+    updated = dict(claims)
+    updated["skills_and_custom"] = frozenset(remaining_skills)
+    return updated
 
 
 def _global_claim_set(resume: ResumeDocument | Resume) -> dict[str, frozenset[str]]:

@@ -948,11 +948,20 @@ def build_structure(
         "--answers",
         help="Optional JSON path mapping source section names to canonical targets.",
     ),
+    omit_custom_sections: bool = typer.Option(
+        False,
+        "--omit-custom-sections",
+        help="Omit unmapped custom sections from structure and ledger them to evidence.",
+    ),
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
     """Run the base->structure canonical shape write path behind hard gates."""
-    request = BuildStructureRequest(root=root, answers=io.load_answers(answers))
+    request = BuildStructureRequest(
+        root=root,
+        answers=io.load_answers(answers),
+        omit_custom_sections=omit_custom_sections,
+    )
     options = _options(False, strict, False)
     _run_gate(caps.build_structure_capability(request, options), output)
 

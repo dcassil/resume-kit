@@ -38,6 +38,7 @@ from resume_kit_schemas.resume import (
     SectionType,
 )
 
+from .dedupe import dedupe_skill_custom_sections_for_render
 from .models import ExportOptions
 
 _PAGE_SIZES = {"letter": LETTER, "a4": A4}
@@ -334,6 +335,7 @@ def render_pdf(
     Returns:
         The PDF file contents as bytes, beginning with ``b"%PDF"``.
     """
+    resume = dedupe_skill_custom_sections_for_render(resume)
     opts = options or ExportOptions()
 
     # Determinism (NFR-604): fix the embedded creation/mod timestamps and

@@ -2,27 +2,35 @@
 
 from __future__ import annotations
 
+import json
+from io import BytesIO
 from pathlib import Path
 
 import pytest
+from docx import Document
 from resume_kit_evidence import build_candidate_evidence, make_evidence_id
+from resume_kit_export.docx import render_docx
 from resume_kit_facade import capabilities as caps
+from resume_kit_facade.baseline import build_base, build_structure
 from resume_kit_facade.models import CapabilityOptions, SeedFullResumeEvidenceRequest
 from resume_kit_facade.project_config import (
     init_project,
     load_config,
     load_evidence_file,
     save_evidence_file,
+    set_active,
     working_dir,
 )
 from resume_kit_policy import default_shape_policy
 from resume_kit_schemas import CandidateEvidence, EvidenceKind, ResumeDocument
+from resume_kit_schemas.canonical import Resume
 from resume_kit_schemas.shape import ContentFate
 from resume_kit_scoring import (
     CustomHandoffPolicy,
     analyze_resume_shape,
     apply_shape_transforms,
     content_ledger_ok,
+    project_builddoc_from_canonical,
 )
 
 
@@ -185,3 +193,69 @@ def test_no_custom_handoff_omits_custom_output_and_ledgers_evidence() -> None:
         for entry in result.ledger.entries
     )
     assert any(item.content == "Mentored bootcamp students" for item in evidence)
+
+
+@pytest.mark.asyncio
+async def test_flow1_omit_build_exports_one_skills_section_and_preserves_evidence(
+    tmp_path: Path,
+) -> None:
+    payload = _full_source_resume().model_dump(mode="json")
+    payload["customSections"] = {
+        "Technical Skills": {
+            "sectionType": "stringList",
+            "strings": [
+                "Technical Skills",
+                "Python",
+                "PostgreSQL",
+                "FastAPI",
+            ],
+        },
+        "community": {
+            "sectionType": "stringList",
+            "strings": ["Mentored bootcamp students"],
+        }
+    }
+    resume = ResumeDocument.model_validate(payload)
+    init_project(tmp_path)
+    original_rel = "resumes/ada-original.json"
+    (working_dir(tmp_path) / original_rel).write_text(
+        resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    set_active(tmp_path, resume=original_rel)
+
+    seeded = await caps.seed_full_resume_evidence_capability(
+        SeedFullResumeEvidenceRequest(root=tmp_path),
+        CapabilityOptions(no_llm=True),
+    )
+    assert seeded.ok
+    build_base(tmp_path, mode="auto")
+
+    result = build_structure(tmp_path, omit_custom_sections=True)
+
+    assert result.structure_path == "resumes/ada-structure.json"
+    assert result.ledger_ok
+    assert result.claims_ok
+    assert any(
+        entry.fate is ContentFate.PRESERVED_IN_EVIDENCE
+        and entry.source_path == "customSections.community.strings[0]"
+        for entry in result.ledger.entries
+    )
+
+    structure_file = working_dir(tmp_path) / result.structure_path
+    structure = Resume.model_validate(json.loads(structure_file.read_text(encoding="utf-8")))
+    assert structure.custom == []
+    assert structure.skills[0].keywords == ["Python", "PostgreSQL", "FastAPI"]
+
+    evidence = load_evidence_file(
+        working_dir(tmp_path) / "learning" / "candidate-evidence.json"
+    )
+    assert any(item.content == "Mentored bootcamp students" for item in evidence)
+
+    renderable = project_builddoc_from_canonical(structure)
+    assert renderable.customSections == {}
+    document = Document(BytesIO(render_docx(renderable)))
+    paragraphs = [paragraph.text for paragraph in document.paragraphs]
+    assert paragraphs.count("Skills & Awards") == 1
+    assert "Technical Skills" not in paragraphs
+    assert "Community" not in paragraphs

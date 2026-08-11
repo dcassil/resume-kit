@@ -1444,7 +1444,11 @@ async def build_structure_capability(
     if not isinstance(request, BuildStructureRequest):
         return from_resume_kit_error(_bad_request(request, "BuildStructureRequest"))
     try:
-        result = _build_structure(request.root, answers=request.answers)
+        result = _build_structure(
+            request.root,
+            answers=request.answers,
+            omit_custom_sections=request.omit_custom_sections,
+        )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
