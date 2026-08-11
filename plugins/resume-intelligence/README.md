@@ -142,6 +142,15 @@ edit-session gates, validates facts, re-scores for deltas, and stops before
 `perfect` or export. It can be repeated for the same job as new evidence,
 aliases, or decisions are added.
 
+`finalize-resume` is Flow 4. After Flow 3 has produced a tailored resume for an
+active job, run Flow 4 independently for the final job-aware fit plus
+PDF/DOCX export. It composes `perfect` and `export-resume` only: `perfect`
+performs the decision-driven or `--auto-fit` budget fit, then `export-resume`
+renders the artifact and enforces the rendered `max_pages` hard gate. This is
+the flow to run when tailoring was delayed or completed earlier and the resume
+now needs final fit/export without rerunning preparation, job ingest, or
+tailoring updates.
+
 `resume-workflow` is the entry-point guide; it runs the skills in order:
 
 1. **Resume ingest** — `parse-resume` (no LLM; the agent converts the source
@@ -214,6 +223,7 @@ by keyword matching + terminology).
 | `prepare-base-resume` | `resume-tool seed-full-resume-evidence` + baseline commands | `resume_seed_full_resume_evidence` + baseline tools | No (deterministic flow) |
 | `ingest-job` | `resume-tool set-active --job` + `resume-tool suggest-terminology-candidates` + `resume-tool set-active --alias-file` | `resume_suggest_terminology_candidates` + `project_set_active` | No (agent-driven flow) |
 | `tailor-resume` | `resume-tool match` + `resume-tool identify-gaps` + `resume-tool review-edits ...` + `resume-tool validate-truth` | `resume_check_job_match` + `resume_identify_gaps` + edit-session tools + `resume_validate_truth` | No (agent-driven flow) |
+| `finalize-resume` | `resume-tool fit` + `resume-tool export` | `resume_build_perfect` + `resume_export` | No (deterministic flow) |
 | `check-structure` | `resume-tool check-structure` | `resume_check_ats_structure` | No (deterministic) |
 | `check-keywords` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
 | `check-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |

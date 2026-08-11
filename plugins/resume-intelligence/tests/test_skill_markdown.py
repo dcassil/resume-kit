@@ -47,6 +47,7 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "prepare-base-resume",
         "ingest-job",
         "tailor-resume",
+        "finalize-resume",
         "seed-terminology",
         "interview-missing-job-description",
         # Improve
