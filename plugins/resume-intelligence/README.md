@@ -127,10 +127,18 @@ parses the resume, seeds full-resume learning with
 `seed-full-resume-evidence`, runs the `base -> structure -> refine` preparation,
 and leaves `refine` as the default downstream tailoring input.
 
+`ingest-job` is Flow 2. After Flow 1 has run, run Flow 2 once per job: it
+parses one posting with `parse-job`, then runs the truth-gated
+`seed-terminology` / `learn-terminology` path against the prepared resume and
+Flow 1 learning base so `resume-kit/learning/synonyms.json` is created or grown
+before the first tailoring score. The repeated path is: run Flow 1 once for the
+resume, then run Flow 2 many times for different jobs.
+
 `resume-workflow` is the entry-point guide; it runs the skills in order:
 
-1. **Ingest** — `parse-resume`, `parse-job` (no LLM; the agent converts the
-   files/posting into canonical JSON). Writes the immutable `<name>-original.json`.
+1. **Resume ingest** — `parse-resume` (no LLM; the agent converts the source
+   resume into canonical JSON). Writes the immutable resume
+   `<name>-original.json`.
 2. **Baseline** *(job-independent — REQUIRED before any tailoring)* — take
    `original` through `original → base → structure → refine`: `update-structure`
    runs the structural check + the auto-safe `base` fix behind the
@@ -148,13 +156,19 @@ and leaves `refine` as the default downstream tailoring input.
    and `build-standard` surfaces remain as one-release deprecation aliases for
    `build-refine`. If the user declines baselining, that override is recorded so
    the tailoring gate is satisfied.
-3. **Check** *(tailoring — gated on `refine` or a recorded override)* —
+3. **Job ingest / terminology learning** *(repeat per job after Flow 1)* —
+   run `ingest-job`: `parse-job` writes the active `JobDescription`, then
+   `seed-terminology` / `learn-terminology` appends and dedupes confirmed,
+   truthful aliases in `learning/synonyms.json` and registers it via
+   `resume-tool set-active --alias-file`. This makes the first tailoring score
+   alias-aware. Do not rerun Flow 1 per job.
+4. **Check** *(tailoring — gated on `refine` or a recorded override)* —
    `check-keywords` (resume↔job keyword coverage) and `check-gaps`
    (missing / injectable keywords), both run against `refine`. The structural
    check already ran in baselining and is not repeated. `check-ats-view` renders
    the read-only "what the ATS sees" report (sections, entities/YoE, and zoned
    keywords) off the same deterministic ScoreDoc projection that scoring reads.
-4. **Improve** (no LLM, truth-gated; gated on `refine`) — `update-keywords` and
+5. **Improve** (no LLM, truth-gated; gated on `refine`) — `update-keywords` and
    `update-terminology` produce truthful `ChangeProposal` records, prompt for
    mode (`interactive`, `review_at_end`, or `auto`), then drive
    `resume-tool review-edits open` → `resume-tool review-edits prompt` →
@@ -169,13 +183,13 @@ and leaves `refine` as the default downstream tailoring input.
    `CONTRADICTED` for structural conflicts or active refutations, and uses
    `UNSUPPORTED` for missing evidence. Every claim includes a stable
    `reason_code`.
-5. **Verify** — `validate-facts`; then re-run the checks to see the delta.
-6. **Review** (optional, no LLM provider) — `review-resume` dispatches a
+6. **Verify** — `validate-facts`; then re-run the checks to see the delta.
+7. **Review** (optional, no LLM provider) — `review-resume` dispatches a
    subagent to critique the tailored resume against the original + job and writes
    parseable, advice-only findings to `resume-kit/review/<session>.md` (it never
    edits the resume; act on findings via `update-keywords` /
    `update-terminology` / `validate-facts`).
-7. **Export** — `export-resume` (PDF/DOCX).
+8. **Export** — `export-resume` (PDF/DOCX).
 
 Supporting: `extract-evidence`, `compare-versions`,
 `select-resume`, and `learn-terminology` (grows the project alias index used
@@ -188,6 +202,7 @@ by keyword matching + terminology).
 | `parse-resume` | (agent-driven) | — | No (agent converts) |
 | `parse-job` | (agent-driven) | — | No (agent converts) |
 | `prepare-base-resume` | `resume-tool seed-full-resume-evidence` + baseline commands | `resume_seed_full_resume_evidence` + baseline tools | No (deterministic flow) |
+| `ingest-job` | `resume-tool set-active --job` + `resume-tool suggest-terminology-candidates` + `resume-tool set-active --alias-file` | `resume_suggest_terminology_candidates` + `project_set_active` | No (agent-driven flow) |
 | `check-structure` | `resume-tool check-structure` | `resume_check_ats_structure` | No (deterministic) |
 | `check-keywords` | `resume-tool match` | `resume_check_job_match` | No (deterministic) |
 | `check-gaps` | `resume-tool identify-gaps` | `resume_identify_gaps` | No (deterministic) |

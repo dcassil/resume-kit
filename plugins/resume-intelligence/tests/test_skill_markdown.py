@@ -45,6 +45,7 @@ EXPECTED_SKILL_SLUGS: frozenset[str] = frozenset(
         "update-best-practices",
         # Flows
         "prepare-base-resume",
+        "ingest-job",
         "seed-terminology",
         "interview-missing-job-description",
         # Improve
