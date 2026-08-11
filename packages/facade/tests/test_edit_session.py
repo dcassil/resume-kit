@@ -230,6 +230,32 @@ async def test_reviewed_modes_happy_path(tmp_path: Path, mode: str) -> None:
 
 
 @pytest.mark.asyncio
+async def test_open_after_commit_on_same_resume_succeeds(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    await _open(tmp_path)
+    await _approve(tmp_path, "summary")
+    committed = await caps.REGISTRY["commit-session"](
+        CommitSessionRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+    assert not committed.errors
+
+    reopened = await caps.REGISTRY["open-edit-session"](
+        OpenEditSessionRequest(root=tmp_path, mode="interactive", changes=[_change()]),
+        CapabilityOptions(),
+    )
+    status = await caps.REGISTRY["session-status"](
+        SessionStatusRequest(root=tmp_path),
+        CapabilityOptions(),
+    )
+
+    assert not reopened.errors
+    assert not status.errors
+    assert status.data is not None
+    assert status.data.pending == ["summary"]
+
+
+@pytest.mark.asyncio
 async def test_add_skill_single_string_lands_without_alias_file(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     change = ChangeProposal(
@@ -423,7 +449,10 @@ async def test_auto_mode_happy_path(tmp_path: Path) -> None:
 
     assert not committed.errors
     assert committed.data is not None
-    assert committed.data.state.committed_hash is not None
+    written = json.loads(
+        (working_dir(tmp_path) / "working" / "daniel.tailored.json").read_text(encoding="utf-8")
+    )
+    assert written["summary"] == "Built Python and FastAPI services."
 
 
 @pytest.mark.asyncio

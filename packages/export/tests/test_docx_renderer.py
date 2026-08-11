@@ -74,6 +74,29 @@ def test_render_docx_omits_empty_optional_fields_and_placeholders() -> None:
     assert "N/A" not in paragraphs
 
 
+def test_render_docx_titleless_experience_has_clean_heading() -> None:
+    resume = ResumeDocument(
+        personalInfo={"name": "Jane Doe", "email": "jane@example.com"},
+        workExperience=[
+            {
+                "title": "",
+                "company": "Ventures Collective",
+                "location": "Remote",
+                "years": "2020-2024",
+                "description": ["Advised early-stage teams."],
+            }
+        ],
+    )
+
+    document = Document(BytesIO(render_docx(resume)))
+    paragraphs = _paragraph_text(document)
+
+    assert "Experience" in paragraphs
+    assert "Ventures Collective | Remote | 2020-2024" in paragraphs
+    assert "Advised early-stage teams." in paragraphs
+    assert all(not paragraph.startswith(" | ") for paragraph in paragraphs)
+
+
 def test_render_docx_dedupes_custom_skills_section() -> None:
     payload = _resume().model_dump(mode="json")
     payload["customSections"] = {

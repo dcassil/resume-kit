@@ -590,7 +590,7 @@ class SessionStatusRequest:
 
 @dataclass(frozen=True)
 class ReconcileSessionRequest:
-    """Inputs for accepting an intentional out-of-band working-file edit."""
+    """Inputs for the edit-session reconcile compatibility operation."""
 
     root: str | Path = "."
 
@@ -604,8 +604,6 @@ class EditSessionState(BaseModel):
     active_job: str
     working_path: str
     review_session: ReviewSession
-    original_hash: str
-    committed_hash: str | None = None
 
 
 class EditSessionChangeStatus(BaseModel):
@@ -635,7 +633,6 @@ class EditSessionStatus(BaseModel):
     pending_change_ids: list[str] = Field(default_factory=list)
     deferred_change_ids: list[str] = Field(default_factory=list)
     truth_summary: dict[ProvenanceStatus, int] = Field(default_factory=dict)
-    committed_hash: str | None = None
 
 
 class AliasGrowthEntry(BaseModel):
@@ -667,11 +664,9 @@ class CommitSessionResult(BaseModel):
 
 
 class ReconcileSessionResult(BaseModel):
-    """Result of re-hashing a manually edited working resume."""
+    """Result of the edit-session reconcile compatibility operation."""
 
     state: EditSessionState
-    previous_hash: str | None = None
-    reconciled_hash: str | None = None
 
 
 @dataclass(frozen=True)

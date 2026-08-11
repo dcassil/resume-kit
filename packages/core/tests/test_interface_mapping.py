@@ -92,6 +92,19 @@ class TestErrorMapping:
         assert resp.errors[0].details["exception_type"] == "ValueError"
         assert exit_code_for(resp) == ExitCode.INTERNAL_ERROR
 
+    def test_generic_exception_logs_diagnostics_without_response_leak(self, capsys) -> None:
+        try:
+            raise RuntimeError("diagnostic secret abc123")
+        except RuntimeError as exc:
+            resp = from_exception(exc)
+
+        captured = capsys.readouterr()
+        assert "Traceback (most recent call last)" in captured.err
+        assert "RuntimeError: diagnostic secret abc123" in captured.err
+        assert "diagnostic secret" not in resp.errors[0].message
+        assert "abc123" not in str(resp.model_dump())
+        assert resp.errors[0].details["exception_type"] == "RuntimeError"
+
     def test_validation_error_maps_to_validation_not_internal(self) -> None:
         """RIT-T-0156 B2: a pydantic ValidationError in the build path must
         surface as a validation-class error naming the offending field, not the

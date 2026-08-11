@@ -1115,7 +1115,7 @@ def review_edits_reconcile(
     output: OutputFormat = _Output,
     strict: bool = _Strict,
 ) -> None:
-    """Re-hash intentional manual edits to the working resume."""
+    """Return the active edit session through the reconcile compatibility path."""
     request = ReconcileSessionRequest(root=root)
     options = _options(False, strict, False)
     _run(caps.reconcile_session_capability(request, options), output)

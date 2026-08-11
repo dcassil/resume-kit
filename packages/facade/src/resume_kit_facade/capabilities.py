@@ -220,9 +220,22 @@ def from_resume_kit_error(exc: ResumeKitError) -> InterfaceResponse[object]:
     return _widen(_from_resume_kit_error(exc))
 
 
-def from_exception(exc: BaseException) -> InterfaceResponse[object]:
+def from_exception(
+    exc: BaseException,
+    request: object | None = None,
+) -> InterfaceResponse[object]:
     """Widened ``from_exception`` for capability return positions."""
-    return _widen(_from_exception(exc))
+    return _widen(
+        _from_exception(exc, project_root=_project_root_from_request(request))
+    )
+
+
+def _project_root_from_request(request: object | None) -> str | Path | None:
+    """Return a capability request's project root when it has one."""
+    value = getattr(request, "root", None)
+    if isinstance(value, str | Path):
+        return value
+    return None
 
 
 def from_value_error(exc: ValueError) -> InterfaceResponse[object]:
@@ -297,7 +310,7 @@ async def extract_resume(
         except ResumeKitError as exc:
             return from_resume_kit_error(exc)
         except Exception as exc:  # noqa: BLE001 - map any engine failure
-            return from_exception(exc)
+            return from_exception(exc, request)
         document = result.document
         return build_success(
             document,
@@ -313,7 +326,7 @@ async def extract_resume(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     document = result.document
     return build_success(
         document,
@@ -337,7 +350,7 @@ async def extract_job_description(
         except ResumeKitError as exc:
             return from_resume_kit_error(exc)
         except Exception as exc:  # noqa: BLE001 - map any engine failure
-            return from_exception(exc)
+            return from_exception(exc, request)
         return build_success(job, strict=options.strict)
 
     if options.provider is None:
@@ -349,7 +362,7 @@ async def extract_job_description(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(job, strict=options.strict)
 
 
@@ -372,7 +385,7 @@ async def extract_resume_text_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, warnings=result.warnings, strict=options.strict)
 
 
@@ -405,7 +418,7 @@ async def align_resume(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return _align_success(result, strict=options.strict)
 
 
@@ -456,7 +469,7 @@ async def check_resume_ats(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(score, strict=options.strict)
 
 
@@ -479,7 +492,7 @@ async def check_ats_structure(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 
@@ -496,7 +509,7 @@ async def check_resume_job_match(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 
@@ -512,7 +525,7 @@ async def select_best_resume(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -534,7 +547,7 @@ async def compare_resume_versions(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -553,7 +566,7 @@ async def identify_resume_gaps(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(gap, strict=options.strict)
 
 
@@ -574,7 +587,7 @@ async def validate_resume_truth_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 
@@ -600,7 +613,7 @@ async def validate_faithfulness_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 
@@ -642,7 +655,7 @@ async def build_candidate_evidence_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(evidence, strict=options.strict)
 
 
@@ -692,7 +705,7 @@ async def seed_full_resume_evidence_capability(
     except ValueError as exc:
         return from_value_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -715,7 +728,7 @@ async def record_edit_feedback_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -755,7 +768,7 @@ async def requirement_answer_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -783,7 +796,7 @@ async def rank_edit_candidates_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -803,7 +816,7 @@ async def refresh_preferences_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(profile, strict=options.strict)
 
 
@@ -842,7 +855,7 @@ async def add_evidence_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -875,7 +888,7 @@ async def open_edit_session_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(state, strict=options.strict)
 
 
@@ -891,7 +904,7 @@ async def session_prompt_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     if isinstance(response, InterfaceResponse):
         return response
     return build_success(response, strict=options.strict)
@@ -926,7 +939,7 @@ async def decide_change_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(state, strict=options.strict)
 
 
@@ -946,7 +959,7 @@ async def commit_session_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence/apply failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -962,7 +975,7 @@ async def session_status_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -970,7 +983,7 @@ async def reconcile_session_capability(
     request: object,
     options: CapabilityOptions,
 ) -> InterfaceResponse[object]:
-    """Re-hash the working resume after an intentional manual edit."""
+    """Return the active edit session through the reconcile compatibility path."""
     if not isinstance(request, ReconcileSessionRequest):
         return from_resume_kit_error(_bad_request(request, "ReconcileSessionRequest"))
     try:
@@ -978,7 +991,7 @@ async def reconcile_session_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any persistence failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(result, strict=options.strict)
 
 
@@ -1109,7 +1122,7 @@ async def export_resume(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(ref, artifacts=[ref], strict=options.strict)
 
 
@@ -1135,7 +1148,7 @@ async def suggest_terminology(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(suggestions, strict=options.strict)
 
 
@@ -1164,7 +1177,7 @@ async def propose_terminology_candidates_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(candidates, strict=options.strict)
 
 
@@ -1202,7 +1215,7 @@ async def align_terminology(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     result = AlignTerminologyResult(
         resume=accepted.resume,
         change=accepted.change,
@@ -1249,7 +1262,7 @@ async def init_project_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(config, strict=options.strict)
 
 
@@ -1283,7 +1296,7 @@ async def set_active_capability(
         # internal error (RIT-T-0156 boundary, RIT-T-0167).
         return from_value_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(config, strict=options.strict)
 
 
@@ -1319,7 +1332,7 @@ async def build_base_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     response = BaseBuildResult(
         base_path=result.base_path,
         applied=list(result.applied),
@@ -1352,7 +1365,7 @@ async def build_standard_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     response = StandardBuildResult(
         standard_path=result.refine_path,
         applied=list(result.applied),
@@ -1381,7 +1394,7 @@ async def build_refine_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     response = RefineBuildResult(
         refine_path=result.refine_path,
         applied=list(result.applied),
@@ -1414,7 +1427,7 @@ async def build_perfect_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     response = BuildPerfectResult.model_validate(result)
     return build_success(response, strict=options.strict)
 
@@ -1436,7 +1449,7 @@ async def analyze_shape_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 
@@ -1463,7 +1476,7 @@ async def build_structure_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine/filesystem failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     response = StructureBuildResult(
         structure_path=result.structure_path,
         report=result.report,
@@ -1504,7 +1517,7 @@ async def analyze_best_practices_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 
@@ -1533,7 +1546,7 @@ async def ats_view_capability(
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
     except Exception as exc:  # noqa: BLE001 - map any engine failure
-        return from_exception(exc)
+        return from_exception(exc, request)
     return build_success(report, strict=options.strict)
 
 

@@ -206,9 +206,12 @@ class Experience(CanonicalBaseModel):
     # Empty organization is intentionally legal, mirroring the source schema
     # ``ResumeDocument.Experience.company`` (which defaults to "" for date-grouped
     # umbrella headings / career-break lines where the group is carried in ``title``).
-    # See RIT-T-0156. Only ``title`` is required-non-empty here.
+    # See RIT-T-0156.
     organization: str = ""
-    title: str
+    # Empty title is intentionally legal, mirroring the source schema
+    # ``ResumeDocument.Experience.title`` for date-bucketed work entries with no
+    # discrete role title. See RIT-T-0182.
+    title: str = ""
     employmentType: EmploymentType | None = None
     location: Location | str | None = None
     startDate: ResumeDate | None = None
@@ -218,11 +221,6 @@ class Experience(CanonicalBaseModel):
     skills: list[str] = Field(default_factory=list)
     technologies: list[str] = Field(default_factory=list)
     links: list[Link] = Field(default_factory=list)
-
-    @field_validator("title")
-    @classmethod
-    def _required_fields_must_have_text(cls, value: str) -> str:
-        return _validate_required_text(value)
 
     @model_validator(mode="after")
     def _must_have_summary_or_achievement(self) -> Experience:
