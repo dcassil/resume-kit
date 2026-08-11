@@ -1076,6 +1076,12 @@ async def align_terminology(
     """
     if not isinstance(request, AlignTerminologyRequest):
         return from_resume_kit_error(_bad_request(request, "AlignTerminologyRequest"))
+    # A terminology swap only re-words content already present in the resume, so
+    # the resume itself substantiates it. When the caller supplies no explicit
+    # evidence, derive it deterministically from the resume (RIT-T-0168: this
+    # keeps the applied⟹passed invariant while letting the swap actually apply;
+    # genuinely unsupported wording still fails the truth gate and is reverted).
+    evidence = list(request.evidence) or build_candidate_evidence(request.resume)
     try:
         with use_alias_file(request.alias_file):
             accepted = accept_terminology_alignment(
@@ -1083,7 +1089,7 @@ async def align_terminology(
                 request.location,
                 request.resume,
                 request.job,
-                list(request.evidence),
+                evidence,
                 freedom=request.freedom,
             )
     except ResumeKitError as exc:
