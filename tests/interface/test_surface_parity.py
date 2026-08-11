@@ -1273,6 +1273,25 @@ def _add_skill_list_change() -> ChangeProposal:
     )
 
 
+def _same_path_add_skill_changes() -> list[ChangeProposal]:
+    return [
+        ChangeProposal(
+            path="additional.technicalSkills",
+            action="add_skill",
+            original=None,
+            value="Kubernetes",
+            reason="Add a JD-required skill approved by the reviewer.",
+        ),
+        ChangeProposal(
+            path="additional.technicalSkills",
+            action="add_skill",
+            original=None,
+            value="AWS",
+            reason="Add a JD-required skill approved by the reviewer.",
+        ),
+    ]
+
+
 def _add_skill_session_root(tmp_path: Path, name: str) -> Path:
     root = tmp_path / name
     init_project(root)
@@ -1305,6 +1324,24 @@ def _add_skill_session_root(tmp_path: Path, name: str) -> Path:
     return root
 
 
+def _same_path_add_skill_session_root(tmp_path: Path, name: str) -> Path:
+    root = _add_skill_session_root(tmp_path, name)
+    _write_json(
+        root / "changes.json",
+        [change.model_dump(mode="json") for change in _same_path_add_skill_changes()],
+    )
+    return root
+
+
+def _pending_change_ids(status: JsonDict) -> list[str]:
+    data = status["data"]
+    assert isinstance(data, dict)
+    change_ids = data["pending_change_ids"]
+    assert isinstance(change_ids, list)
+    assert all(isinstance(item, str) for item in change_ids)
+    return cast(list[str], change_ids)
+
+
 def _direct_add_skill_list_commit(root: Path) -> JsonDict:
     change = _add_skill_list_change()
     responses = [
@@ -1323,6 +1360,26 @@ def _direct_add_skill_list_commit(root: Path) -> JsonDict:
         _direct_json("commit-session", CommitSessionRequest(root=root)),
     ]
     return _scrub_session_payload(responses[-1])
+
+
+def _direct_same_path_add_skill_commit(root: Path) -> list[JsonDict]:
+    changes = _same_path_add_skill_changes()
+    _direct_json(
+        "open-edit-session",
+        OpenEditSessionRequest(root=root, mode="interactive", changes=changes),
+    )
+    status = _direct_json("session-status", SessionStatusRequest(root=root))
+    for change_id in _pending_change_ids(status):
+        _direct_json(
+            "decide-change",
+            DecideChangeRequest(
+                root=root,
+                change_id=change_id,
+                action=ReviewAction.APPROVE,
+            ),
+        )
+    commit = _direct_json("commit-session", CommitSessionRequest(root=root))
+    return [_scrub_session_payload(status), _scrub_session_payload(commit)]
 
 
 def _cli_add_skill_list_commit(root: Path) -> JsonDict:
@@ -1356,6 +1413,37 @@ def _cli_add_skill_list_commit(root: Path) -> JsonDict:
     return _scrub_session_payload(responses[-1])
 
 
+def _cli_same_path_add_skill_commit(root: Path) -> list[JsonDict]:
+    _cli_json(
+        [
+            "review-edits",
+            "open",
+            "--mode",
+            "interactive",
+            "--changes",
+            str(root / "changes.json"),
+            "--root",
+            str(root),
+        ]
+    )
+    status = _cli_json(["review-edits", "status", "--root", str(root)])
+    for change_id in _pending_change_ids(status):
+        _cli_json(
+            [
+                "review-edits",
+                "decide",
+                "--change-id",
+                change_id,
+                "--action",
+                "approve",
+                "--root",
+                str(root),
+            ]
+        )
+    commit = _cli_json(["review-edits", "commit", "--root", str(root)])
+    return [_scrub_session_payload(status), _scrub_session_payload(commit)]
+
+
 def _mcp_add_skill_list_commit(root: Path) -> JsonDict:
     change = _add_skill_list_change().model_dump(mode="json")
     responses = [
@@ -1376,6 +1464,22 @@ def _mcp_add_skill_list_commit(root: Path) -> JsonDict:
     return _scrub_session_payload(responses[-1])
 
 
+def _mcp_same_path_add_skill_commit(root: Path) -> list[JsonDict]:
+    changes = [change.model_dump(mode="json") for change in _same_path_add_skill_changes()]
+    _mcp_json(
+        "edit_session_open",
+        {"root": str(root), "mode": "interactive", "changes": changes},
+    )
+    status = _mcp_json("edit_session_status", {"root": str(root)})
+    for change_id in _pending_change_ids(status):
+        _mcp_json(
+            "edit_session_decide",
+            {"root": str(root), "change_id": change_id, "action": "approve"},
+        )
+    commit = _mcp_json("edit_session_commit", {"root": str(root)})
+    return [_scrub_session_payload(status), _scrub_session_payload(commit)]
+
+
 def _api_add_skill_list_commit(root: Path) -> JsonDict:
     change = _add_skill_list_change().model_dump(mode="json")
     responses = [
@@ -1394,6 +1498,22 @@ def _api_add_skill_list_commit(root: Path) -> JsonDict:
         _api_json("/review-edits/commit", {"root": str(root)}),
     ]
     return _scrub_session_payload(responses[-1])
+
+
+def _api_same_path_add_skill_commit(root: Path) -> list[JsonDict]:
+    changes = [change.model_dump(mode="json") for change in _same_path_add_skill_changes()]
+    _api_json(
+        "/review-edits/open",
+        {"root": str(root), "mode": "interactive", "changes": changes},
+    )
+    status = _api_json("/review-edits/status", {"root": str(root)})
+    for change_id in _pending_change_ids(status):
+        _api_json(
+            "/review-edits/decide",
+            {"root": str(root), "change_id": change_id, "action": "approve"},
+        )
+    commit = _api_json("/review-edits/commit", {"root": str(root)})
+    return [_scrub_session_payload(status), _scrub_session_payload(commit)]
 
 
 def _written_skills(root: Path) -> list[str]:
@@ -1417,6 +1537,26 @@ def test_add_skill_list_commit_parity_across_surfaces(tmp_path: Path) -> None:
     cli = _cli_add_skill_list_commit(roots["cli"])
     mcp = _mcp_add_skill_list_commit(roots["mcp"])
     api = _api_add_skill_list_commit(roots["api"])
+
+    assert cli == direct
+    assert mcp == direct
+    assert api == direct
+    for root in roots.values():
+        assert _written_skills(root) == ["Python", "Kubernetes", "AWS"]
+
+
+def test_same_path_change_id_selector_parity_across_surfaces(tmp_path: Path) -> None:
+    roots = {
+        "direct": _same_path_add_skill_session_root(tmp_path, "direct-same-path"),
+        "cli": _same_path_add_skill_session_root(tmp_path, "cli-same-path"),
+        "mcp": _same_path_add_skill_session_root(tmp_path, "mcp-same-path"),
+        "api": _same_path_add_skill_session_root(tmp_path, "api-same-path"),
+    }
+
+    direct = _direct_same_path_add_skill_commit(roots["direct"])
+    cli = _cli_same_path_add_skill_commit(roots["cli"])
+    mcp = _mcp_same_path_add_skill_commit(roots["mcp"])
+    api = _api_same_path_add_skill_commit(roots["api"])
 
     assert cli == direct
     assert mcp == direct

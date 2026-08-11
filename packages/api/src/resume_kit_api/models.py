@@ -279,7 +279,11 @@ class SessionRootBody(_Options):
 class DecideChangeBody(_Options):
     """Body for ``POST /review-edits/decide``."""
 
-    path: str
+    path: str | None = None
+    change_id: str | None = Field(
+        default=None,
+        description="Stable change_id from /review-edits/status.",
+    )
     action: ReviewAction
     reason_code: EditFeedbackReasonCode | None = None
     note: str | None = None

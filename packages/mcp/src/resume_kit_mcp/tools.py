@@ -1130,7 +1130,8 @@ async def edit_session_decide(arguments: ToolArguments) -> ToolResult:
         request = _make_request(
             DecideChangeRequest,
             {
-                "path": _string(arguments, "path"),
+                "path": _optional_str(arguments, "path"),
+                "change_id": _optional_str(arguments, "change_id"),
                 "action": _review_action(arguments),
                 "reason_code": _optional_feedback_reason(arguments),
                 "note": _optional_str(arguments, "note"),

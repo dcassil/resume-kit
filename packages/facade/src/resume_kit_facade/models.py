@@ -563,8 +563,9 @@ class SessionPromptRequest:
 class DecideChangeRequest:
     """Inputs for recording one terminal or reopen decision."""
 
-    path: str
     action: ReviewAction
+    path: str | None = None
+    change_id: str | None = None
     reason_code: EditFeedbackReasonCode | None = None
     note: str | None = None
     root: str | Path = "."
@@ -607,6 +608,16 @@ class EditSessionState(BaseModel):
     committed_hash: str | None = None
 
 
+class EditSessionChangeStatus(BaseModel):
+    """Caller-facing selector metadata for one proposed edit-session change."""
+
+    change_id: str
+    path: str
+    action: str
+    section: str
+    status: Literal["decided", "pending", "deferred"]
+
+
 class EditSessionStatus(BaseModel):
     """Serializable progress report for the active edit session."""
 
@@ -619,6 +630,10 @@ class EditSessionStatus(BaseModel):
     decided: list[str] = Field(default_factory=list)
     pending: list[str] = Field(default_factory=list)
     deferred: list[str] = Field(default_factory=list)
+    changes: list[EditSessionChangeStatus] = Field(default_factory=list)
+    decided_change_ids: list[str] = Field(default_factory=list)
+    pending_change_ids: list[str] = Field(default_factory=list)
+    deferred_change_ids: list[str] = Field(default_factory=list)
     truth_summary: dict[ProvenanceStatus, int] = Field(default_factory=dict)
     committed_hash: str | None = None
 

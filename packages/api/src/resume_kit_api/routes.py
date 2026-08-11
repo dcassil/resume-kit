@@ -417,6 +417,7 @@ def register_routes(app: FastAPI) -> None:
     async def review_edits_decide(body: DecideChangeBody) -> Response:
         request = DecideChangeRequest(
             path=body.path,
+            change_id=body.change_id,
             action=body.action,
             reason_code=body.reason_code,
             note=body.note,
