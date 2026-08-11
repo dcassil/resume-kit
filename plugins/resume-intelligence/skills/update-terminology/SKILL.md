@@ -41,6 +41,14 @@ Run the shared prerequisites gate in
 If the resume or job JSON is missing, stop and run **parse-resume** or
 **parse-job** first.
 
+**Evidence precondition (required).** Terminology swaps are truth-gated: the
+accept path re-validates the swapped wording with `validate_resume_truth`
+against the project's `CandidateEvidence`. With no evidence the gate cannot
+substantiate any wording, so every swap is rejected (not applied) with the
+reason "no candidate evidence — run extract-evidence first". Run
+**extract-evidence** before this skill so the gate can substantiate the swaps;
+a swap is only ever reported as applied when it passed the truth gate.
+
 ## Run Me In A Subagent
 
 This is a self-contained improve task over potentially large resume/job data.

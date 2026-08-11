@@ -263,6 +263,71 @@ class TestUnsupportedAndBlockedLocationsRejected:
         assert result.truth_passed is False
         assert result.field_after == "Python"
 
+    def test_no_evidence_run_is_not_applied_with_explicit_reason(self) -> None:
+        """RIT-T-0168 (1)+(2): with NO candidate evidence the truth gate cannot
+        substantiate the new wording (passed=False). The swap must NOT be
+        reported as applied, and the empty-evidence precondition must be surfaced
+        as a named, actionable reason rather than a bare passed=False."""
+        resume = _resume_bullet()
+        job = _job_k8s()
+        # Empty evidence: extract-evidence was never run.
+        evidence: list[CandidateEvidence] = []
+
+        sug = next(
+            s
+            for s in analyze_terminology_alignment(job, resume)
+            if "workExperience[0].description[0]" in s.locations
+        )
+        result = accept_terminology_alignment(
+            sug, "workExperience[0].description[0]", resume, job, evidence
+        )
+
+        # Contract: a truth-failed swap is never reported as applied.
+        assert result.swap_applied is False
+        assert result.applied == []
+        assert result.truth_passed is False
+        # Resume left untouched.
+        assert result.resume == resume
+        # The empty-evidence precondition is surfaced explicitly and points at
+        # extract-evidence.
+        assert "extract-evidence" in result.truth_reason
+        assert result.rejected
+        assert result.rejected[-1].reason_code is PolicyReasonCode.TRUTH_VALIDATION_FAILED
+
+    def test_with_evidence_substantiating_swap_is_applied_and_passes(self) -> None:
+        """RIT-T-0168 (b): with evidence that substantiates the (unchanged)
+        claim, the swap is applied and truth passes."""
+        resume = _resume_bullet()
+        job = _job_k8s()
+        evidence = _evidence(resume)
+
+        sug = next(
+            s
+            for s in analyze_terminology_alignment(job, resume)
+            if "workExperience[0].description[0]" in s.locations
+        )
+        result = accept_terminology_alignment(
+            sug, "workExperience[0].description[0]", resume, job, evidence
+        )
+
+        assert result.swap_applied is True
+        assert result.truth_passed is True
+        assert result.applied and not result.rejected
+        assert result.truth_reason == ""
+
+    def test_applied_true_never_coexists_with_passed_false(self) -> None:
+        """RIT-T-0168 (3): the two flags can never be swap_applied=True while
+        truth_passed=False simultaneously, across the with/without-evidence and
+        blocked-field scenarios."""
+        resume = _resume_bullet()
+        job = _job_k8s()
+        loc = "workExperience[0].description[0]"
+        sug = next(s for s in analyze_terminology_alignment(job, resume) if loc in s.locations)
+
+        for evidence in ([], _evidence(resume)):
+            result = accept_terminology_alignment(sug, loc, resume, job, evidence)
+            assert not (result.swap_applied and not result.truth_passed)
+
     def test_bare_skill_element_swap_rejected(self) -> None:
         resume = _resume_bullet()
         job = _job_k8s()
