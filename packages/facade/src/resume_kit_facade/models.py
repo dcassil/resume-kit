@@ -14,6 +14,7 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 from resume_kit_core import StructuredCompletionProvider
@@ -632,6 +633,8 @@ class AliasGrowthEntry(BaseModel):
     source: str = "accepted_edit"
     timestamp: str
     alias_file: str
+    status: Literal["grown", "deferred"] = "grown"
+    reason: str | None = None
 
 
 class CommitSessionResult(BaseModel):
@@ -641,6 +644,7 @@ class CommitSessionResult(BaseModel):
     applied: list[ChangeProposal] = Field(default_factory=list)
     rejected: list[PolicyRejection] = Field(default_factory=list)
     grown_aliases: list[AliasGrowthEntry] = Field(default_factory=list)
+    deferred_aliases: list[AliasGrowthEntry] = Field(default_factory=list)
     before_match_report: JobMatchReport | None = None
     after_match_report: JobMatchReport | None = None
     before_ats_score: ATSScore | None = None

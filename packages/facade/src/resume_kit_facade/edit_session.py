@@ -14,6 +14,7 @@ import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 from resume_kit_alignment import ReviewController, apply_diffs
@@ -35,7 +36,14 @@ from resume_kit_schemas import (
     ReviewDecision,
     ScoreDelta,
 )
-from resume_kit_terms import load_effective_alias_index, normalize, surface_form
+from resume_kit_terms import (
+    AliasIndex,
+    LexiconError,
+    build_effective_alias_index,
+    load_effective_alias_index,
+    normalize,
+    surface_form,
+)
 
 from resume_kit_facade.models import (
     AliasGrowthEntry,
@@ -268,7 +276,7 @@ def commit_session(
             "Assembled resume fails truth validation (contradicted claims).",
             {"paths": assembled_contradicted},
         )
-    grown_aliases = grow_aliases_from_accepted_terminology(
+    grown_aliases, deferred_aliases = grow_aliases_from_accepted_terminology(
         root=root,
         state=state,
         timestamp=alias_timestamp or datetime.now(UTC).isoformat(),
@@ -283,6 +291,7 @@ def commit_session(
         applied=applied,
         rejected=rejected,
         grown_aliases=grown_aliases,
+        deferred_aliases=deferred_aliases,
         before_match_report=before_match,
         after_match_report=after_match,
         before_ats_score=before_ats,
@@ -316,13 +325,13 @@ def grow_aliases_from_accepted_terminology(
     root: str | Path,
     state: EditSessionState,
     timestamp: str,
-) -> list[AliasGrowthEntry]:
+) -> tuple[list[AliasGrowthEntry], list[AliasGrowthEntry]]:
     """Append aliases learned from human-accepted terminology decisions."""
     if state.mode == "auto":
-        return []
+        return [], []
     config = load_config(root)
     if config.alias_file is None or not config.alias_file.strip():
-        return []
+        return [], []
 
     alias_file = _project_file(root, config.alias_file)
     candidates = _accepted_terminology_alias_candidates(
@@ -331,11 +340,11 @@ def grow_aliases_from_accepted_terminology(
         alias_file=alias_file,
     )
     if not candidates:
-        return []
-    grown = _append_project_aliases(alias_file, candidates)
+        return [], []
+    grown, deferred = _append_project_aliases(alias_file, candidates)
     if grown:
         _clear_alias_index_caches()
-    return grown
+    return grown, deferred
 
 
 def _auto_resolve(state: EditSessionState) -> tuple[EditSessionState, list[EditFeedback]]:
@@ -467,7 +476,10 @@ def _candidate_from_text_swap(
 def _append_project_aliases(
     alias_file: Path,
     candidates: list[AliasGrowthEntry],
-) -> list[AliasGrowthEntry]:
+) -> tuple[list[AliasGrowthEntry], list[AliasGrowthEntry]]:
+    # Code-owned alias-growth writes go through this path. The current
+    # seed/learn-terminology skills still document direct JSON edits rather than
+    # invoking a facade capability, so those prose-only writes are outside this guard.
     payload = _load_project_alias_payload(alias_file)
     aliases = payload["aliases"]
     assert isinstance(aliases, dict)
@@ -477,13 +489,30 @@ def _append_project_aliases(
         payload["provenance"] = provenance
 
     grown: list[AliasGrowthEntry] = []
-    effective = load_effective_alias_index(alias_file if alias_file.exists() else None)
+    deferred: list[AliasGrowthEntry] = []
+    try:
+        effective = _validate_project_alias_payload(payload)
+    except LexiconError as exc:
+        return [], [
+            _deferred_alias_entry(candidate, f"existing_alias_index_invalid: {exc}")
+            for candidate in candidates
+        ]
+
     for candidate in candidates:
         existing_alias = effective.canonical_for(candidate.alias)
         existing_canonical = effective.canonical_for(candidate.canonical)
         if existing_alias is not None and existing_canonical is not None:
             if existing_alias != existing_canonical:
-                continue
+                deferred.append(
+                    _deferred_alias_entry(
+                        candidate,
+                        (
+                            "alias_collision: "
+                            f"{normalize(candidate.alias)!r} maps to {existing_alias!r}; "
+                            f"{normalize(candidate.canonical)!r} maps to {existing_canonical!r}"
+                        ),
+                    )
+                )
             continue
 
         canonical_norm = existing_canonical or normalize(candidate.canonical)
@@ -491,9 +520,18 @@ def _append_project_aliases(
         if not canonical_norm or not alias_norm or canonical_norm == alias_norm:
             continue
 
-        canonical_key = _canonical_key_for(aliases, canonical_norm, candidate.canonical)
-        alias_values = aliases.setdefault(canonical_key, [])
+        trial_payload = _copy_project_alias_payload(payload)
+        trial_aliases = trial_payload["aliases"]
+        assert isinstance(trial_aliases, dict)
+        canonical_key = _canonical_key_for(trial_aliases, canonical_norm, candidate.canonical)
+        alias_values = trial_aliases.setdefault(canonical_key, [])
         if not isinstance(alias_values, list):
+            deferred.append(
+                _deferred_alias_entry(
+                    candidate,
+                    f"alias_group_invalid: {canonical_key!r} must map to a list",
+                )
+            )
             continue
         group_norms = {normalize(canonical_key)}
         group_norms.update(normalize(str(value)) for value in alias_values)
@@ -502,6 +540,14 @@ def _append_project_aliases(
 
         alias_values.append(candidate.alias)
         alias_values.sort(key=lambda value: surface_form(str(value)))
+        try:
+            effective = _validate_project_alias_payload(trial_payload)
+        except LexiconError as exc:
+            deferred.append(_deferred_alias_entry(candidate, f"alias_collision: {exc}"))
+            continue
+
+        payload = trial_payload
+        aliases = cast(dict[object, object], payload["aliases"])
         grown.append(
             candidate.model_copy(
                 update={
@@ -512,8 +558,12 @@ def _append_project_aliases(
         )
 
     if not grown:
-        return []
+        return [], deferred
 
+    provenance = payload.setdefault("provenance", [])
+    if not isinstance(provenance, list):
+        provenance = []
+        payload["provenance"] = provenance
     existing_provenance = {
         (
             str(item.get("source", "")),
@@ -541,9 +591,58 @@ def _append_project_aliases(
         )
         existing_provenance.add(key)
 
+    _validate_project_alias_payload(payload)
     atomic_write_json(alias_file, payload)
     load_effective_alias_index(alias_file)
-    return grown
+    return grown, deferred
+
+
+def _deferred_alias_entry(candidate: AliasGrowthEntry, reason: str) -> AliasGrowthEntry:
+    return candidate.model_copy(update={"status": "deferred", "reason": reason})
+
+
+def _copy_project_alias_payload(payload: dict[str, object]) -> dict[str, object]:
+    copied = dict(payload)
+    aliases = payload.get("aliases", {})
+    if isinstance(aliases, dict):
+        copied["aliases"] = {
+            key: list(value) if isinstance(value, list) else value
+            for key, value in aliases.items()
+        }
+    provenance = payload.get("provenance")
+    if isinstance(provenance, list):
+        copied["provenance"] = list(provenance)
+    justifications = payload.get("justifications")
+    if isinstance(justifications, dict):
+        copied["justifications"] = dict(justifications)
+    return copied
+
+
+def _validate_project_alias_payload(payload: dict[str, object]) -> AliasIndex:
+    return build_effective_alias_index(_project_alias_mapping(payload))
+
+
+def _project_alias_mapping(payload: dict[str, object]) -> dict[str, list[str]]:
+    aliases = payload.get("aliases")
+    if not isinstance(aliases, dict):
+        raise LexiconError("'aliases' must be a mapping of canonical -> [alias, ...]")
+    justifications = payload.get("justifications")
+    if justifications is not None:
+        if not isinstance(justifications, dict):
+            raise LexiconError("'justifications' must be a mapping of canonical -> reason string")
+        for canonical, reason in justifications.items():
+            if not isinstance(canonical, str) or not isinstance(reason, str):
+                raise LexiconError(
+                    f"justification entry {canonical!r} must map a string to a string"
+                )
+    result: dict[str, list[str]] = {}
+    for canonical, alias_values in aliases.items():
+        if not isinstance(canonical, str) or not isinstance(alias_values, list):
+            raise LexiconError(f"entry {canonical!r} must map a string to a list of strings")
+        if not all(isinstance(alias, str) for alias in alias_values):
+            raise LexiconError(f"all aliases for {canonical!r} must be strings")
+        result[canonical] = list(alias_values)
+    return result
 
 
 def _load_project_alias_payload(alias_file: Path) -> dict[str, object]:

@@ -30,6 +30,7 @@ from resume_kit_schemas import (
     ResumeDocument,
     ReviewAction,
 )
+from resume_kit_terms import load_effective_alias_index
 
 _TERMINOLOGY_REASON = (
     "Mirror the employer's exact terminology: the resume already demonstrates "
@@ -387,6 +388,121 @@ async def test_alias_growth_uses_edited_accepted_text_and_is_idempotent(
     payload = json.loads(alias_file.read_text(encoding="utf-8"))
     assert payload["aliases"] == {"splinesprocket": ["flibbertigibbet"]}
     assert len(payload["provenance"]) == 1
+    load_effective_alias_index(alias_file)
+
+
+@pytest.mark.asyncio
+async def test_alias_growth_defers_same_batch_collision_without_blocking_commit(
+    tmp_path: Path,
+) -> None:
+    _setup_project(tmp_path)
+    alias_file = _enable_alias_file(tmp_path)
+    source_resume = ResumeDocument(
+        summary="Built zorbulator services.",
+        workExperience=[{"description": ["Delivered zorbulator platform."]}],
+    )
+    base = working_dir(tmp_path)
+    (base / "resumes" / "daniel-original.json").write_text(
+        source_resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    changes = [
+        ChangeProposal(
+            path="summary",
+            action="replace",
+            original="Built zorbulator services.",
+            value="Built alphaWidget services.",
+            reason=_TERMINOLOGY_REASON,
+        ),
+        ChangeProposal(
+            path="workExperience[0].description[0]",
+            action="replace",
+            original="Delivered zorbulator platform.",
+            value="Delivered betaWidget platform.",
+            reason=_TERMINOLOGY_REASON,
+        ),
+    ]
+
+    await _open(tmp_path, changes=changes)
+    await _approve(tmp_path, "summary")
+    await _approve(tmp_path, "workExperience[0].description[0]")
+
+    committed = await caps.REGISTRY["commit-session"](
+        CommitSessionRequest(
+            root=tmp_path,
+            alias_timestamp="2026-08-05T12:00:00+00:00",
+        ),
+        CapabilityOptions(),
+    )
+
+    assert not committed.errors
+    assert committed.data is not None
+    assert committed.data.grown_aliases[0].canonical == "alphaWidget"
+    assert committed.data.grown_aliases[0].alias == "zorbulator"
+    assert committed.data.deferred_aliases[0].canonical == "betaWidget"
+    assert committed.data.deferred_aliases[0].alias == "zorbulator"
+    assert committed.data.deferred_aliases[0].status == "deferred"
+    assert "alias_collision" in (committed.data.deferred_aliases[0].reason or "")
+    payload = json.loads(alias_file.read_text(encoding="utf-8"))
+    assert payload["aliases"] == {"alphaWidget": ["zorbulator"]}
+    load_effective_alias_index(alias_file)
+    written = json.loads(
+        (working_dir(tmp_path) / "working" / "daniel.tailored.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert written["summary"] == "Built alphaWidget services."
+    assert written["workExperience"][0]["description"][0] == "Delivered betaWidget platform."
+
+
+@pytest.mark.asyncio
+async def test_alias_growth_defers_existing_index_collision_and_leaves_file_valid(
+    tmp_path: Path,
+) -> None:
+    _setup_project(tmp_path)
+    alias_file = _enable_alias_file(tmp_path)
+    existing = {"version": 1, "aliases": {"alphaWidget": ["zorbulator"]}}
+    alias_file.parent.mkdir(parents=True, exist_ok=True)
+    alias_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    source_resume = _resume("Built zorbulator services.")
+    base = working_dir(tmp_path)
+    (base / "resumes" / "daniel-original.json").write_text(
+        source_resume.model_dump_json(),
+        encoding="utf-8",
+    )
+    change = ChangeProposal(
+        path="summary",
+        action="replace",
+        original="Built zorbulator services.",
+        value="Built betaWidget services.",
+        reason=_TERMINOLOGY_REASON,
+    )
+
+    await _open(tmp_path, changes=[change])
+    await _approve(tmp_path, "summary")
+
+    committed = await caps.REGISTRY["commit-session"](
+        CommitSessionRequest(
+            root=tmp_path,
+            alias_timestamp="2026-08-05T12:00:00+00:00",
+        ),
+        CapabilityOptions(),
+    )
+
+    assert not committed.errors
+    assert committed.data is not None
+    assert committed.data.grown_aliases == []
+    assert committed.data.deferred_aliases[0].canonical == "betaWidget"
+    assert committed.data.deferred_aliases[0].alias == "zorbulator"
+    assert "alias_collision" in (committed.data.deferred_aliases[0].reason or "")
+    assert json.loads(alias_file.read_text(encoding="utf-8")) == existing
+    load_effective_alias_index(alias_file)
+    written = json.loads(
+        (working_dir(tmp_path) / "working" / "daniel.tailored.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert written["summary"] == "Built betaWidget services."
 
 
 @pytest.mark.asyncio
