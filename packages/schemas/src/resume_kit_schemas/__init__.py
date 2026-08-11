@@ -63,6 +63,8 @@ from .feedback import (
     EditFeedbackReasonCode,
     EditOutcome,
     PreferencePair,
+    RequirementAnswer,
+    RequirementAnswerValue,
     UserPreferenceProfile,
 )
 from .job import JobDescription, Requirement, RequirementKind
@@ -174,6 +176,8 @@ __all__ = [
     "UserPreferenceProfile",
     "CandidateFeatures",
     "PreferencePair",
+    "RequirementAnswer",
+    "RequirementAnswerValue",
     # provenance
     "ClaimProvenance",
     "ProvenanceReasonCode",

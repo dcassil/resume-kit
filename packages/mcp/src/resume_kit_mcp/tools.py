@@ -50,6 +50,7 @@ from resume_kit_facade.models import (
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
+    RequirementAnswerRequest,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -86,6 +87,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "candidate_evidence_build",
     "candidate_evidence_add",
     "edit_feedback_record",
+    "requirement_answer_record",
     "edit_candidates_rank",
     "preferences_refresh",
     "edit_session_open",
@@ -181,6 +183,7 @@ _VALIDATE_EVIDENCE = _model_validator(ValidateResumeTruthRequest, "evidence")
 _VALIDATE_SUGGESTION = _model_validator(AlignTerminologyRequest, "suggestion")
 _VALIDATE_FEEDBACK = _model_validator(RecordEditFeedbackRequest, "feedback")
 _VALIDATE_PREFERENCE_PAIR = _model_validator(RecordEditFeedbackRequest, "preference_pair")
+_VALIDATE_REQUIREMENT_ANSWER = _model_validator(RequirementAnswerRequest, "answer")
 _VALIDATE_CANDIDATE = _model_validator(RankEditCandidatesRequest, "candidates")
 _VALIDATE_FEATURE_CONTEXT = _model_validator(RankEditCandidatesRequest, "context")
 _VALIDATE_CHANGE = _model_validator(OpenEditSessionRequest, "changes")
@@ -428,6 +431,10 @@ def _feedback(value: object, field: str) -> object:
 
 def _preference_pair(value: object, field: str) -> object:
     return _validated(_VALIDATE_PREFERENCE_PAIR, value, field)
+
+
+def _requirement_answer(value: object, field: str) -> object:
+    return _validated(_VALIDATE_REQUIREMENT_ANSWER, value, field)
 
 
 def _candidate(value: object, field: str) -> object:
@@ -740,6 +747,27 @@ async def edit_feedback_record(arguments: ToolArguments) -> ToolResult:
     except _ValidationFailure as exc:
         return _validation_error(exc)
     return await _call("record-edit-feedback", request, arguments)
+
+
+async def requirement_answer_record(arguments: ToolArguments) -> ToolResult:
+    try:
+        answer_value = arguments.get("answer")
+        request = _make_request(
+            RequirementAnswerRequest,
+            {
+                "answer": (
+                    _requirement_answer(answer_value, "answer")
+                    if answer_value is not None
+                    else None
+                ),
+                "query_key": _optional_str(arguments, "query_key"),
+                "query_context_tag": _optional_str(arguments, "query_context_tag"),
+                "base_path": _optional_str(arguments, "base_path"),
+            },
+        )
+    except _ValidationFailure as exc:
+        return _validation_error(exc)
+    return await _call("requirement-answer", request, arguments)
 
 
 async def edit_candidates_rank(arguments: ToolArguments) -> ToolResult:
@@ -1150,6 +1178,7 @@ HANDLERS: dict[str, ToolHandler] = {
     "candidate_evidence_build": candidate_evidence_build,
     "candidate_evidence_add": candidate_evidence_add,
     "edit_feedback_record": edit_feedback_record,
+    "requirement_answer_record": requirement_answer_record,
     "edit_candidates_rank": edit_candidates_rank,
     "preferences_refresh": preferences_refresh,
     "edit_session_open": edit_session_open,

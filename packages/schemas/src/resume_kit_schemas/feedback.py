@@ -196,3 +196,46 @@ class PreferencePair(BaseModel):
         default=None,
         description="Optional caller-provided ISO-8601 timestamp for persistence.",
     )
+
+
+RequirementAnswerValue = Literal["yes", "no", "not_in_context"]
+"""The candidate's durable answer to 'do you have this requirement?'."""
+
+
+class RequirementAnswer(BaseModel):
+    """A durable, append-only record of the user's answer to a job requirement.
+
+    Persisted one-per-line to ``resume-kit/learning/requirement-answers.jsonl``
+    (extends the RIT-I-0013 learning substrate). Records whether the candidate
+    genuinely has a requirement so a future interview can pre-filter items that
+    were already answered and never re-ask them.
+
+    Deliberately minimal — exactly five fields, no notes/confidence/decay:
+
+    - ``requirement_key`` — the normalized requirement/term text, produced by the
+      shared matching-side normalizer so keys are comparable across runs.
+    - ``answer`` — ``yes`` / ``no`` (both durable, global) or ``not_in_context``
+      (a ``no`` scoped to this job's coarse context).
+    - ``context_tag`` — coarse role/industry tag; populated only for
+      ``not_in_context`` so suppression can be context-aware.
+    - ``evidence_ref`` — link to the ``CandidateEvidence`` record backing a ``yes``.
+    - ``ts`` — caller-provided ISO-8601 timestamp (the model never reads the clock).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    requirement_key: str = Field(
+        description="Normalized requirement/term text (shared matching normalizer)."
+    )
+    answer: RequirementAnswerValue = Field(
+        description="Durable answer: 'yes', 'no', or context-scoped 'not_in_context'."
+    )
+    context_tag: str | None = Field(
+        default=None,
+        description="Coarse role/industry tag; set only for 'not_in_context' answers.",
+    )
+    evidence_ref: str | None = Field(
+        default=None,
+        description="Optional link to the CandidateEvidence record backing a 'yes'.",
+    )
+    ts: str = Field(description="Caller-provided ISO-8601 timestamp for persistence.")

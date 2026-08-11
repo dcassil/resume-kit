@@ -59,6 +59,7 @@ from resume_kit_facade.models import (
     ReconcileSessionRequest,
     RecordEditFeedbackRequest,
     RefreshPreferencesRequest,
+    RequirementAnswerRequest,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -78,6 +79,7 @@ from resume_kit_schemas import (
     EvidenceKind,
     FaithfulnessReport,
     PreferencePair,
+    RequirementAnswer,
     ReviewAction,
     ScoreDelta,
     UserPreferenceProfile,
@@ -615,6 +617,38 @@ def record_edit_feedback(
     )
     options = _options(False, strict, False)
     _run(caps.record_edit_feedback_capability(request, options), output)
+
+
+@app.command(name="requirement-answer")
+def requirement_answer(
+    answer: str | None = typer.Option(
+        None,
+        "--answer",
+        help="Optional RequirementAnswer JSON path to append (write).",
+    ),
+    query_key: str | None = typer.Option(
+        None,
+        "--query-key",
+        help="Normalized requirement key to check for prior suppression (read).",
+    ),
+    query_context_tag: str | None = typer.Option(
+        None,
+        "--query-context-tag",
+        help="Coarse context tag for the suppression check.",
+    ),
+    base_path: str | None = _BasePath,
+    output: OutputFormat = _Output,
+    strict: bool = _Strict,
+) -> None:
+    """Write and/or read the durable RequirementAnswer learning rail."""
+    request = RequirementAnswerRequest(
+        answer=(io.load_model(answer, RequirementAnswer) if answer is not None else None),
+        query_key=query_key,
+        query_context_tag=query_context_tag,
+        base_path=base_path,
+    )
+    options = _options(False, strict, False)
+    _run(caps.requirement_answer_capability(request, options), output)
 
 
 @app.command(name="rank-edit-candidates")

@@ -32,6 +32,13 @@ from .ranker import (
     RankedCandidate,
     Ranker,
 )
+from .requirement_answers import (
+    append_requirement_answer,
+    is_already_answered,
+    load_and_check,
+    load_requirement_answers,
+    normalize_requirement_key,
+)
 from .retrieval import EditContext, PreferenceContext, RetrievedEdit, retrieve_preference_context
 
 __version__ = "0.0.0"
@@ -45,6 +52,12 @@ __all__ = [
     "read_preference_pairs",
     # preference memory
     "derive_preferences",
+    # requirement-answer learning rail
+    "append_requirement_answer",
+    "load_requirement_answers",
+    "is_already_answered",
+    "load_and_check",
+    "normalize_requirement_key",
     # preference-RAG retrieval
     "EditContext",
     "PreferenceContext",

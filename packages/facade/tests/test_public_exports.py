@@ -88,6 +88,7 @@ def test_all_public_exports_importable() -> None:
         reconcile_session_capability,
         record_edit_feedback_capability,
         refresh_preferences_capability,
+        requirement_answer_capability,
         save_config,
         select_best_resume,
         session_prompt_capability,
@@ -100,7 +101,7 @@ def test_all_public_exports_importable() -> None:
     )
 
     assert isinstance(REGISTRY, dict)
-    assert len(REGISTRY) == 37
+    assert len(REGISTRY) == 38
     assert callable(propose_terminology_candidates_capability)
     assert "suggest-terminology-candidates" in REGISTRY
     assert "ats-view" in REGISTRY
@@ -120,6 +121,7 @@ def test_all_public_exports_importable() -> None:
     assert "init-project" in REGISTRY
     assert "set-active" in REGISTRY
     assert "record-edit-feedback" in REGISTRY
+    assert "requirement-answer" in REGISTRY
     assert "rank-edit-candidates" in REGISTRY
     assert "refresh-preferences" in REGISTRY
     assert "add-evidence" in REGISTRY
@@ -133,6 +135,7 @@ def test_all_public_exports_importable() -> None:
     assert callable(init_project_capability)
     assert callable(add_evidence_capability)
     assert callable(record_edit_feedback_capability)
+    assert callable(requirement_answer_capability)
     assert callable(rank_edit_candidates_capability)
     assert callable(refresh_preferences_capability)
     assert callable(open_edit_session_capability)

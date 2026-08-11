@@ -32,6 +32,8 @@ from resume_kit_schemas import (
     JobMatchReport,
     PreferencePair,
     ProvenanceStatus,
+    RequirementAnswer,
+    RequirementAnswerValue,
     ResumeDocument,
     ReviewAction,
     ReviewSession,
@@ -465,6 +467,30 @@ class RecordEditFeedbackRequest:
 
 
 @dataclass(frozen=True)
+class RequirementAnswerRequest:
+    """Inputs for the single requirement-answer learning-rail capability.
+
+    ONE thin surface covering both write and read of the durable
+    ``RequirementAnswer`` rail (``learning/requirement-answers.jsonl``):
+
+    - When ``answer`` is provided, it is appended to the log (write).
+    - ``query_key``/``query_context_tag`` drive the deterministic
+      ``is_already_answered`` dedupe check (read). When ``query_key`` is omitted
+      and an ``answer`` is provided, the check is run for that answer's key and
+      context so the caller sees the post-write suppression state.
+
+    ``base_path`` points at the ``resume-kit/`` working directory whose
+    ``learning/`` log receives/holds the records; when omitted the engine's
+    default ``resume-kit/`` path is used.
+    """
+
+    answer: RequirementAnswer | None = None
+    query_key: str | None = None
+    query_context_tag: str | None = None
+    base_path: str | Path | None = None
+
+
+@dataclass(frozen=True)
 class RankEditCandidatesRequest:
     """Inputs for the rank-edit-candidates capability."""
 
@@ -641,6 +667,26 @@ class RecordEditFeedbackResult(BaseModel):
     feedback: EditFeedback = Field(description="The persisted feedback record.")
     preference_pair: PreferencePair | None = Field(
         default=None, description="Optional persisted preference-pair record."
+    )
+
+
+class RequirementAnswerResult(BaseModel):
+    """Serializable result of a requirement-answer rail read/write."""
+
+    model_config = {"frozen": True}
+
+    appended: RequirementAnswer | None = Field(
+        default=None, description="The record appended this call, if any."
+    )
+    answers: list[RequirementAnswer] = Field(
+        description="Every record currently in the requirement-answers log."
+    )
+    already_answered: RequirementAnswerValue | None = Field(
+        default=None,
+        description=(
+            "The durable answer that suppresses re-asking the queried key, or "
+            "null when the key is eligible to ask (or no key was queried)."
+        ),
     )
 
 
