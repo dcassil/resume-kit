@@ -65,7 +65,10 @@ from resume_kit_feedback import (
     HeuristicRanker,
     append_edit_feedback,
     append_preference_pair,
+    append_requirement_answer,
     derive_preferences,
+    is_already_answered,
+    load_requirement_answers,
     read_edit_feedback,
 )
 from resume_kit_job_parser import (
@@ -145,6 +148,8 @@ from resume_kit_facade.models import (
     RecordEditFeedbackResult,
     RefineBuildResult,
     RefreshPreferencesRequest,
+    RequirementAnswerRequest,
+    RequirementAnswerResult,
     SelectBestResumeRequest,
     SessionPromptRequest,
     SessionStatusRequest,
@@ -608,6 +613,46 @@ async def record_edit_feedback_capability(
         result = RecordEditFeedbackResult(
             feedback=request.feedback,
             preference_pair=request.preference_pair,
+        )
+    except ResumeKitError as exc:
+        return from_resume_kit_error(exc)
+    except Exception as exc:  # noqa: BLE001 - map any persistence failure
+        return from_exception(exc)
+    return build_success(result, strict=options.strict)
+
+
+async def requirement_answer_capability(
+    request: object,
+    options: CapabilityOptions,
+) -> InterfaceResponse[object]:
+    """Write and/or read the durable RequirementAnswer learning rail.
+
+    The single thin surface for the rail: appends the supplied ``answer`` (if
+    any), then loads every record and runs the deterministic
+    ``is_already_answered`` dedupe check for the queried key/context so callers
+    can pre-filter already-answered requirements.
+    """
+    if not isinstance(request, RequirementAnswerRequest):
+        return from_resume_kit_error(_bad_request(request, "RequirementAnswerRequest"))
+    try:
+        base_path = _optional_path(request.base_path)
+        if request.answer is not None:
+            append_requirement_answer(request.answer, base_path=base_path)
+        answers = load_requirement_answers(base_path=base_path)
+        query_key = request.query_key
+        query_context_tag = request.query_context_tag
+        if query_key is None and request.answer is not None:
+            query_key = request.answer.requirement_key
+            query_context_tag = request.answer.context_tag
+        already = (
+            is_already_answered(query_key, query_context_tag, answers)
+            if query_key is not None
+            else None
+        )
+        result = RequirementAnswerResult(
+            appended=request.answer,
+            answers=answers,
+            already_answered=already,
         )
     except ResumeKitError as exc:
         return from_resume_kit_error(exc)
@@ -1346,6 +1391,7 @@ REGISTRY: dict[str, Capability] = {
     "validate-faithfulness": validate_faithfulness_capability,
     "extract-evidence": build_candidate_evidence_capability,
     "record-edit-feedback": record_edit_feedback_capability,
+    "requirement-answer": requirement_answer_capability,
     "rank-edit-candidates": rank_edit_candidates_capability,
     "refresh-preferences": refresh_preferences_capability,
     "add-evidence": add_evidence_capability,

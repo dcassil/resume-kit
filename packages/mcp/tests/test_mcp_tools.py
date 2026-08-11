@@ -107,6 +107,7 @@ def test_registers_exactly_the_stable_tools() -> None:
         "candidate_evidence_build",
         "candidate_evidence_add",
         "edit_feedback_record",
+        "requirement_answer_record",
         "edit_candidates_rank",
         "preferences_refresh",
         "edit_session_open",
@@ -422,6 +423,34 @@ async def test_feedback_and_evidence_tools(tmp_path: Path) -> None:
     )
     _assert_envelope(added)
     assert added["errors"] == []
+
+
+async def test_requirement_answer_record_tool(tmp_path: Path) -> None:
+    base = tmp_path / "resume-kit"
+    written = await HANDLERS["requirement_answer_record"](
+        {
+            "answer": {
+                "requirement_key": "kubernetes",
+                "answer": "yes",
+                "evidence_ref": "ev-1",
+                "ts": "2026-08-10T00:00:00+00:00",
+            },
+            "base_path": str(base),
+        }
+    )
+    _assert_envelope(written)
+    assert written["errors"] == []
+    assert (base / "learning" / "requirement-answers.jsonl").is_file()
+    assert written["data"]["already_answered"] == "yes"
+
+    read = await HANDLERS["requirement_answer_record"](
+        {"query_key": "kubernetes", "base_path": str(base)}
+    )
+    _assert_envelope(read)
+    assert read["errors"] == []
+    assert read["data"]["already_answered"] == "yes"
+    assert read["data"]["appended"] is None
+    assert len(read["data"]["answers"]) == 1
 
 
 async def test_build_evidence_approved_claims_and_envelope_truth_input() -> None:
